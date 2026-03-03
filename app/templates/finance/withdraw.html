@@ -17,11 +17,11 @@
         <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">提现金额 (小猪粮)</label>
             <div class="relative">
-                <input 
-                    type="number" 
-                    name="amount" 
-                    step="0.01" 
-                    min="0.01" 
+                <input
+                    type="number"
+                    name="amount"
+                    step="0.01"
+                    min="0.01"
                     max="{{ current_user.m_bean }}"
                     required
                     class="block w-full pl-4 pr-16 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white text-lg font-medium"
@@ -34,50 +34,73 @@
             <p class="text-xs text-slate-500 mt-2">当前可提现余额: {{ "%.2f"|format(current_user.m_bean) }}</p>
         </div>
 
-        <!-- 收款方式 -->
-        <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">收款方式</label>
-            <div class="grid grid-cols-2 gap-4">
-                <label class="relative cursor-pointer">
-                    <input type="radio" name="payment_method" value="wechat" class="peer sr-only" checked>
-                    <div class="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 peer-checked:border-green-500 peer-checked:bg-green-50 dark:peer-checked:bg-green-900/20 transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="message-circle" width="20" height="20" class="text-green-600"></i>
-                        <span class="font-medium text-slate-800 dark:text-slate-200">微信支付</span>
-                    </div>
-                </label>
-                <label class="relative cursor-pointer">
-                    <input type="radio" name="payment_method" value="alipay" class="peer sr-only">
-                    <div class="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 transition-all flex items-center justify-center gap-2">
-                        <i data-lucide="qr-code" width="20" height="20" class="text-blue-600"></i>
-                        <span class="font-medium text-slate-800 dark:text-slate-200">支付宝</span>
-                    </div>
-                </label>
+        {% if saved_payment and saved_payment.has_both_codes %}
+        <div class="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/80 dark:bg-emerald-900/10">
+            <p class="text-sm text-emerald-700 dark:text-emerald-300 font-medium">已保存微信+支付宝收款码</p>
+            <p class="text-xs text-emerald-600/80 dark:text-emerald-300/80 mt-1">不重新上传时会自动沿用；需要修改时只替换对应收款码即可。</p>
+        </div>
+        {% else %}
+        <div class="p-4 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/80 dark:bg-amber-900/10">
+            <p class="text-sm text-amber-700 dark:text-amber-300 font-medium">首次提现请上传微信和支付宝两张收款码</p>
+            <p class="text-xs text-amber-600/80 dark:text-amber-300/80 mt-1">后续提现可复用已保存收款码。</p>
+        </div>
+        {% endif %}
+
+        <!-- 收款账号（可选，自动记忆） -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">微信账号（可选）</label>
+                <input
+                    type="text"
+                    name="wechat_account"
+                    value="{{ saved_payment.wechat_account if saved_payment else '' }}"
+                    class="block w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white"
+                    placeholder="可填写微信号"
+                >
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝账号（可选）</label>
+                <input
+                    type="text"
+                    name="alipay_account"
+                    value="{{ saved_payment.alipay_account if saved_payment else '' }}"
+                    class="block w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white"
+                    placeholder="可填写支付宝账号"
+                >
             </div>
         </div>
 
-        <!-- 收款账号 -->
-        <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">收款账号</label>
-            <input 
-                type="text" 
-                name="payment_account" 
-                required
-                class="block w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white"
-                placeholder="请输入微信账号或支付宝账号"
-            >
-        </div>
+        <!-- 双收款码上传 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">微信收款码</label>
+                {% if saved_payment and saved_payment.wechat_image %}
+                <img src="{{ url_for('static', filename=saved_payment.wechat_image) }}" class="max-h-32 rounded-lg border border-slate-200 dark:border-slate-700" alt="微信收款码">
+                {% endif %}
+                <label class="block border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
+                    <input type="file" name="wechat_payment_image" accept="image/*" class="sr-only" onchange="previewImage(this, 'wechat-preview', 'wechat-upload-placeholder')">
+                    <div id="wechat-upload-placeholder">
+                        <i data-lucide="image-plus" width="26" height="26" class="mx-auto text-slate-400 mb-2 group-hover:text-purple-500 transition-colors"></i>
+                        <span class="text-xs text-slate-500 group-hover:text-purple-500 transition-colors">上传微信收款码（可覆盖）</span>
+                    </div>
+                    <img id="wechat-preview" src="#" alt="微信预览" class="hidden max-h-36 mx-auto rounded-lg shadow-sm" />
+                </label>
+            </div>
 
-        <!-- 收款码图片 (暂留接口) -->
-        <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">收款码 (可选)</label>
-            <label class="block border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
-                <input type="file" name="payment_image" accept="image/*" class="sr-only" onchange="previewImage(this)">
-                <div id="upload-placeholder">
-                    <i data-lucide="image-plus" width="32" height="32" class="mx-auto text-slate-400 mb-2 group-hover:text-purple-500 transition-colors"></i>
-                    <span class="text-sm text-slate-500 group-hover:text-purple-500 transition-colors">点击上传收款码图片</span>
-                </div>
-                <img id="image-preview" src="#" alt="Preview" class="hidden max-h-48 mx-auto rounded-lg shadow-sm" />
-            </label>
+            <div class="space-y-2">
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300">支付宝收款码</label>
+                {% if saved_payment and saved_payment.alipay_image %}
+                <img src="{{ url_for('static', filename=saved_payment.alipay_image) }}" class="max-h-32 rounded-lg border border-slate-200 dark:border-slate-700" alt="支付宝收款码">
+                {% endif %}
+                <label class="block border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
+                    <input type="file" name="alipay_payment_image" accept="image/*" class="sr-only" onchange="previewImage(this, 'alipay-preview', 'alipay-upload-placeholder')">
+                    <div id="alipay-upload-placeholder">
+                        <i data-lucide="image-plus" width="26" height="26" class="mx-auto text-slate-400 mb-2 group-hover:text-purple-500 transition-colors"></i>
+                        <span class="text-xs text-slate-500 group-hover:text-purple-500 transition-colors">上传支付宝收款码（可覆盖）</span>
+                    </div>
+                    <img id="alipay-preview" src="#" alt="支付宝预览" class="hidden max-h-36 mx-auto rounded-lg shadow-sm" />
+                </label>
+            </div>
         </div>
 
         <button type="submit" class="w-full btn-primary py-3.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-lg shadow-purple-200 dark:shadow-none font-bold text-lg">
@@ -88,17 +111,17 @@
 </div>
 
 <script>
-function previewImage(input) {
+function previewImage(input, previewId, placeholderId) {
     if (input.files && input.files[0]) {
         var reader = new FileReader();
-        
+
         reader.onload = function(e) {
-            document.getElementById('upload-placeholder').classList.add('hidden');
-            var img = document.getElementById('image-preview');
+            document.getElementById(placeholderId).classList.add('hidden');
+            var img = document.getElementById(previewId);
             img.src = e.target.result;
             img.classList.remove('hidden');
         }
-        
+
         reader.readAsDataURL(input.files[0]);
     }
 }

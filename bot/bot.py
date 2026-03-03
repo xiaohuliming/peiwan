@@ -334,6 +334,67 @@ def _get_recent_withdrawal_within_3_days(user_id: int):
     )
 
 
+def _parse_dual_payment_images(payment_method: str, payment_image: str):
+    """兼容历史单码与新双码存储，返回(wechat_image, alipay_image)。"""
+    raw = str(payment_image or '').strip()
+    if not raw:
+        return '', ''
+    if '|' in raw:
+        left, right = raw.split('|', 1)
+        return left.strip(), right.strip()
+    method = str(payment_method or '').strip().lower()
+    if method == 'alipay':
+        return '', raw
+    return raw, ''
+
+
+def _get_saved_withdraw_payment_info(user_id: int):
+    """获取用户最近一次保存的收款码信息（双码优先）。"""
+    records = (
+        WithdrawRequest.query
+        .filter(WithdrawRequest.user_id == user_id)
+        .order_by(WithdrawRequest.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    for wr in records:
+        wx_img, ali_img = _parse_dual_payment_images(getattr(wr, 'payment_method', ''), getattr(wr, 'payment_image', ''))
+        if wx_img and ali_img:
+            return {
+                'wechat_image': wx_img,
+                'alipay_image': ali_img,
+                'payment_account': str(getattr(wr, 'payment_account', '') or '').strip(),
+            }
+    return None
+
+
+def _create_withdraw_request(user, amount: Decimal, payment_account: str, payment_image: str):
+    """创建提现单并冻结余额。"""
+    user.m_bean -= amount
+    user.m_bean_frozen += amount
+
+    wr = WithdrawRequest(
+        user_id=user.id,
+        amount=amount,
+        payment_method='wechat+alipay',
+        payment_account=payment_account or '双码收款',
+        payment_image=payment_image,
+        status='pending',
+    )
+    db.session.add(wr)
+    db.session.flush()
+
+    cl = CommissionLog(
+        user_id=user.id,
+        change_type='withdraw_freeze',
+        amount=-amount,
+        balance_after=user.m_bean,
+        reason=f'提现申请冻结 #{wr.id}'
+    )
+    db.session.add(cl)
+    return wr
+
+
 def _download_payment_image(image_url: str):
     """下载收款码图片到 static/uploads/payment_codes，返回相对路径。"""
     try:
@@ -456,25 +517,14 @@ async def _try_complete_withdraw_with_payment_image(msg: Message) -> bool:
             user.m_bean -= amount
             user.m_bean_frozen += amount
 
-            wr = WithdrawRequest(
-                user_id=user.id,
+            saved_info = _get_saved_withdraw_payment_info(user.id) or {}
+            payment_account = str(saved_info.get('payment_account') or '').strip() or '机器人提现(双码)'
+            wr = _create_withdraw_request(
+                user=user,
                 amount=amount,
-                payment_method='wechat+alipay',
-                payment_account='机器人提现(双码)',
+                payment_account=payment_account,
                 payment_image=f'{wechat_image_path}|{alipay_image_path}',
-                status='pending',
             )
-            db.session.add(wr)
-            db.session.flush()
-
-            cl = CommissionLog(
-                user_id=user.id,
-                change_type='withdraw_freeze',
-                amount=-amount,
-                balance_after=user.m_bean,
-                reason=f'提现申请冻结 #{wr.id}'
-            )
-            db.session.add(cl)
             db.session.commit()
             _withdraw_pending_uploads.pop(kook_id, None)
 
@@ -692,7 +742,12 @@ async def withdraw(msg: Message, amount_str: str = ''):
             return
 
         if not amount_str:
-            await msg.reply(f'请输入提现金额: `/提现 金额`\n当前可提现: **{user.m_bean}** 小猪粮')
+            await _reply_withdraw_prompt(
+                msg,
+                f"请输入提现金额: `/提现 金额`\n"
+                f"当前可提现: **{user.m_bean}** 小猪粮\n"
+                f"首次需要上传微信+支付宝收款码；后续可复用已保存收款码。"
+            )
             return
 
         _cleanup_expired_withdraw_pending()
@@ -721,6 +776,34 @@ async def withdraw(msg: Message, amount_str: str = ''):
             next_time = (recent_wr.created_at + timedelta(days=3)).strftime('%Y-%m-%d %H:%M')
             await msg.reply(f'限制：3天内仅可提交1次提现申请。你可在 {next_time} 后再次申请。')
             return
+
+        # 若已有历史双码，直接复用提交（无需重复上传）
+        saved_info = _get_saved_withdraw_payment_info(user.id)
+        if saved_info and saved_info.get('wechat_image') and saved_info.get('alipay_image'):
+            try:
+                wr = _create_withdraw_request(
+                    user=user,
+                    amount=amount,
+                    payment_account=str(saved_info.get('payment_account') or '双码收款'),
+                    payment_image=f"{saved_info['wechat_image']}|{saved_info['alipay_image']}",
+                )
+                db.session.commit()
+                await msg.reply(
+                    f"**提现申请已提交**\n"
+                    f"提现金额: **{amount}** 小猪粮\n"
+                    f"收款码: 已复用已保存的微信+支付宝双码\n"
+                    f"单号: #{wr.id}\n"
+                    f"剩余可用: **{user.m_bean}** 小猪粮\n"
+                    f"---\n"
+                    f"如需修改收款码，请点击下方按钮进入网页面板修改。"
+                )
+                await _reply_withdraw_prompt(msg, "需要修改收款码时，请前往网页提现面板重新上传。")
+                return
+            except Exception as e:
+                logger.error(f'复用收款码提现失败: {e}')
+                db.session.rollback()
+                await msg.reply('提现失败，请联系管理员')
+                return
 
         kook_id = str(getattr(getattr(msg, 'author', None), 'id', '') or '')
         if not kook_id:
@@ -965,7 +1048,7 @@ def _build_help_text():
         "`/确认 订单号` - 确认订单(老板)\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
         "`/结束抽奖` - 结束当前互动抽奖并立即开奖\n"
-        "`/提现 金额` - 申请提现(需上传微信+支付宝收款码)\n"
+        "`/提现 [金额]` - 申请提现(无金额会弹网页入口；需微信+支付宝收款码)\n"
         "`/取消提现` - 取消待上传收款码的提现\n"
         "`/帮助` 或 `/help` - 查看此帮助\n"
         "`/ping` - 测试机器人"

@@ -14,6 +14,82 @@ finance_bp = Blueprint('finance', __name__)
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
 
+
+def _save_payment_image(file):
+    """保存上传图片并返回相对路径。"""
+    if not file or file.filename == '':
+        return None, None
+    if not allowed_file(file.filename):
+        return None, '收款码图片格式仅支持 png/jpg/jpeg/gif'
+
+    filename = secure_filename(file.filename)
+    unique_filename = f"{uuid.uuid4().hex}_{filename}"
+    upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'payment_codes')
+    if not os.path.exists(upload_folder):
+        os.makedirs(upload_folder)
+    file.save(os.path.join(upload_folder, unique_filename))
+    return f"uploads/payment_codes/{unique_filename}", None
+
+
+def _parse_dual_payment_images(payment_method, payment_image):
+    raw = str(payment_image or '').strip()
+    if not raw:
+        return '', ''
+    if '|' in raw:
+        left, right = raw.split('|', 1)
+        return left.strip(), right.strip()
+    method = str(payment_method or '').strip().lower()
+    if method == 'alipay':
+        return '', raw
+    return raw, ''
+
+
+def _parse_dual_payment_accounts(payment_account):
+    raw = str(payment_account or '').strip()
+    if not raw:
+        return '', ''
+    if raw.startswith('机器人提现'):
+        return '', ''
+    wechat_account = ''
+    alipay_account = ''
+    for part in [p.strip() for p in raw.split('|')]:
+        if part.startswith('微信:'):
+            wechat_account = part.split(':', 1)[1].strip()
+        elif part.startswith('支付宝:'):
+            alipay_account = part.split(':', 1)[1].strip()
+    if wechat_account or alipay_account:
+        return wechat_account, alipay_account
+    return raw, ''
+
+
+def _get_saved_withdraw_payment(user_id):
+    """读取用户最近一次可复用的收款信息。"""
+    records = (
+        WithdrawRequest.query
+        .filter(WithdrawRequest.user_id == user_id)
+        .order_by(WithdrawRequest.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    for wr in records:
+        wx_img, ali_img = _parse_dual_payment_images(wr.payment_method, wr.payment_image)
+        wx_acc, ali_acc = _parse_dual_payment_accounts(wr.payment_account)
+        if wx_img or ali_img or wx_acc or ali_acc:
+            return {
+                'wechat_image': wx_img,
+                'alipay_image': ali_img,
+                'wechat_account': wx_acc,
+                'alipay_account': ali_acc,
+                'has_both_codes': bool(wx_img and ali_img),
+            }
+    return {
+        'wechat_image': '',
+        'alipay_image': '',
+        'wechat_account': '',
+        'alipay_account': '',
+        'has_both_codes': False,
+    }
+
 @finance_bp.route('/')
 @login_required
 def index():
@@ -39,55 +115,65 @@ def withdraw():
     if not current_user.is_player:
         flash('只有陪玩可以提现', 'error')
         return redirect(url_for('finance.my_wallet'))
-        
+
+    def _render_page():
+        saved_payment = _get_saved_withdraw_payment(current_user.id)
+        return render_template('finance/withdraw.html', saved_payment=saved_payment)
+
     if request.method == 'POST':
         amount_str = request.form.get('amount', '0')
         try:
             amount = Decimal(amount_str)
-        except:
+        except Exception:
             flash('无效的金额格式', 'error')
-            return render_template('finance/withdraw.html')
-            
-        payment_method = request.form.get('payment_method')
-        payment_account = request.form.get('payment_account')
-        
+            return _render_page()
+
         # Validation
         if amount <= 0:
             flash('提现金额必须大于0', 'error')
-            return render_template('finance/withdraw.html')
-            
+            return _render_page()
+
         if amount > current_user.m_bean:
             flash('余额不足', 'error')
-            return render_template('finance/withdraw.html')
-            
-        if not payment_account:
-            flash('请填写收款账号', 'error')
-            return render_template('finance/withdraw.html')
-            
-        # Handle Image Upload
-        payment_image_path = None
-        if 'payment_image' in request.files:
-            file = request.files['payment_image']
-            if file and file.filename != '' and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                unique_filename = f"{uuid.uuid4().hex}_{filename}"
-                upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'payment_codes')
-                
-                if not os.path.exists(upload_folder):
-                    os.makedirs(upload_folder)
-                    
-                file.save(os.path.join(upload_folder, unique_filename))
-                payment_image_path = f"uploads/payment_codes/{unique_filename}"
-            
+            return _render_page()
+
+        pending = WithdrawRequest.query.filter_by(user_id=current_user.id, status='pending').first()
+        if pending:
+            flash(f'你有一笔待审核提现（#{pending.id}），请等待处理', 'error')
+            return _render_page()
+
+        saved_payment = _get_saved_withdraw_payment(current_user.id)
+        wechat_account = (request.form.get('wechat_account', '').strip() or saved_payment.get('wechat_account', ''))
+        alipay_account = (request.form.get('alipay_account', '').strip() or saved_payment.get('alipay_account', ''))
+
+        wechat_image_upload, wechat_err = _save_payment_image(request.files.get('wechat_payment_image'))
+        if wechat_err:
+            flash(wechat_err, 'error')
+            return _render_page()
+        alipay_image_upload, alipay_err = _save_payment_image(request.files.get('alipay_payment_image'))
+        if alipay_err:
+            flash(alipay_err, 'error')
+            return _render_page()
+
+        wechat_image = wechat_image_upload or saved_payment.get('wechat_image', '')
+        alipay_image = alipay_image_upload or saved_payment.get('alipay_image', '')
+
+        if not wechat_image or not alipay_image:
+            flash('请上传微信和支付宝收款码（首次必填；后续可不重复上传）', 'error')
+            return _render_page()
+
+        payment_account = f"微信:{wechat_account or '-'} | 支付宝:{alipay_account or '-'}"
+        payment_image = f"{wechat_image}|{alipay_image}"
+
         # Create request
         wr = WithdrawRequest(
             user_id=current_user.id,
             amount=amount,
-            payment_method=payment_method,
+            payment_method='wechat+alipay',
             payment_account=payment_account,
-            payment_image=payment_image_path
+            payment_image=payment_image
         )
-        
+
         # Deduct balance immediately (freeze it)
         # Assuming model handles types correctly (Numeric -> Decimal)
         current_user.m_bean -= amount
@@ -104,8 +190,9 @@ def withdraw():
         except Exception as e:
             db.session.rollback()
             flash(f'提交失败: {str(e)}', 'error')
-            
-    return render_template('finance/withdraw.html')
+            return _render_page()
+
+    return _render_page()
 
 # Admin Routes
 @finance_bp.route('/withdraws')
