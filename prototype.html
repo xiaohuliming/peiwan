@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>嗯呢呗电竞 - 陪玩店中控面板</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* 自定义滚动条 */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: rgba(156, 163, 175, 0.3);
+      border-radius: 20px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(156, 163, 175, 0.5);
+    }
+
+    /* 空间感背景动画 */
+    @keyframes blob {
+      0% { transform: translate(0px, 0px) scale(1); }
+      33% { transform: translate(30px, -50px) scale(1.1); }
+      66% { transform: translate(-20px, 20px) scale(0.9); }
+      100% { transform: translate(0px, 0px) scale(1); }
+    }
+    .animate-blob {
+      animation: blob 7s infinite;
+    }
+    .animation-delay-2000 {
+      animation-delay: 2s;
+    }
+    .animation-delay-4000 {
+      animation-delay: 4s;
+    }
+
+    /* 玻璃拟物卡片共用类 */
+    .glass-card {
+      background-color: rgba(255, 255, 255, 0.4);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+      border-radius: 32px;
+      transition: background-color 0.3s, border-color 0.3s;
+    }
+    
+    /* Dark Mode Glass */
+    .dark .glass-card {
+      background-color: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#f4f5f7] dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-100 selection:bg-purple-200 dark:selection:bg-purple-900 relative overflow-hidden transition-colors duration-300">
+  
+  <!-- 渐变背景底色 -->
+  <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-[#f4f5f7] to-purple-50 dark:from-slate-900 dark:via-slate-950 dark:to-indigo-950 -z-20 transition-colors duration-500"></div>
+
+  <!-- 背景环境光晕 (iOS/VisionOS 风格) -->
+  <div class="fixed top-0 left-0 w-96 h-96 bg-purple-300/20 dark:bg-purple-600/10 rounded-full mix-blend-multiply dark:mix-blend-normal filter blur-[100px] opacity-70 animate-blob -z-10 pointer-events-none"></div>
+  <div class="fixed top-0 right-0 w-96 h-96 bg-blue-300/20 dark:bg-blue-600/10 rounded-full mix-blend-multiply dark:mix-blend-normal filter blur-[100px] opacity-70 animate-blob animation-delay-2000 -z-10 pointer-events-none"></div>
+  <div class="fixed -bottom-8 left-20 w-96 h-96 bg-pink-300/20 dark:bg-pink-600/10 rounded-full mix-blend-multiply dark:mix-blend-normal filter blur-[100px] opacity-70 animate-blob animation-delay-4000 -z-10 pointer-events-none"></div>
+
+  <!-- 页面主容器 -->
+  <div class="flex relative z-10 max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 h-screen gap-8">
+    
+    <!-- 左侧导航栏 -->
+    <aside class="w-64 flex-shrink-0 flex-col hidden md:flex">
+      <div class="flex items-center gap-3 px-6 py-8">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-500 shadow-lg shadow-purple-500/30 flex items-center justify-center text-white font-bold text-xl">
+          嗯
+        </div>
+        <span class="text-xl font-semibold tracking-tight text-slate-800 dark:text-white">嗯呢呗电竞</span>
+      </div>
+
+      <nav class="flex-1 px-4 space-y-2" id="nav-menu">
+        <button data-target="dashboard" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium">
+          <i data-lucide="layout-dashboard" width="20" height="20" stroke-width="2.5"></i>
+          <span class="text-[15px]">总览</span>
+        </button>
+        <button data-target="companions" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200">
+          <i data-lucide="users" width="20" height="20" stroke-width="2"></i>
+          <span class="text-[15px]">陪玩管理</span>
+        </button>
+        <button data-target="orders" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200">
+          <i data-lucide="gamepad-2" width="20" height="20" stroke-width="2"></i>
+          <span class="text-[15px]">订单中心</span>
+        </button>
+        <button data-target="finance" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200">
+          <i data-lucide="wallet" width="20" height="20" stroke-width="2"></i>
+          <span class="text-[15px]">财务报表</span>
+        </button>
+        <button data-target="messages" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200">
+          <i data-lucide="message-square" width="20" height="20" stroke-width="2"></i>
+          <span class="text-[15px]">消息通知</span>
+          <span class="ml-auto bg-purple-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">3</span>
+        </button>
+      </nav>
+
+      <div class="p-4 mt-auto">
+        <button class="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 transition-all duration-300">
+          <i data-lucide="settings" width="20" height="20" stroke-width="2"></i>
+          <span class="text-[15px]">系统设置</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 右侧主内容区 -->
+    <main class="flex-1 flex flex-col h-full overflow-y-auto pr-2 pb-8 custom-scrollbar">
+      
+      <!-- 顶部 Header -->
+      <header class="flex items-center justify-between py-6 sticky top-0 z-20">
+        <div>
+          <h1 class="text-3xl font-bold tracking-tight text-slate-800 dark:text-white">
+            下午好，Sirus
+          </h1>
+          <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium" id="current-date">今天是 2026年2月27日，店里生意不错哦。</p>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <div class="relative">
+            <i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" width="18" height="18"></i>
+            <input 
+              type="text" 
+              placeholder="搜索订单或陪玩..." 
+              class="pl-10 pr-4 py-2.5 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white/60 dark:focus:bg-slate-800/60 transition-all w-64 placeholder:text-slate-400 shadow-sm text-slate-800 dark:text-slate-200"
+            />
+          </div>
+          
+          <!-- 主题切换按钮 -->
+          <button id="theme-toggle" class="w-10 h-10 flex items-center justify-center bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all relative shadow-sm">
+             <i data-lucide="moon" class="block dark:hidden" width="18" height="18"></i>
+             <i data-lucide="sun" class="hidden dark:block" width="18" height="18"></i>
+          </button>
+
+          <button class="w-10 h-10 flex items-center justify-center bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all relative shadow-sm">
+            <i data-lucide="bell" width="18" height="18"></i>
+            <span class="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-800"></span>
+          </button>
+
+          <button class="w-10 h-10 rounded-full overflow-hidden border-2 border-white dark:border-slate-700 shadow-sm hover:scale-105 transition-transform flex-shrink-0">
+            <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Sirus&backgroundColor=e8eaf6" alt="Sirus" class="w-full h-full object-cover" />
+          </button>
+        </div>
+      </header>
+
+      <!-- 核心数据区 -->
+      <div class="space-y-8 mt-4">
+        
+        <!-- 四大数据卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          
+          <!-- Card 1 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="wallet" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 text-green-500">
+                <i data-lucide="trending-up" width="14" height="14"></i>
+                +14.5%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">今日营业额</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">¥ 12,840</p>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="users" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 text-green-500">
+                <i data-lucide="trending-up" width="14" height="14"></i>
+                +5.2%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">活跃陪玩</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">142</p>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-orange-500/10 text-orange-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="gamepad-2" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 text-orange-500">
+                -2.1%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">进行中订单</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">38</p>
+            </div>
+          </div>
+
+          <!-- Card 4 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-yellow-500/10 text-yellow-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="star" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 text-green-500">
+                <i data-lucide="trending-up" width="14" height="14"></i>
+                +0.1%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">客户满意度</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">4.96</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          <!-- 左侧两列：图表与订单 -->
+          <div class="lg:col-span-2 space-y-8">
+            
+            <!-- 图表区块 -->
+            <div class="glass-card p-8">
+              <div class="flex justify-between items-center mb-8">
+                <div>
+                  <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">流水趋势</h2>
+                  <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">本周营业额数据分析</p>
+                </div>
+                <button class="p-2 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-full transition-colors">
+                  <i data-lucide="more-horizontal" width="20" height="20" class="text-slate-400"></i>
+                </button>
+              </div>
+              
+              <!-- 纯 CSS 拟物柱状图 -->
+              <div class="h-48 flex items-end justify-between gap-2 sm:gap-4 mt-4" id="chart-container">
+                <!-- 柱子通过JS或直接写死渲染 -->
+              </div>
+              <div class="flex justify-between mt-4 text-xs font-medium text-slate-400 px-1">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+            </div>
+
+            <!-- 最新订单 -->
+            <div class="glass-card p-8">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">实时订单</h2>
+                <button class="text-sm text-purple-600 dark:text-purple-400 font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20 px-3 py-1.5 rounded-full transition-colors flex items-center gap-1">
+                  查看全部 <i data-lucide="chevron-right" width="16" height="16"></i>
+                </button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[500px]">
+                  <thead>
+                    <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+                      <th class="pb-4 font-medium">订单编号</th>
+                      <th class="pb-4 font-medium">客户 / 陪玩</th>
+                      <th class="pb-4 font-medium">项目</th>
+                      <th class="pb-4 font-medium">金额</th>
+                      <th class="pb-4 font-medium">状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors group">
+                      <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">#ORD-8821</td>
+                      <td class="py-4">
+                        <div class="flex flex-col">
+                          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">星空下的猫 / 小软软</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="clock" width="10" height="10"></i> 10分钟前
+                          </span>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-slate-100/50 dark:bg-slate-800/50 flex items-center justify-center backdrop-blur-sm">
+                            <i data-lucide="gamepad-2" width="14" height="14" class="text-slate-600 dark:text-slate-400"></i>
+                          </div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">英雄联盟</span>
+                        </div>
+                      </td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">¥ 120</td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">进行中</span>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors group">
+                      <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">#ORD-8820</td>
+                      <td class="py-4">
+                        <div class="flex flex-col">
+                          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">Sirus_Fans / 阿杰</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="clock" width="10" height="10"></i> 25分钟前
+                          </span>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-slate-100/50 dark:bg-slate-800/50 flex items-center justify-center backdrop-blur-sm">
+                            <i data-lucide="gamepad-2" width="14" height="14" class="text-slate-600 dark:text-slate-400"></i>
+                          </div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">无畏契约</span>
+                        </div>
+                      </td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">¥ 80</td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]"></div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">待接单</span>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors group">
+                      <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">#ORD-8819</td>
+                      <td class="py-4">
+                        <div class="flex flex-col">
+                          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">深夜emo / 甜梦</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="clock" width="10" height="10"></i> 1小时前
+                          </span>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-slate-100/50 dark:bg-slate-800/50 flex items-center justify-center backdrop-blur-sm">
+                            <i data-lucide="gamepad-2" width="14" height="14" class="text-slate-600 dark:text-slate-400"></i>
+                          </div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">王者荣耀</span>
+                        </div>
+                      </td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">¥ 150</td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">已完成</span>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr class="hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors group">
+                      <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">#ORD-8818</td>
+                      <td class="py-4">
+                        <div class="flex flex-col">
+                          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">不吃香菜 / Kiko</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="clock" width="10" height="10"></i> 2小时前
+                          </span>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-slate-100/50 dark:bg-slate-800/50 flex items-center justify-center backdrop-blur-sm">
+                            <i data-lucide="gamepad-2" width="14" height="14" class="text-slate-600 dark:text-slate-400"></i>
+                          </div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">绝地求生</span>
+                        </div>
+                      </td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">¥ 200</td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">已完成</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧一列：排行榜与操作 -->
+          <div class="space-y-8">
+            <div class="glass-card p-8 h-full flex flex-col">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">金牌陪玩榜</h2>
+                <button class="p-2 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-full transition-colors">
+                  <i data-lucide="more-horizontal" width="20" height="20" class="text-slate-400"></i>
+                </button>
+              </div>
+
+              <div class="space-y-6 flex-1">
+                <!-- 陪玩 1 -->
+                <div class="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/40 dark:hover:bg-slate-700/30 transition-colors border border-transparent hover:border-white/60 dark:hover:border-slate-600/50">
+                  <div class="relative">
+                    <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Felix&backgroundColor=f8bbd0" alt="小软软" class="w-12 h-12 rounded-2xl object-cover shadow-sm border border-white dark:border-slate-700" />
+                    <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-bold shadow-sm">1</div>
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-white">小软软</h4>
+                    <div class="flex items-center gap-1 mt-1">
+                      <i data-lucide="star" width="12" height="12" class="text-yellow-500 fill-yellow-500"></i>
+                      <span class="text-xs font-medium text-slate-500 dark:text-slate-400">5.0 评分</span>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-slate-800 dark:text-white">¥ 4,520</div>
+                    <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">本周创收</div>
+                  </div>
+                </div>
+
+                <!-- 陪玩 2 -->
+                <div class="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/40 dark:hover:bg-slate-700/30 transition-colors border border-transparent hover:border-white/60 dark:hover:border-slate-600/50">
+                  <div class="relative">
+                    <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Kiko&backgroundColor=b2ebf2" alt="Kiko" class="w-12 h-12 rounded-2xl object-cover shadow-sm border border-white dark:border-slate-700" />
+                    <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gradient-to-br from-slate-300 to-slate-400 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-bold shadow-sm">2</div>
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-white">Kiko</h4>
+                    <div class="flex items-center gap-1 mt-1">
+                      <i data-lucide="star" width="12" height="12" class="text-yellow-500 fill-yellow-500"></i>
+                      <span class="text-xs font-medium text-slate-500 dark:text-slate-400">4.9 评分</span>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-slate-800 dark:text-white">¥ 3,890</div>
+                    <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">本周创收</div>
+                  </div>
+                </div>
+
+                <!-- 陪玩 3 -->
+                <div class="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/40 dark:hover:bg-slate-700/30 transition-colors border border-transparent hover:border-white/60 dark:hover:border-slate-600/50">
+                  <div class="relative">
+                    <img src="https://api.dicebear.com/7.x/notionists/svg?seed=Jack&backgroundColor=c8e6c9" alt="阿杰" class="w-12 h-12 rounded-2xl object-cover shadow-sm border border-white dark:border-slate-700" />
+                    <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gradient-to-br from-orange-300 to-orange-500 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-bold shadow-sm">3</div>
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-white">阿杰</h4>
+                    <div class="flex items-center gap-1 mt-1">
+                      <i data-lucide="star" width="12" height="12" class="text-yellow-500 fill-yellow-500"></i>
+                      <span class="text-xs font-medium text-slate-500 dark:text-slate-400">4.8 评分</span>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-slate-800 dark:text-white">¥ 3,100</div>
+                    <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">本周创收</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 快捷操作按钮 -->
+              <div class="mt-8 pt-6 border-t border-white/40 dark:border-slate-700/50">
+                <button class="w-full py-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-2xl font-semibold tracking-wide transition-all shadow-[0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.15)] active:scale-[0.98] flex items-center justify-center gap-2">
+                  <i data-lucide="users" width="18" height="18"></i>
+                  招募新陪玩
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script>
+    // 初始化 Lucide Icons
+    lucide.createIcons();
+
+    // 图表数据生成
+    const chartData = [40, 60, 45, 80, 55, 90, 75, 100, 85, 110, 95, 120];
+    const chartContainer = document.getElementById('chart-container');
+    
+    chartData.forEach(val => {
+      const colDiv = document.createElement('div');
+      colDiv.className = 'w-full relative group';
+      
+      const barDiv = document.createElement('div');
+      barDiv.className = 'w-full bg-gradient-to-t from-purple-500/80 to-blue-400/80 rounded-t-xl transition-all duration-500 ease-out group-hover:opacity-100 opacity-80 cursor-pointer';
+      barDiv.style.height = `${val}%`;
+
+      const tooltipDiv = document.createElement('div');
+      tooltipDiv.className = 'absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white text-xs py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30 shadow-lg';
+      tooltipDiv.innerText = `¥ ${val * 120}`;
+
+      colDiv.appendChild(barDiv);
+      colDiv.appendChild(tooltipDiv);
+      chartContainer.appendChild(colDiv);
+    });
+
+    // 导航栏切换交互
+    const navButtons = document.querySelectorAll('.nav-btn');
+    
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // 重置所有按钮样式
+        navButtons.forEach(b => {
+          b.className = 'nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200';
+          const icon = b.querySelector('i');
+          if(icon) icon.setAttribute('stroke-width', '2');
+        });
+
+        // 设置当前选中按钮样式
+        btn.className = 'nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium';
+        const activeIcon = btn.querySelector('i');
+        if(activeIcon) activeIcon.setAttribute('stroke-width', '2.5');
+      });
+    });
+
+    // Dark Mode Toggle Logic
+    const themeToggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
+    
+    // Check local storage or system preference
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      html.classList.add('dark');
+    } else {
+      html.classList.remove('dark');
+    }
+
+    themeToggle.addEventListener('click', () => {
+      html.classList.toggle('dark');
+      if (html.classList.contains('dark')) {
+        localStorage.theme = 'dark';
+      } else {
+        localStorage.theme = 'light';
+      }
+    });
+  </script>
+</body>
+</html>

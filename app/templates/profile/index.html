@@ -1,0 +1,503 @@
+{% extends "base.html" %}
+
+{% block header_title %}个人中心{% endblock %}
+
+{% block content %}
+<div class="space-y-8 mt-4">
+
+  <!-- 个人信息卡片 -->
+  <div class="glass-card p-8 flex flex-col md:flex-row items-center gap-8 relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full blur-3xl -z-10"></div>
+
+    <!-- 头像 -->
+    <div class="relative group">
+      <div class="w-32 h-32 rounded-full p-1 bg-gradient-to-tr from-purple-500 to-blue-500 shadow-lg">
+        <div class="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-800 border-4 border-white dark:border-slate-800">
+            <img src="{{ current_user.avatar_url }}" alt="Avatar" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+        </div>
+      </div>
+      <button class="absolute bottom-1 right-1 p-2 bg-white dark:bg-slate-800 rounded-full shadow-md border border-slate-100 dark:border-slate-700 text-slate-500 hover:text-purple-600 transition-colors">
+        <i data-lucide="camera" width="16" height="16"></i>
+      </button>
+    </div>
+
+    <!-- 信息 -->
+    <div class="flex-1 text-center md:text-left space-y-2">
+      <div class="flex flex-col md:flex-row items-center gap-3">
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-white">{{ current_user.nickname or current_user.username }}</h2>
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800/30">
+          {{ current_user.role_name }}
+        </span>
+        {% if current_user.vip_level %}
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800/30 flex items-center gap-1">
+          <i data-lucide="crown" width="12" height="12"></i>
+          {{ current_user.vip_level }}
+        </span>
+        {% endif %}
+      </div>
+
+      <p class="text-slate-500 dark:text-slate-400 text-sm font-mono bg-slate-100 dark:bg-slate-800/50 px-3 py-1 rounded-lg inline-block md:inline-flex items-center gap-2">
+        <span>ID: {{ current_user.user_code }}</span>
+        <button class="hover:text-purple-600 transition-colors" title="复制ID">
+            <i data-lucide="copy" width="12" height="12"></i>
+        </button>
+      </p>
+
+      {% if current_user.vip_discount < 100 %}
+      <p class="text-sm text-yellow-600 dark:text-yellow-400 font-medium">
+        当前享受下单 {{ (current_user.vip_discount / 10)|round(1) }} 折优惠
+      </p>
+      {% endif %}
+
+      <!-- 绑定状态 -->
+      <div class="flex items-center justify-center md:justify-start gap-4 mt-4 text-sm text-slate-500">
+        <div class="flex items-center gap-1.5 {% if current_user.kook_bound %}text-green-600 dark:text-green-400{% endif %}">
+            <i data-lucide="gamepad-2" width="16" height="16"></i>
+            <span>KOOK {% if current_user.kook_bound %}已绑定{% else %}未绑定{% endif %}</span>
+        </div>
+        <div class="flex items-center gap-1.5 {% if current_user.wechat_bound %}text-green-600 dark:text-green-400{% endif %}">
+            <i data-lucide="message-circle" width="16" height="16"></i>
+            <span>微信 {% if current_user.wechat_bound %}已绑定{% else %}未绑定{% endif %}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 快捷操作 -->
+    <div class="flex flex-col gap-3 min-w-[140px]">
+        <button type="button" onclick="openEditProfileModal()" class="btn-primary w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 transition-colors shadow-lg shadow-slate-200 dark:shadow-none font-medium text-sm">
+            <i data-lucide="edit-3" width="16" height="16"></i>
+            编辑资料
+        </button>
+        <button class="w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300 font-medium text-sm">
+            <i data-lucide="share-2" width="16" height="16"></i>
+            分享名片
+        </button>
+    </div>
+  </div>
+
+  {# 编辑资料弹窗 #}
+  <div id="edit-profile-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeEditProfileModal()">
+    <div class="glass-card p-8 w-full max-w-md mx-4">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">编辑资料</h3>
+        <button type="button" onclick="closeEditProfileModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+          <i data-lucide="x" width="18" height="18"></i>
+        </button>
+      </div>
+      <form action="{{ url_for('profile.update_profile') }}" method="post" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">客户昵称</label>
+          <input type="text" name="nickname" required value="{{ current_user.nickname or current_user.username }}"
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        {% if current_user.role == 'player' %}
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">陪玩昵称</label>
+          <input type="text" name="player_nickname" value="{{ current_user.player_nickname or '' }}"
+                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        {% endif %}
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">保存</button>
+          <button type="button" onclick="closeEditProfileModal()" class="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2.5 rounded-xl text-sm font-medium transition-colors">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tab 栏 -->
+  <div class="flex gap-1 bg-white/30 dark:bg-slate-800/30 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-2xl p-1.5">
+    <a href="?tab=info"
+       class="flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-medium transition-all {% if current_tab == 'info' %}bg-white/80 dark:bg-slate-700/80 text-purple-600 dark:text-purple-400 shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+      基本信息
+    </a>
+    <a href="?tab=orders"
+       class="flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-medium transition-all {% if current_tab == 'orders' %}bg-white/80 dark:bg-slate-700/80 text-purple-600 dark:text-purple-400 shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+      订单详细
+    </a>
+    {% if current_user.is_player %}
+    <a href="?tab=earnings"
+       class="flex-1 text-center px-4 py-2.5 rounded-xl text-sm font-medium transition-all {% if current_tab == 'earnings' %}bg-white/80 dark:bg-slate-700/80 text-purple-600 dark:text-purple-400 shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+      接单详细
+    </a>
+    {% endif %}
+  </div>
+
+  {# ====== 基本信息 Tab ====== #}
+  {% if current_tab == 'info' %}
+
+  <!-- 资产账户 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- 嗯呢币余额 (充值) -->
+    <div class="glass-card p-6 relative overflow-hidden group">
+        <div class="absolute -right-4 -top-4 p-8 bg-blue-500/5 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+        <div class="relative z-10">
+            <div class="flex justify-between items-start mb-4">
+                <div class="p-3 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-900/20 dark:text-blue-400">
+                    <i data-lucide="wallet" width="24" height="24"></i>
+                </div>
+                <button class="text-xs font-bold px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200 dark:shadow-none">
+                    充值
+                </button>
+            </div>
+            <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">嗯呢币余额</h3>
+            <p class="text-3xl font-bold text-slate-800 dark:text-white mt-1">{{ "%.2f"|format(current_user.m_coin) }}</p>
+            <p class="text-xs text-slate-400 mt-2">用于支付陪玩订单</p>
+        </div>
+    </div>
+
+    <!-- 积分/经验 -->
+    <div class="glass-card p-6 relative overflow-hidden group">
+        <div class="absolute -right-4 -top-4 p-8 bg-yellow-500/5 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+        <div class="relative z-10">
+            <div class="flex justify-between items-start mb-4">
+                <div class="p-3 bg-yellow-50 text-yellow-600 rounded-xl dark:bg-yellow-900/20 dark:text-yellow-400">
+                    <i data-lucide="star" width="24" height="24"></i>
+                </div>
+            </div>
+            <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">消费积分</h3>
+            <p class="text-3xl font-bold text-slate-800 dark:text-white mt-1">{{ current_user.experience }}</p>
+            <div class="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-1.5 mt-3 overflow-hidden">
+                <div class="bg-yellow-500 h-1.5 rounded-full" style="width: 60%"></div>
+            </div>
+            <p class="text-xs text-slate-400 mt-2 flex justify-between">
+                <span>当前等级 {{ current_user.vip_level }}</span>
+                <span>升级还需 500</span>
+            </p>
+        </div>
+    </div>
+
+    <!-- 小猪粮余额 (收益 - 仅陪玩可见) -->
+    {% if current_user.is_player %}
+    <div class="glass-card p-6 relative overflow-hidden group">
+        <div class="absolute -right-4 -top-4 p-8 bg-purple-500/5 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+        <div class="relative z-10">
+            <div class="flex justify-between items-start mb-4">
+                <div class="p-3 bg-purple-50 text-purple-600 rounded-xl dark:bg-purple-900/20 dark:text-purple-400">
+                    <i data-lucide="piggy-bank" width="24" height="24"></i>
+                </div>
+                <div class="flex gap-2">
+                    <button class="text-xs font-bold px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
+                        兑换
+                    </button>
+                    <button class="text-xs font-bold px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm shadow-purple-200 dark:shadow-none">
+                        提现
+                    </button>
+                </div>
+            </div>
+            <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">小猪粮余额 (收益)</h3>
+            <p class="text-3xl font-bold text-slate-800 dark:text-white mt-1">{{ "%.2f"|format(current_user.m_bean) }}</p>
+            <p class="text-xs text-slate-400 mt-2">可提现收益</p>
+        </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 设置与偏好 -->
+  <div class="glass-card p-6">
+    <div class="flex items-center gap-3 mb-6">
+        <div class="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
+            <i data-lucide="settings" width="20" height="20" class="text-slate-600 dark:text-slate-400"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">隐私设置</h3>
+    </div>
+
+    <form action="{{ url_for('profile.update_settings') }}" method="POST" id="settings-form">
+        <div class="space-y-4">
+            <!-- 匿名充值 -->
+            <div class="flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex items-center gap-4">
+                    <div class="p-2 bg-blue-50 text-blue-500 rounded-lg dark:bg-blue-900/20">
+                        <i data-lucide="credit-card" width="20" height="20"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-800 dark:text-slate-200">匿名充值播报</h4>
+                        <p class="text-sm text-slate-400">开启后，充值全服播报将隐藏您的昵称</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="anonymous_recharge" class="sr-only peer" onchange="document.getElementById('settings-form').submit()" {% if current_user.anonymous_recharge %}checked{% endif %}>
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
+                </label>
+            </div>
+
+            <!-- 匿名送礼 -->
+            <div class="flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex items-center gap-4">
+                    <div class="p-2 bg-amber-50 text-amber-500 rounded-lg dark:bg-amber-900/20">
+                        <i data-lucide="receipt" width="20" height="20"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-800 dark:text-slate-200">匿名消费通知</h4>
+                        <p class="text-sm text-slate-400">开启后，消费私信通知将隐藏您的昵称</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="anonymous_consume" class="sr-only peer" onchange="document.getElementById('settings-form').submit()" {% if current_user.anonymous_consume %}checked{% endif %}>
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
+                </label>
+            </div>
+
+            <!-- 匿名送礼 -->
+            <div class="flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex items-center gap-4">
+                    <div class="p-2 bg-pink-50 text-pink-500 rounded-lg dark:bg-pink-900/20">
+                        <i data-lucide="gift" width="20" height="20"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-800 dark:text-slate-200">送礼物匿名冠名</h4>
+                        <p class="text-sm text-slate-400">开启后，赠送礼物时的冠名将显示为"神秘人"</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="anonymous_gift_send" class="sr-only peer" onchange="document.getElementById('settings-form').submit()" {% if current_user.anonymous_gift_send %}checked{% endif %}>
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
+                </label>
+            </div>
+
+            <!-- 陪玩收礼匿名 -->
+            {% if current_user.is_player %}
+            <div class="flex items-center justify-between p-4 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                <div class="flex items-center gap-4">
+                    <div class="p-2 bg-purple-50 text-purple-500 rounded-lg dark:bg-purple-900/20">
+                        <i data-lucide="heart" width="20" height="20"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-slate-800 dark:text-slate-200">收礼物匿名显示</h4>
+                        <p class="text-sm text-slate-400">开启后，收到的礼物记录将隐藏赠送者信息</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="anonymous_gift_recv" class="sr-only peer" onchange="document.getElementById('settings-form').submit()" {% if current_user.anonymous_gift_recv %}checked{% endif %}>
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
+                </label>
+            </div>
+            {% endif %}
+        </div>
+    </form>
+  </div>
+
+  {% endif %}
+
+  {# ====== 订单详细 Tab ====== #}
+  {% if current_tab == 'orders' %}
+  <div class="glass-card p-8">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+        <i data-lucide="file-text" width="22" height="22" class="text-blue-500"></i>
+        订单记录
+      </h2>
+
+      <form method="GET" class="flex items-center gap-2 flex-wrap">
+        <input type="hidden" name="tab" value="orders" />
+        <input type="date" name="start_date" value="{{ start_date }}"
+               class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <span class="text-slate-400 text-sm">至</span>
+        <input type="date" name="end_date" value="{{ end_date }}"
+               class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
+          筛选
+        </button>
+        {% if start_date or end_date %}
+        <a href="?tab=orders" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          清除
+        </a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[600px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-4 font-medium">订单号</th>
+            <th class="pb-4 font-medium">游戏项目</th>
+            <th class="pb-4 font-medium">{% if current_user.is_god %}陪玩{% elif current_user.is_player %}老板{% else %}客户/陪玩{% endif %}</th>
+            <th class="pb-4 font-medium">金额</th>
+            <th class="pb-4 font-medium">状态</th>
+            <th class="pb-4 font-medium">时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if orders %}
+          {% for order in orders.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors">
+            <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">#{{ order.order_no[-8:] }}</td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">{{ order.project_display }}</td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">
+              {% if current_user.is_god %}
+                {{ order.player.player_nickname or order.player.nickname }}
+              {% elif current_user.is_player %}
+                {{ order.boss.nickname }}
+              {% else %}
+                {{ order.boss.nickname }} / {{ order.player.player_nickname or order.player.nickname }}
+              {% endif %}
+            </td>
+            <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">¥ {{ "%.2f"|format(order.total_price) }}</td>
+            <td class="py-4">
+              {% set sc = order.status_color %}
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-{{ sc }}-100 text-{{ sc }}-600 dark:bg-{{ sc }}-900/30 dark:text-{{ sc }}-300">{{ order.status_label }}</span>
+            </td>
+            <td class="py-4 text-sm text-slate-500 dark:text-slate-400">{{ order.created_at.strftime('%m-%d %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+
+          {% if not orders or orders.total == 0 %}
+          <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400">
+              <i data-lucide="inbox" width="48" height="48" class="mx-auto mb-3 opacity-50"></i>
+              <p class="text-sm">暂无订单记录</p>
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 分页 -->
+    {% if orders and orders.pages > 1 %}
+    <div class="flex justify-center gap-2 mt-6">
+      {% if orders.has_prev %}
+      <a href="?tab=orders&page={{ orders.prev_num }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        上一页
+      </a>
+      {% endif %}
+      <span class="px-4 py-2 text-sm text-slate-500">第 {{ orders.page }} / {{ orders.pages }} 页</span>
+      {% if orders.has_next %}
+      <a href="?tab=orders&page={{ orders.next_num }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        下一页
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# ====== 接单详细 Tab (仅陪玩) ====== #}
+  {% if current_tab == 'earnings' and current_user.is_player %}
+  <div class="glass-card p-8">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+        <i data-lucide="coins" width="22" height="22" class="text-purple-500"></i>
+        收益明细
+      </h2>
+
+      <form method="GET" class="flex items-center gap-2 flex-wrap">
+        <input type="hidden" name="tab" value="earnings" />
+        <input type="date" name="start_date" value="{{ start_date }}"
+               class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <span class="text-slate-400 text-sm">至</span>
+        <input type="date" name="end_date" value="{{ end_date }}"
+               class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
+          筛选
+        </button>
+        {% if start_date or end_date %}
+        <a href="?tab=earnings" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          清除
+        </a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[600px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-4 font-medium">时间</th>
+            <th class="pb-4 font-medium">类型</th>
+            <th class="pb-4 font-medium">金额</th>
+            <th class="pb-4 font-medium">余额</th>
+            <th class="pb-4 font-medium">关联订单</th>
+            <th class="pb-4 font-medium">备注</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if earnings %}
+          {% for log in earnings.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors">
+            <td class="py-4 text-sm text-slate-500 dark:text-slate-400">{{ log.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-4 text-sm">
+              {% if log.change_type == 'order_income' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300">订单收入</span>
+              {% elif log.change_type == 'withdraw' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">提现</span>
+              {% elif log.change_type == 'refund_deduct' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">退款扣除</span>
+              {% elif log.change_type == 'gift_income' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-300">礼物收入</span>
+              {% else %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ log.change_type }}</span>
+              {% endif %}
+            </td>
+            <td class="py-4 text-sm font-bold {% if log.amount >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+              {% if log.amount >= 0 %}+{% endif %}{{ "%.2f"|format(log.amount) }}
+            </td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">{{ "%.2f"|format(log.balance_after) }}</td>
+            <td class="py-4 text-sm text-slate-500 dark:text-slate-400">
+              {% if log.order %}
+                #{{ log.order.order_no[-8:] }}
+              {% else %}
+                --
+              {% endif %}
+            </td>
+            <td class="py-4 text-sm text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{{ log.reason or '--' }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+
+          {% if not earnings or earnings.total == 0 %}
+          <tr>
+            <td colspan="6" class="py-12 text-center text-slate-400">
+              <i data-lucide="inbox" width="48" height="48" class="mx-auto mb-3 opacity-50"></i>
+              <p class="text-sm">暂无收益记录</p>
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 分页 -->
+    {% if earnings and earnings.pages > 1 %}
+    <div class="flex justify-center gap-2 mt-6">
+      {% if earnings.has_prev %}
+      <a href="?tab=earnings&page={{ earnings.prev_num }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        上一页
+      </a>
+      {% endif %}
+      <span class="px-4 py-2 text-sm text-slate-500">第 {{ earnings.page }} / {{ earnings.pages }} 页</span>
+      {% if earnings.has_next %}
+      <a href="?tab=earnings&page={{ earnings.next_num }}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        下一页
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditProfileModal() {
+  const m = document.getElementById('edit-profile-modal');
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+}
+
+function closeEditProfileModal() {
+  const m = document.getElementById('edit-profile-modal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block header_title %}项目管理{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="flex justify-between items-center">
+    <h2 class="text-xl font-bold text-slate-800 dark:text-white">游戏项目管理</h2>
+    <button onclick="document.getElementById('add-project-modal').classList.remove('hidden');document.getElementById('add-project-modal').classList.add('flex')"
+      class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+      <i data-lucide="plus-circle" width="18" height="18"></i> 添加项目
+    </button>
+  </div>
+
+  {% for project in projects %}
+  <div class="glass-card p-6">
+    <div class="flex justify-between items-center mb-4">
+      <div class="flex items-center gap-3">
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">{{ project.name }}</h3>
+        {% if project.status %}
+        <span class="px-2 py-0.5 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full">启用</span>
+        {% else %}
+        <span class="px-2 py-0.5 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full">停用</span>
+        {% endif %}
+        <span class="text-xs text-slate-400">排序: {{ project.sort_order }}</span>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="toggleEditProject({{ project.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+        <button onclick="showAddItem({{ project.id }})" class="text-blue-500 hover:text-blue-600 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">+ 子项目</button>
+        <form action="{{ url_for('project_admin.delete_project', project_id=project.id) }}" method="post" class="inline">
+          <button type="submit" onclick="return confirm('确认删除该项目及所有子项目?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
+        </form>
+      </div>
+    </div>
+
+    {# 项目编辑表单 (隐藏) #}
+    <div id="edit-project-{{ project.id }}" class="hidden mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+      <form action="{{ url_for('project_admin.edit_project', project_id=project.id) }}" method="post" class="flex gap-3 items-end">
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">名称</label>
+          <input type="text" name="name" value="{{ project.name }}" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm w-40">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 mb-1 block">排序</label>
+          <input type="number" name="sort_order" value="{{ project.sort_order }}" class="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm w-20">
+        </div>
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="status" {% if project.status %}checked{% endif %} class="rounded"> 启用
+        </label>
+        <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm">保存</button>
+      </form>
+    </div>
+
+    {# 子项目表格 #}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-sm">
+        <thead>
+          <tr class="text-xs text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-2 font-medium">子项目</th>
+            <th class="pb-2 font-medium">娱乐档</th>
+            <th class="pb-2 font-medium">技术档</th>
+            <th class="pb-2 font-medium">大神档</th>
+            <th class="pb-2 font-medium">巅峰档</th>
+            <th class="pb-2 font-medium">魔王档</th>
+            <th class="pb-2 font-medium">佣金%</th>
+            <th class="pb-2 font-medium">计费</th>
+            <th class="pb-2 font-medium">类型</th>
+            <th class="pb-2 font-medium">状态</th>
+            <th class="pb-2 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in project.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors" id="item-row-{{ item.id }}">
+            <td class="py-2 font-medium text-slate-800 dark:text-white">{{ item.name }}</td>
+            <td class="py-2">{{ "%.2f"|format(item.price_casual) }}</td>
+            <td class="py-2">{{ "%.2f"|format(item.price_tech) }}</td>
+            <td class="py-2">{{ "%.2f"|format(item.price_god) }}</td>
+            <td class="py-2">{{ "%.2f"|format(item.price_pro) }}</td>
+            <td class="py-2">{{ "%.2f"|format(item.price_devil or 0) }}</td>
+            <td class="py-2">{{ "%.0f"|format(item.commission_rate) }}%</td>
+            <td class="py-2"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-xs rounded-full">{{ '按时' if item.billing_type == 'hour' else '按局' }}</span></td>
+            <td class="py-2"><span class="px-2 py-0.5 bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 text-xs rounded-full">{{ {'normal':'陪玩','escort':'护航','training':'代练'}.get(item.project_type, item.project_type) }}</span></td>
+            <td class="py-2">
+              {% if item.status %}<span class="text-green-500 text-xs">启用</span>{% else %}<span class="text-red-500 text-xs">停用</span>{% endif %}
+            </td>
+            <td class="py-2 text-right">
+              <button onclick="toggleEditItem({{ item.id }})" class="text-purple-500 text-xs font-medium px-1">编辑</button>
+              <form action="{{ url_for('project_admin.delete_item', item_id=item.id) }}" method="post" class="inline">
+                <button type="submit" onclick="return confirm('确认删除?')" class="text-red-500 text-xs font-medium px-1">删除</button>
+              </form>
+            </td>
+          </tr>
+          {# 编辑行 (隐藏) #}
+          <tr id="edit-item-{{ item.id }}" class="hidden bg-slate-50/50 dark:bg-slate-800/30">
+            <td colspan="11" class="py-3 px-2">
+              <form action="{{ url_for('project_admin.edit_item', item_id=item.id) }}" method="post" class="grid grid-cols-6 gap-2 items-end">
+                <div><label class="text-xs text-slate-400">名称</label><input name="name" value="{{ item.name }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">娱乐档</label><input name="price_casual" value="{{ item.price_casual }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">技术档</label><input name="price_tech" value="{{ item.price_tech }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">大神档</label><input name="price_god" value="{{ item.price_god }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">巅峰档</label><input name="price_peak" value="{{ item.price_pro }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">魔王档</label><input name="price_devil" value="{{ item.price_devil or 0 }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">佣金%</label><input name="commission_rate" value="{{ item.commission_rate }}" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div><label class="text-xs text-slate-400">计费</label>
+                  <select name="billing_type" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs">
+                    <option value="hour" {% if item.billing_type == 'hour' %}selected{% endif %}>按时</option>
+                    <option value="round" {% if item.billing_type == 'round' %}selected{% endif %}>按局</option>
+                  </select>
+                </div>
+                <div><label class="text-xs text-slate-400">类型</label>
+                  <select name="project_type" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs">
+                    <option value="normal" {% if item.project_type == 'normal' %}selected{% endif %}>陪玩</option>
+                    <option value="escort" {% if item.project_type == 'escort' %}selected{% endif %}>护航</option>
+                    <option value="training" {% if item.project_type == 'training' %}selected{% endif %}>代练</option>
+                  </select>
+                </div>
+                <div><label class="text-xs text-slate-400">排序</label><input name="sort_order" value="{{ item.sort_order }}" type="number" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"></div>
+                <div class="flex items-end gap-2">
+                  <label class="flex items-center gap-1 text-xs"><input type="checkbox" name="status" {% if item.status %}checked{% endif %}> 启用</label>
+                  <button type="submit" class="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs">保存</button>
+                </div>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" class="py-4 text-center text-slate-400 text-xs">暂无子项目</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="glass-card p-8 text-center text-slate-500">暂无项目，点击上方按钮添加</div>
+  {% endfor %}
+
+</div>
+
+{# 添加项目弹窗 #}
+<div id="add-project-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex')}">
+  <div class="glass-card p-8 max-w-md w-full mx-4">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4">添加游戏项目</h3>
+    <form action="{{ url_for('project_admin.add_project') }}" method="post" class="space-y-4">
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">项目名称</label>
+        <input type="text" name="name" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+      </div>
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">排序</label>
+        <input type="number" name="sort_order" value="0" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+      </div>
+      <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium">添加</button>
+    </form>
+  </div>
+</div>
+
+{# 添加子项目弹窗 #}
+<div id="add-item-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex')}">
+  <div class="glass-card p-8 max-w-lg w-full mx-4">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4">添加子项目</h3>
+    <form id="add-item-form" method="post" class="space-y-3">
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">名称</label>
+        <input type="text" name="name" required class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div><label class="text-xs text-slate-500 mb-1 block">娱乐档</label><input name="price_casual" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"></div>
+        <div><label class="text-xs text-slate-500 mb-1 block">技术档</label><input name="price_tech" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"></div>
+        <div><label class="text-xs text-slate-500 mb-1 block">大神档</label><input name="price_god" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"></div>
+        <div><label class="text-xs text-slate-500 mb-1 block">巅峰档</label><input name="price_peak" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"></div>
+        <div><label class="text-xs text-slate-500 mb-1 block">魔王档</label><input name="price_devil" value="0" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"></div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div><label class="text-xs text-slate-500 mb-1 block">佣金%</label><input name="commission_rate" value="80" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"></div>
+        <div><label class="text-xs text-slate-500 mb-1 block">计费方式</label>
+          <select name="billing_type" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+            <option value="hour">按时</option><option value="round">按局</option>
+          </select>
+        </div>
+        <div><label class="text-xs text-slate-500 mb-1 block">类型</label>
+          <select name="project_type" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+            <option value="normal">陪玩</option><option value="escort">护航</option><option value="training">代练</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium">添加</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEditProject(id) {
+  document.getElementById('edit-project-' + id).classList.toggle('hidden');
+}
+function toggleEditItem(id) {
+  document.getElementById('edit-item-' + id).classList.toggle('hidden');
+}
+function showAddItem(projectId) {
+  document.getElementById('add-item-form').action = `/admin/projects/${projectId}/items/add`;
+  const m = document.getElementById('add-item-modal');
+  m.classList.remove('hidden'); m.classList.add('flex');
+}
+</script>
+{% endblock %}

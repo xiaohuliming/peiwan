@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block header_title %}申请提现{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-8">
+  <div class="glass-card p-8">
+    <div class="flex items-center gap-3 mb-8">
+        <a href="{{ url_for('finance.my_wallet') }}" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+            <i data-lucide="arrow-left" width="20" height="20"></i>
+        </a>
+        <h2 class="text-xl font-bold text-slate-800 dark:text-white">申请提现</h2>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+        <!-- 提现金额 -->
+        <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">提现金额 (小猪粮)</label>
+            <div class="relative">
+                <input 
+                    type="number" 
+                    name="amount" 
+                    step="0.01" 
+                    min="0.01" 
+                    max="{{ current_user.m_bean }}"
+                    required
+                    class="block w-full pl-4 pr-16 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white text-lg font-medium"
+                    placeholder="0.00"
+                >
+                <div class="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-500 font-medium">
+                    小猪粮
+                </div>
+            </div>
+            <p class="text-xs text-slate-500 mt-2">当前可提现余额: {{ "%.2f"|format(current_user.m_bean) }}</p>
+        </div>
+
+        <!-- 收款方式 -->
+        <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">收款方式</label>
+            <div class="grid grid-cols-2 gap-4">
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="payment_method" value="wechat" class="peer sr-only" checked>
+                    <div class="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 peer-checked:border-green-500 peer-checked:bg-green-50 dark:peer-checked:bg-green-900/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="message-circle" width="20" height="20" class="text-green-600"></i>
+                        <span class="font-medium text-slate-800 dark:text-slate-200">微信支付</span>
+                    </div>
+                </label>
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="payment_method" value="alipay" class="peer sr-only">
+                    <div class="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/20 transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="qr-code" width="20" height="20" class="text-blue-600"></i>
+                        <span class="font-medium text-slate-800 dark:text-slate-200">支付宝</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- 收款账号 -->
+        <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">收款账号</label>
+            <input 
+                type="text" 
+                name="payment_account" 
+                required
+                class="block w-full px-4 py-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white"
+                placeholder="请输入微信账号或支付宝账号"
+            >
+        </div>
+
+        <!-- 收款码图片 (暂留接口) -->
+        <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">收款码 (可选)</label>
+            <label class="block border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group">
+                <input type="file" name="payment_image" accept="image/*" class="sr-only" onchange="previewImage(this)">
+                <div id="upload-placeholder">
+                    <i data-lucide="image-plus" width="32" height="32" class="mx-auto text-slate-400 mb-2 group-hover:text-purple-500 transition-colors"></i>
+                    <span class="text-sm text-slate-500 group-hover:text-purple-500 transition-colors">点击上传收款码图片</span>
+                </div>
+                <img id="image-preview" src="#" alt="Preview" class="hidden max-h-48 mx-auto rounded-lg shadow-sm" />
+            </label>
+        </div>
+
+        <button type="submit" class="w-full btn-primary py-3.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-colors shadow-lg shadow-purple-200 dark:shadow-none font-bold text-lg">
+            确认提现
+        </button>
+    </form>
+  </div>
+</div>
+
+<script>
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        
+        reader.onload = function(e) {
+            document.getElementById('upload-placeholder').classList.add('hidden');
+            var img = document.getElementById('image-preview');
+            img.src = e.target.result;
+            img.classList.remove('hidden');
+        }
+        
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+{% endblock %}

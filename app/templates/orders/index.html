@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+
+{% block header_title %}订单中心{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# ===== 客服/管理视图 ===== #}
+  {% if view_mode == 'staff' %}
+
+  {# 搜索栏 #}
+  <div class="glass-card p-6">
+    <form method="get" action="{{ url_for('orders.index') }}" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">订单号</label>
+        <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="订单号..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">老板昵称</label>
+        <input type="text" name="boss_name" value="{{ request.args.get('boss_name', '') }}" placeholder="老板昵称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">陪玩昵称</label>
+        <input type="text" name="player_name" value="{{ request.args.get('player_name', '') }}" placeholder="陪玩昵称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">派单客服</label>
+        <input type="text" name="staff_name" value="{{ request.args.get('staff_name', '') }}" placeholder="客服昵称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">开始日期</label>
+        <input type="date" name="date_from" value="{{ request.args.get('date_from', '') }}"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">结束日期</label>
+        <input type="date" name="date_to" value="{{ request.args.get('date_to', '') }}"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">状态</label>
+        <select name="status"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="all">全部状态</option>
+          <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
+          <option value="pending_confirm" {% if request.args.get('status')=='pending_confirm' %}selected{% endif %}>待确认</option>
+          <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
+          <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
+          <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
+        </select>
+      </div>
+      <div class="col-span-2 md:col-span-4 lg:col-span-7 flex gap-2 justify-end">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1">
+          <i data-lucide="search" width="16" height="16"></i> 搜索
+        </button>
+        <a href="{{ url_for('orders.index') }}" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
+      </div>
+      
+      <div class="col-span-2 md:col-span-4 lg:col-span-7 flex justify-end items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
+        <div class="flex items-center gap-2">
+            <input type="checkbox" id="auto-refresh" class="rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-600 dark:bg-slate-700">
+            <label for="auto-refresh" class="text-xs text-slate-500 dark:text-slate-400 cursor-pointer select-none">自动刷新 (30s)</label>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const refreshCheckbox = document.getElementById('auto-refresh');
+        let refreshInterval;
+
+        // Restore state
+        if (localStorage.getItem('order_auto_refresh') === 'true') {
+            refreshCheckbox.checked = true;
+            startRefresh();
+        }
+
+        refreshCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                localStorage.setItem('order_auto_refresh', 'true');
+                startRefresh();
+            } else {
+                localStorage.setItem('order_auto_refresh', 'false');
+                stopRefresh();
+            }
+        });
+
+        function startRefresh() {
+            refreshInterval = setInterval(() => {
+                window.location.reload();
+            }, 30000);
+        }
+
+        function stopRefresh() {
+            clearInterval(refreshInterval);
+        }
+    });
+  </script>
+
+  {# 统计卡片 #}
+  {% if stats %}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500"><i data-lucide="wallet" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">总订单额</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(stats.total_amount) }}</p>
+      </div>
+    </div>
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-green-500/10 text-green-500"><i data-lucide="coins" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">陪玩工资</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(stats.player_wages) }}</p>
+      </div>
+    </div>
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500"><i data-lucide="trending-up" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">平台营收</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(stats.platform_revenue) }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# 快捷操作 - 派单: 客服+ #}
+  {% if can_dispatch_order(current_user) %}
+  <div class="flex gap-3">
+    <a href="{{ url_for('orders.dispatch') }}" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+      <i data-lucide="plus-circle" width="18" height="18"></i> 立即派单
+    </a>
+  </div>
+  {% endif %}
+
+  {# 订单表格 #}
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[900px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">订单号</th>
+            <th class="pb-3 font-medium">老板</th>
+            <th class="pb-3 font-medium">陪玩</th>
+            <th class="pb-3 font-medium">游戏项目</th>
+            <th class="pb-3 font-medium">实际价格</th>
+            <th class="pb-3 font-medium">陪玩收益</th>
+            <th class="pb-3 font-medium">订单状态</th>
+            <th class="pb-3 font-medium">冻结</th>
+            <th class="pb-3 font-medium">客服</th>
+            <th class="pb-3 font-medium">派单日期</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3 text-slate-600 dark:text-slate-300 font-mono text-xs">{{ order.order_no }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ order.boss.nickname if order.boss else '-' }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ order.player.player_nickname if order.player else '-' }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">
+              <span class="flex items-center gap-1"><i data-lucide="gamepad-2" width="14" height="14"></i> {{ order.project_display }}</span>
+            </td>
+            <td class="py-3 font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.total_price) }}</td>
+            <td class="py-3 text-green-600 dark:text-green-400 font-medium">{{ "%.2f"|format(order.player_earning) }}</td>
+            <td class="py-3">
+              {% set color = order.status_color %}
+              <span class="px-2 py-1 bg-{{ color }}-100 text-{{ color }}-800 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-300 text-xs rounded-full font-medium">{{ order.status_label }}</span>
+            </td>
+            <td class="py-3">
+              {% if order.is_frozen %}
+              <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">冻结</span>
+              {% else %}
+              <span class="text-xs text-slate-400">正常</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ order.staff.staff_display_name if order.staff else '-' }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ order.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-3 text-right">
+              <div class="flex justify-end gap-1">
+                <button onclick="showDetail({{ order.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">详情</button>
+                {# 冻结/解冻: 客服+ #}
+                {% if can_freeze_order(current_user) %}
+                  {% if not order.is_frozen %}
+                  <form action="{{ url_for('orders.order_action', order_id=order.id, action='freeze') }}" method="post" class="inline">
+                    <button type="submit" class="text-orange-500 hover:text-orange-600 text-xs font-medium px-2 py-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" onclick="return confirm('确认冻结?')">冻结</button>
+                  </form>
+                  {% else %}
+                  <form action="{{ url_for('orders.order_action', order_id=order.id, action='unfreeze') }}" method="post" class="inline">
+                    <button type="submit" class="text-blue-500 hover:text-blue-600 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" onclick="return confirm('确认解冻?')">解冻</button>
+                  </form>
+                  {% endif %}
+                {% endif %}
+                {# 结算: 客服+, 仅护航/代练待结算订单 #}
+                {% if can_freeze_order(current_user) and order.status == 'pending_pay' and order.order_type in ('escort', 'training') %}
+                <form action="{{ url_for('orders.order_action', order_id=order.id, action='settle') }}" method="post" class="inline">
+                  <button type="submit" class="text-green-500 hover:text-green-600 text-xs font-medium px-2 py-1 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" onclick="return confirm('确认结算? 将解冻佣金并发放给陪玩')">结算</button>
+                </form>
+                {% endif %}
+                {# 退款: 管理员+ #}
+                {% if can_refund_order(current_user) and order.status in ('pending_pay', 'paid') %}
+                <form action="{{ url_for('orders.order_action', order_id=order.id, action='refund') }}" method="post" class="inline">
+                  <button type="submit" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" onclick="return confirm('确认退款? 将退还老板嗯呢币并扣回陪玩小猪粮')">退款</button>
+                </form>
+                {% endif %}
+                {# 删除: 客服+ #}
+                {% if can_delete_order(current_user) and order.status in ('pending_report', 'pending_confirm') %}
+                <form action="{{ url_for('orders.delete', order_id=order.id) }}" method="post" class="inline">
+                  <button type="submit" class="text-rose-600 hover:text-rose-700 text-xs font-medium px-2 py-1 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors" onclick="return confirm('确认删除订单?\\n\\n仅删除未付款订单，不会产生资金变动。')">删除</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" class="py-8 text-center text-slate-500">暂无订单数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# 分页 #}
+    {% if orders.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if orders.has_prev %}
+        <a href="{{ url_for('orders.index', page=orders.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">第 {{ orders.page }} / {{ orders.pages }} 页</span>
+        {% if orders.has_next %}
+        <a href="{{ url_for('orders.index', page=orders.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ===== 老板视图 ===== #}
+  {% elif view_mode == 'god' %}
+
+  <div class="glass-card p-8">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">我的订单</h2>
+      <div class="flex gap-2">
+        <select onchange="location.href='{{ url_for('orders.index') }}?status='+this.value"
+          class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="all">全部状态</option>
+          <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
+          <option value="pending_confirm" {% if request.args.get('status')=='pending_confirm' %}selected{% endif %}>待确认</option>
+          <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
+          <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
+          <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">订单号</th>
+            <th class="pb-3 font-medium">陪玩</th>
+            <th class="pb-3 font-medium">游戏项目</th>
+            <th class="pb-3 font-medium">金额</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium">时间</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3 text-slate-600 dark:text-slate-300 font-mono text-xs">{{ order.order_no }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ order.player.player_nickname if order.player else '-' }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">{{ order.project_display }}</td>
+            <td class="py-3 font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.total_price) }}</td>
+            <td class="py-3">
+              {% set color = order.status_color %}
+              <span class="px-2 py-1 bg-{{ color }}-100 text-{{ color }}-800 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-300 text-xs rounded-full font-medium">{{ order.status_label }}</span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ order.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-3 text-right">
+              {% if order.status == 'pending_confirm' %}
+              <form action="{{ url_for('orders.confirm', order_id=order.id) }}" method="post" class="inline">
+                <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors" onclick="return confirm('确认订单?')">确认</button>
+              </form>
+              {% endif %}
+              <button onclick="showDetail({{ order.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1">详情</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="py-8 text-center text-slate-500">暂无订单数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if orders.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if orders.has_prev %}
+        <a href="{{ url_for('orders.index', page=orders.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">第 {{ orders.page }} / {{ orders.pages }} 页</span>
+        {% if orders.has_next %}
+        <a href="{{ url_for('orders.index', page=orders.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ===== 多身份(老板+陪玩)视图 ===== #}
+  {% elif view_mode == 'hybrid' %}
+
+  <div class="glass-card p-8">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">我的多身份订单</h2>
+      <div class="flex gap-2">
+        <select onchange="location.href='{{ url_for('orders.index') }}?status='+this.value"
+          class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="all">全部状态</option>
+          <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
+          <option value="pending_confirm" {% if request.args.get('status')=='pending_confirm' %}selected{% endif %}>待确认</option>
+          <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
+          <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
+          <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">订单号</th>
+            <th class="pb-3 font-medium">我的身份</th>
+            <th class="pb-3 font-medium">对方</th>
+            <th class="pb-3 font-medium">游戏项目</th>
+            <th class="pb-3 font-medium">金额/收益</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium">时间</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders.items %}
+          {% set as_boss = (order.boss_id == current_user.id) %}
+          {% set as_player = (order.player_id == current_user.id) %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3 text-slate-600 dark:text-slate-300 font-mono text-xs">{{ order.order_no }}</td>
+            <td class="py-3">
+              {% if as_boss and as_player %}
+              <span class="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">老板 + 陪玩</span>
+              {% elif as_boss %}
+              <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">老板</span>
+              {% elif as_player %}
+              <span class="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">陪玩</span>
+              {% else %}
+              <span class="text-xs text-slate-400">-</span>
+              {% endif %}
+            </td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">
+              {% if as_boss and order.player %}
+              {{ order.player.player_nickname or order.player.nickname or order.player.username }}
+              {% elif as_player and order.boss %}
+              {{ order.boss.nickname or order.boss.username }}
+              {% else %}
+              -
+              {% endif %}
+            </td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">{{ order.project_display }}</td>
+            <td class="py-3">
+              <div class="font-semibold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.total_price) }}</div>
+              {% if as_player %}
+              <div class="text-xs text-green-600 dark:text-green-400">我的收益 {{ "%.2f"|format(order.player_earning) }} 小猪粮</div>
+              {% endif %}
+            </td>
+            <td class="py-3">
+              {% set color = order.status_color %}
+              <span class="px-2 py-1 bg-{{ color }}-100 text-{{ color }}-800 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-300 text-xs rounded-full font-medium">{{ order.status_label }}</span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ order.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-3 text-right">
+              {% if as_player and order.status == 'pending_report' %}
+              <a href="{{ url_for('orders.report', order_id=order.id) }}" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors">申报</a>
+              {% endif %}
+              {% if as_boss and order.status == 'pending_confirm' %}
+              <form action="{{ url_for('orders.confirm', order_id=order.id) }}" method="post" class="inline">
+                <button type="submit" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors" onclick="return confirm('确认订单?')">确认</button>
+              </form>
+              {% endif %}
+              <button onclick="showDetail({{ order.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1">详情</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="py-8 text-center text-slate-500">暂无订单数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if orders.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if orders.has_prev %}
+        <a href="{{ url_for('orders.index', page=orders.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">第 {{ orders.page }} / {{ orders.pages }} 页</span>
+        {% if orders.has_next %}
+        <a href="{{ url_for('orders.index', page=orders.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ===== 陪玩视图 ===== #}
+  {% else %}
+
+  <div class="glass-card p-8">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">我的订单</h2>
+      <div class="flex gap-2">
+        <select onchange="location.href='{{ url_for('orders.index') }}?status='+this.value"
+          class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="all">全部状态</option>
+          <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
+          <option value="pending_confirm" {% if request.args.get('status')=='pending_confirm' %}selected{% endif %}>待确认</option>
+          <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
+          <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
+          <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">订单号</th>
+            <th class="pb-3 font-medium">老板</th>
+            <th class="pb-3 font-medium">游戏项目</th>
+            <th class="pb-3 font-medium">我的收益</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium">时间</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3 text-slate-600 dark:text-slate-300 font-mono text-xs">{{ order.order_no }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ order.boss.nickname if order.boss else '-' }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">{{ order.project_display }}</td>
+            <td class="py-3 text-green-600 dark:text-green-400 font-bold">{{ "%.2f"|format(order.player_earning) }} 小猪粮</td>
+            <td class="py-3">
+              {% set color = order.status_color %}
+              <span class="px-2 py-1 bg-{{ color }}-100 text-{{ color }}-800 dark:bg-{{ color }}-900/30 dark:text-{{ color }}-300 text-xs rounded-full font-medium">{{ order.status_label }}</span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ order.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-3 text-right">
+              {% if order.status == 'pending_report' %}
+              <a href="{{ url_for('orders.report', order_id=order.id) }}" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors">申报</a>
+              {% endif %}
+              <button onclick="showDetail({{ order.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1">详情</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="py-8 text-center text-slate-500">暂无订单数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if orders.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if orders.has_prev %}
+        <a href="{{ url_for('orders.index', page=orders.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">第 {{ orders.page }} / {{ orders.pages }} 页</span>
+        {% if orders.has_next %}
+        <a href="{{ url_for('orders.index', page=orders.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% endif %}
+</div>
+
+{# ===== 订单详情弹窗 ===== #}
+<div id="detail-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this)closeDetail()">
+  <div class="glass-card p-8 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto custom-scrollbar">
+    <div class="flex justify-between items-center mb-6">
+      <h3 class="text-lg font-bold text-slate-800 dark:text-white">订单详情</h3>
+      <button onclick="closeDetail()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+        <i data-lucide="x" width="20" height="20"></i>
+      </button>
+    </div>
+    <div id="detail-content" class="grid grid-cols-2 gap-4 text-sm">
+      <p class="text-slate-400">加载中...</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showDetail(orderId) {
+  const modal = document.getElementById('detail-modal');
+  const content = document.getElementById('detail-content');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  content.innerHTML = '<p class="text-slate-400 col-span-2">加载中...</p>';
+
+  fetch(`/api/orders/${orderId}/detail`)
+    .then(r => r.json())
+    .then(d => {
+      const tierMap = {casual:'娱乐档',tech:'技术档',god:'大神档',peak:'巅峰档',pro:'巅峰档',devil:'魔王档'};
+      const typeMap = {normal:'常规陪玩',escort:'护航',training:'代练'};
+      content.innerHTML = `
+        <div class="space-y-3">
+          <div><span class="text-slate-400">订单号:</span><span class="ml-2 font-mono font-medium text-slate-800 dark:text-white">${d.order_no}</span></div>
+          <div><span class="text-slate-400">老板:</span><span class="ml-2 font-medium text-slate-800 dark:text-white">${d.boss}${d.boss_kook ? ' ('+d.boss_kook+')' : ''}</span></div>
+          <div><span class="text-slate-400">陪玩:</span><span class="ml-2 font-medium text-slate-800 dark:text-white">${d.player}</span></div>
+          <div><span class="text-slate-400">派单客服:</span><span class="ml-2 text-slate-800 dark:text-white">${d.staff || '-'}</span></div>
+          <div><span class="text-slate-400">游戏:</span><span class="ml-2 text-slate-800 dark:text-white">${d.game} - ${d.item}</span></div>
+          <div><span class="text-slate-400">订单类型:</span><span class="ml-2 text-slate-800 dark:text-white">${typeMap[d.order_type]||d.order_type}</span></div>
+          <div><span class="text-slate-400">档位:</span><span class="ml-2 text-slate-800 dark:text-white">${tierMap[d.price_tier]||d.price_tier}</span></div>
+        </div>
+        <div class="space-y-3">
+          <div><span class="text-slate-400">基础单价:</span><span class="ml-2 font-medium text-slate-800 dark:text-white">¥${d.base_price.toFixed(2)}</span></div>
+          <div><span class="text-slate-400">补充单价:</span><span class="ml-2 text-slate-800 dark:text-white">¥${d.extra_price.toFixed(2)}</span></div>
+          ${d.addon_desc ? `<div><span class="text-slate-400">附加项:</span><span class="ml-2 text-slate-800 dark:text-white">${d.addon_desc} ¥${d.addon_price.toFixed(2)}</span></div>` : ''}
+          <div><span class="text-slate-400">折扣:</span><span class="ml-2 text-slate-800 dark:text-white">${d.boss_discount}%</span></div>
+          <div><span class="text-slate-400">时长:</span><span class="ml-2 text-slate-800 dark:text-white">${d.duration}h</span></div>
+          <div><span class="text-slate-400 font-bold">总价:</span><span class="ml-2 font-bold text-lg text-slate-800 dark:text-white">¥${d.total_price.toFixed(2)}</span></div>
+          ${d.consume_amount > 0 ? `<div><span class="text-slate-400">已扣款:</span><span class="ml-2 text-amber-600 font-medium">¥${d.consume_amount.toFixed(2)}</span></div>` : ''}
+          ${d.refund_amount > 0 ? `<div><span class="text-slate-400">退款给老板:</span><span class="ml-2 text-green-600 font-medium">¥${d.refund_amount.toFixed(2)}</span></div>` : ''}
+          ${d.player_refund_deduct > 0 ? `<div><span class="text-slate-400">扣回陪玩:</span><span class="ml-2 text-red-600 font-medium">${d.player_refund_deduct.toFixed(2)} 小猪粮</span></div>` : ''}
+          <div><span class="text-slate-400">佣金比例:</span><span class="ml-2 text-slate-800 dark:text-white">${d.commission_rate}%</span></div>
+          <div><span class="text-slate-400">陪玩收益:</span><span class="ml-2 text-green-600 font-medium">${d.player_earning.toFixed(2)} 小猪粮</span></div>
+          <div><span class="text-slate-400">平台营收:</span><span class="ml-2 text-purple-600 font-medium">¥${d.shop_earning.toFixed(2)}</span></div>
+        </div>
+        <div class="col-span-2 border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
+          <div class="grid grid-cols-2 gap-2 text-xs text-slate-500">
+            <div>派单: ${d.created_at || '-'}</div>
+            <div>申报: ${d.report_time || '-'}</div>
+            <div>确认: ${d.confirm_time || '-'}</div>
+            <div>结算: ${d.pay_time || '-'}</div>
+            ${d.refund_time ? `<div class="text-red-500">退款: ${d.refund_time}</div>` : ''}
+            ${d.refund_balance_time ? `<div class="text-green-600">退款记账: ${d.refund_balance_time}</div>` : ''}
+            ${d.player_refund_deduct_time ? `<div class="text-red-600">扣回记账: ${d.player_refund_deduct_time}</div>` : ''}
+          </div>
+          ${d.refund_reason ? `<div class="text-red-500"><span class="text-slate-400">退款说明:</span> ${d.refund_reason}</div>` : ''}
+          ${d.remark ? `<div class="text-slate-500"><span class="text-slate-400">备注:</span> ${d.remark}</div>` : ''}
+          <div class="flex items-center gap-2 mt-2">
+            <span class="text-slate-400">状态:</span>
+            <span class="font-medium text-slate-800 dark:text-white">${d.status_label}</span>
+            ${d.freeze_status === 'frozen' ? '<span class="px-2 py-0.5 bg-red-100 text-red-600 text-xs rounded-full">冻结中</span>' : ''}
+          </div>
+        </div>
+      `;
+      lucide.createIcons();
+    })
+    .catch(() => { content.innerHTML = '<p class="text-red-500 col-span-2">加载失败</p>'; });
+}
+
+function closeDetail() {
+  const modal = document.getElementById('detail-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+</script>
+{% endblock %}

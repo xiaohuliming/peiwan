@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block header_title %}操作日志{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 筛选栏 #}
+  <div class="glass-card p-6">
+    <form method="get" class="flex gap-3 items-end">
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">操作类型</label>
+        <select name="action_type" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+          <option value="">全部</option>
+          {% for at in action_types %}
+          <option value="{{ at }}" {% if action_type == at %}selected{% endif %}>{{ at }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">操作人</label>
+        <input type="text" name="operator_name" value="{{ operator_name }}" placeholder="昵称..."
+          class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-40">
+      </div>
+      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors">筛选</button>
+      <a href="{{ url_for('logs.index') }}" class="bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
+    </form>
+  </div>
+
+  {# 日志表格 #}
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[700px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">时间</th>
+            <th class="pb-3 font-medium">操作人</th>
+            <th class="pb-3 font-medium">操作类型</th>
+            <th class="pb-3 font-medium">目标</th>
+            <th class="pb-3 font-medium">详情</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">{{ log.created_at.strftime('%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ log.operator.nickname if log.operator else '-' }}</td>
+            <td class="py-3">
+              <span class="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded-full font-mono">{{ log.action_type }}</span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ log.target_type }}#{{ log.target_id }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300 text-xs max-w-[300px] truncate">{{ log.detail or '-' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-8 text-center text-slate-500">暂无操作日志</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# 分页 #}
+    {% if logs.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if logs.has_prev %}
+        <a href="{{ url_for('logs.index', page=logs.prev_num, action_type=action_type, operator_name=operator_name) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">{{ logs.page }} / {{ logs.pages }}</span>
+        {% if logs.has_next %}
+        <a href="{{ url_for('logs.index', page=logs.next_num, action_type=action_type, operator_name=operator_name) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

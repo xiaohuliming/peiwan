@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block header_title %}排行榜{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 时间筛选 + 标签切换 #}
+  <div class="glass-card p-6">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {# 标签切换 #}
+      <div class="flex gap-2">
+        <a href="{{ url_for('rankings.index', tab='player', period=period) }}"
+          class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if tab == 'player' %}bg-purple-600 text-white shadow-sm{% else %}bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60{% endif %}">
+          <i data-lucide="gamepad-2" width="16" height="16" class="inline-block mr-1"></i> 陪玩排行
+        </a>
+        <a href="{{ url_for('rankings.index', tab='boss', period=period) }}"
+          class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if tab == 'boss' %}bg-purple-600 text-white shadow-sm{% else %}bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60{% endif %}">
+          <i data-lucide="crown" width="16" height="16" class="inline-block mr-1"></i> 老板排行
+        </a>
+        <a href="{{ url_for('rankings.index', tab='intimacy', period=period) }}"
+          class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if tab == 'intimacy' %}bg-purple-600 text-white shadow-sm{% else %}bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60{% endif %}">
+          <i data-lucide="heart" width="16" height="16" class="inline-block mr-1"></i> 亲密度排行
+        </a>
+      </div>
+
+      {# 时间筛选 #}
+      {% if tab != 'intimacy' %}
+      <div class="flex flex-wrap gap-1.5">
+        {% set periods = [
+          ('today', '今天'), ('yesterday', '昨天'),
+          ('this_week', '本周'), ('last_week', '上周'),
+          ('this_month', '本月'), ('last_month', '上月'),
+          ('this_quarter', '本季度'), ('this_year', '今年'),
+          ('last_7', '近7天'), ('last_30', '近30天')
+        ] %}
+        {% for val, label in periods %}
+        <a href="{{ url_for('rankings.index', tab=tab, period=val) }}"
+          class="px-3 py-1 rounded-lg text-xs font-medium transition-colors {% if period == val %}bg-purple-500 text-white{% else %}bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600{% endif %}">
+          {{ label }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# 陪玩排行 #}
+  {% if tab == 'player' %}
+  <div class="glass-card p-6">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+      <i data-lucide="trophy" width="20" height="20" class="text-yellow-500"></i> 陪玩收益排行
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium w-16">排名</th>
+            <th class="pb-3 font-medium">陪玩</th>
+            <th class="pb-3 font-medium text-right">订单收益</th>
+            <th class="pb-3 font-medium text-right">礼物收益</th>
+            <th class="pb-3 font-medium text-right">总收益 (小猪粮)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in player_ranking %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              {% if loop.index == 1 %}
+              <span class="w-8 h-8 rounded-full bg-yellow-400 text-white flex items-center justify-center font-bold text-sm shadow-sm">1</span>
+              {% elif loop.index == 2 %}
+              <span class="w-8 h-8 rounded-full bg-slate-300 text-white flex items-center justify-center font-bold text-sm shadow-sm">2</span>
+              {% elif loop.index == 3 %}
+              <span class="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">3</span>
+              {% else %}
+              <span class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center font-medium text-sm">{{ loop.index }}</span>
+              {% endif %}
+            </td>
+            <td class="py-3">
+              <div class="flex items-center gap-3">
+                <img src="{{ item.user.avatar_url }}" class="w-8 h-8 rounded-full" alt="">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-white">{{ item.user.player_nickname or item.user.nickname or item.user.username }}</p>
+                  <p class="text-xs text-slate-400">{{ item.user.user_code }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="py-3 text-right text-slate-600 dark:text-slate-300">{{ "%.2f"|format(item.order_earning) }}</td>
+            <td class="py-3 text-right text-slate-600 dark:text-slate-300">{{ "%.2f"|format(item.gift_earning) }}</td>
+            <td class="py-3 text-right font-bold text-green-600 dark:text-green-400">{{ "%.2f"|format(item.total) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-8 text-center text-slate-500">暂无数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# 老板排行 #}
+  {% if tab == 'boss' %}
+  <div class="glass-card p-6">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+      <i data-lucide="crown" width="20" height="20" class="text-yellow-500"></i> 老板消费排行
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium w-16">排名</th>
+            <th class="pb-3 font-medium">老板</th>
+            {% if current_user.is_admin %}
+            <th class="pb-3 font-medium text-right">经验值</th>
+            <th class="pb-3 font-medium text-right">VIP等级</th>
+            {% endif %}
+            <th class="pb-3 font-medium text-right">订单消费</th>
+            <th class="pb-3 font-medium text-right">礼物消费</th>
+            <th class="pb-3 font-medium text-right">总消费 (嗯呢币)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in boss_ranking %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              {% if loop.index == 1 %}
+              <span class="w-8 h-8 rounded-full bg-yellow-400 text-white flex items-center justify-center font-bold text-sm shadow-sm">1</span>
+              {% elif loop.index == 2 %}
+              <span class="w-8 h-8 rounded-full bg-slate-300 text-white flex items-center justify-center font-bold text-sm shadow-sm">2</span>
+              {% elif loop.index == 3 %}
+              <span class="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-sm shadow-sm">3</span>
+              {% else %}
+              <span class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center font-medium text-sm">{{ loop.index }}</span>
+              {% endif %}
+            </td>
+            <td class="py-3">
+              <div class="flex items-center gap-3">
+                <img src="{{ item.user.avatar_url }}" class="w-8 h-8 rounded-full" alt="">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-white">{{ item.user.nickname or item.user.username }}</p>
+                  <p class="text-xs text-slate-400">{{ item.user.user_code }}</p>
+                </div>
+              </div>
+            </td>
+            {% if current_user.is_admin %}
+            <td class="py-3 text-right text-slate-600 dark:text-slate-300">{{ item.user.experience }}</td>
+            <td class="py-3 text-right">
+              <span class="px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 text-xs rounded-full font-medium">{{ item.user.vip_level }}</span>
+            </td>
+            {% endif %}
+            <td class="py-3 text-right text-slate-600 dark:text-slate-300">{{ "%.2f"|format(item.order_spend) }}</td>
+            <td class="py-3 text-right text-slate-600 dark:text-slate-300">{{ "%.2f"|format(item.gift_spend) }}</td>
+            <td class="py-3 text-right font-bold text-purple-600 dark:text-purple-400">{{ "%.2f"|format(item.total) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="{% if current_user.is_admin %}7{% else %}5{% endif %}" class="py-8 text-center text-slate-500">暂无数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {# 亲密度排行 #}
+  {% if tab == 'intimacy' %}
+  <div class="glass-card p-6">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+      <i data-lucide="heart" width="20" height="20" class="text-pink-500"></i> 亲密度排行
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium w-16">排名</th>
+            <th class="pb-3 font-medium">老板</th>
+            <th class="pb-3 font-medium">陪玩</th>
+            <th class="pb-3 font-medium text-right">亲密度</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in intimacy_ranking %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              {% if loop.index == 1 %}
+              <span class="w-8 h-8 rounded-full bg-pink-400 text-white flex items-center justify-center font-bold text-sm shadow-sm">1</span>
+              {% elif loop.index == 2 %}
+              <span class="w-8 h-8 rounded-full bg-pink-300 text-white flex items-center justify-center font-bold text-sm shadow-sm">2</span>
+              {% elif loop.index == 3 %}
+              <span class="w-8 h-8 rounded-full bg-pink-200 text-pink-700 flex items-center justify-center font-bold text-sm shadow-sm">3</span>
+              {% else %}
+              <span class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center font-medium text-sm">{{ loop.index }}</span>
+              {% endif %}
+            </td>
+            <td class="py-3">
+              <div class="flex items-center gap-2">
+                <img src="{{ item.boss.avatar_url }}" class="w-7 h-7 rounded-full" alt="">
+                <span class="font-medium text-slate-800 dark:text-white">{{ item.boss.nickname or item.boss.username }}</span>
+              </div>
+            </td>
+            <td class="py-3">
+              <div class="flex items-center gap-2">
+                <img src="{{ item.player.avatar_url }}" class="w-7 h-7 rounded-full" alt="">
+                <span class="font-medium text-slate-800 dark:text-white">{{ item.player.player_nickname or item.player.nickname or item.player.username }}</span>
+              </div>
+            </td>
+            <td class="py-3 text-right">
+              <span class="text-pink-600 dark:text-pink-400 font-bold">{{ "%.0f"|format(item.value) }}</span>
+              <i data-lucide="heart" width="14" height="14" class="inline-block text-pink-400 ml-1"></i>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="py-8 text-center text-slate-500">暂无亲密度数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

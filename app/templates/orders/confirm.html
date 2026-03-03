@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block header_title %}确认结单{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <div class="glass-card p-8">
+    <div class="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <h2 class="text-2xl font-bold text-slate-800 dark:text-white">订单确认</h2>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">请核对订单信息后完成确认</p>
+      </div>
+      <span class="px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+        {{ order.order_no }}
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-6">
+      <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <p class="text-slate-400 mb-1">老板</p>
+        <p class="text-slate-800 dark:text-white font-medium">{{ order.boss.nickname if order.boss else '-' }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <p class="text-slate-400 mb-1">陪玩</p>
+        <p class="text-slate-800 dark:text-white font-medium">{{ order.player.player_nickname if order.player else '-' }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <p class="text-slate-400 mb-1">项目</p>
+        <p class="text-slate-800 dark:text-white font-medium">{{ order.project_display }}</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+        <p class="text-slate-400 mb-1">申报时长</p>
+        <p class="text-slate-800 dark:text-white font-medium">{{ order.duration or 0 }} 小时</p>
+      </div>
+      <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4 md:col-span-2">
+        <p class="text-slate-400 mb-1">订单金额</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.total_price or 0) }}</p>
+      </div>
+    </div>
+
+    {% if order.status == 'pending_confirm' %}
+    <div class="rounded-xl border border-green-200 dark:border-green-900/40 bg-green-50/70 dark:bg-green-900/10 p-4 mb-6">
+      <p class="text-sm text-green-700 dark:text-green-300">当前状态为待确认，确认后将执行扣款并发放陪玩收益。</p>
+    </div>
+    {% else %}
+    <div class="rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/70 dark:bg-amber-900/10 p-4 mb-6">
+      <p class="text-sm text-amber-700 dark:text-amber-300">当前订单状态为「{{ order.status_label }}」，无需重复确认。</p>
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col sm:flex-row gap-3 sm:justify-end">
+      <a href="{{ url_for('orders.index', status='pending_confirm', q=order.order_no) }}"
+         class="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-center">
+        返回订单中心
+      </a>
+      {% if order.status == 'pending_confirm' %}
+      <form action="{{ url_for('orders.confirm', order_id=order.id) }}" method="post">
+        <button type="submit"
+                class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors"
+                onclick="return confirm('确认结单后将扣款并发放收益，是否继续？')">
+          确认结单
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block header_title %}派单{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <div class="glass-card p-8">
+    <div class="flex items-center gap-3 mb-8">
+      <a href="{{ url_for('orders.index') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+        <i data-lucide="arrow-left" width="20" height="20"></i>
+      </a>
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">创建新订单</h2>
+    </div>
+
+    <form method="post" action="{{ url_for('orders.dispatch') }}" class="space-y-6" id="dispatch-form">
+
+      {# 3级级联选择 #}
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">游戏</label>
+          <select id="sel-game" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <option value="">选择游戏...</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">子项目</label>
+          <select id="sel-item" name="project_item_id" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <option value="">先选游戏...</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">定价档位</label>
+          <select id="sel-tier" name="price_tier" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <option value="casual">娱乐档</option>
+            <option value="tech">技术档</option>
+            <option value="god">大神档</option>
+            <option value="peak">巅峰档</option>
+            <option value="devil">魔王档</option>
+          </select>
+        </div>
+      </div>
+
+      {# 项目信息提示 #}
+      <div id="item-info" class="hidden bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 text-sm space-y-1">
+        <div class="flex gap-4">
+          <span class="text-slate-500">计费方式: <strong id="info-billing" class="text-slate-800 dark:text-white"></strong></span>
+          <span class="text-slate-500">项目类型: <strong id="info-type" class="text-slate-800 dark:text-white"></strong></span>
+          <span class="text-slate-500">佣金比例: <strong id="info-commission" class="text-slate-800 dark:text-white"></strong></span>
+        </div>
+      </div>
+
+      {# 价格行 #}
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">基础单价 (自动)</label>
+          <input type="text" id="base-price-display" readonly
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-sm text-slate-600 dark:text-slate-400 cursor-not-allowed">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">补充单价</label>
+          <input type="number" name="extra_price" step="0.01" value="0" min="0"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">附加价格</label>
+          <input type="number" name="addon_price" step="0.01" value="0" min="0"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+      </div>
+
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">附加项目描述</label>
+        <input type="text" name="addon_desc" placeholder="如: 语音开黑、指导教学等"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+
+      {# 护航/代练时长 #}
+      <div id="duration-section" class="hidden">
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">时长/数量</label>
+        <input type="number" name="duration" step="0.5" value="1" min="0.5"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        <p class="text-xs text-slate-400 mt-1">护航/代练订单需要预设时长，将即时扣款</p>
+      </div>
+
+      {# 用户搜索 #}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="relative">
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">老板 (GOD)</label>
+          <input type="text" id="boss-search" placeholder="搜索老板昵称/KOOK/编号..." autocomplete="off"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="hidden" name="boss_id" id="boss-id">
+          <div id="boss-dropdown" class="absolute z-30 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto hidden"></div>
+          <p id="boss-selected" class="text-xs text-green-500 mt-1 hidden"></p>
+        </div>
+        <div class="relative">
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">陪玩</label>
+          <input type="text" id="player-search" placeholder="搜索陪玩昵称/编号..." autocomplete="off"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="hidden" name="player_id" id="player-id">
+          <div id="player-dropdown" class="absolute z-30 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto hidden"></div>
+          <p id="player-selected" class="text-xs text-green-500 mt-1 hidden"></p>
+        </div>
+      </div>
+
+      {# 备注 #}
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">备注</label>
+        <textarea name="remark" rows="2" placeholder="订单备注..."
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"></textarea>
+      </div>
+
+      {# 提交 #}
+      <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <a href="{{ url_for('orders.index') }}" class="px-6 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">取消</a>
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+          <i data-lucide="send" width="16" height="16"></i> 立刻派单
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let cascadeData = [];
+let currentItems = [];
+let selectedItem = null;
+
+// 加载级联数据
+fetch('/api/projects/cascade')
+  .then(r => r.json())
+  .then(data => {
+    cascadeData = data;
+    const sel = document.getElementById('sel-game');
+    data.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+  });
+
+// 游戏切换 → 更新子项目
+document.getElementById('sel-game').addEventListener('change', function() {
+  const gameId = parseInt(this.value);
+  const selItem = document.getElementById('sel-item');
+  selItem.innerHTML = '<option value="">选择子项目...</option>';
+  selectedItem = null;
+  updateItemInfo();
+
+  const game = cascadeData.find(p => p.id === gameId);
+  if (game) {
+    currentItems = game.items;
+    game.items.forEach(item => {
+      const opt = document.createElement('option');
+      opt.value = item.id;
+      opt.textContent = item.name;
+      selItem.appendChild(opt);
+    });
+  }
+});
+
+// 子项目切换 → 更新价格
+document.getElementById('sel-item').addEventListener('change', function() {
+  const itemId = parseInt(this.value);
+  selectedItem = currentItems.find(i => i.id === itemId) || null;
+  updateItemInfo();
+  updateBasePrice();
+});
+
+// 档位切换 → 更新价格
+document.getElementById('sel-tier').addEventListener('change', updateBasePrice);
+
+function updateItemInfo() {
+  const info = document.getElementById('item-info');
+  if (!selectedItem) { info.classList.add('hidden'); return; }
+  info.classList.remove('hidden');
+  const billingMap = {hour:'按小时',round:'按局'};
+  const typeMap = {normal:'常规陪玩',escort:'护航',training:'代练'};
+  document.getElementById('info-billing').textContent = billingMap[selectedItem.billing_type] || selectedItem.billing_type;
+  document.getElementById('info-type').textContent = typeMap[selectedItem.project_type] || selectedItem.project_type;
+  document.getElementById('info-commission').textContent = selectedItem.commission_rate + '%';
+
+  // 护航/代练显示时长
+  const ds = document.getElementById('duration-section');
+  if (selectedItem.project_type === 'escort' || selectedItem.project_type === 'training') {
+    ds.classList.remove('hidden');
+  } else {
+    ds.classList.add('hidden');
+  }
+}
+
+function updateBasePrice() {
+  const tier = document.getElementById('sel-tier').value;
+  const display = document.getElementById('base-price-display');
+  if (selectedItem && selectedItem.prices[tier] !== undefined) {
+    display.value = '¥ ' + selectedItem.prices[tier].toFixed(2);
+  } else {
+    display.value = '';
+  }
+}
+
+// 用户搜索
+function setupSearch(inputId, dropdownId, hiddenId, selectedId, role) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hidden = document.getElementById(hiddenId);
+  const selectedEl = document.getElementById(selectedId);
+  let timer = null;
+
+  input.addEventListener('input', function() {
+    clearTimeout(timer);
+    const q = this.value.trim();
+    if (q.length < 1) { dropdown.classList.add('hidden'); return; }
+    timer = setTimeout(() => {
+      fetch(`/api/users/search?q=${encodeURIComponent(q)}&role=${role}`)
+        .then(r => r.json())
+        .then(users => {
+          dropdown.innerHTML = '';
+          if (users.length === 0) {
+            dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-slate-400">无结果</div>';
+          } else {
+            users.forEach(u => {
+              const div = document.createElement('div');
+              div.className = 'flex items-center gap-3 px-4 py-2.5 hover:bg-purple-50 dark:hover:bg-slate-700 cursor-pointer transition-colors';
+              const mainName = role === 'player' ? (u.player_name || u.display) : (u.display || '');
+              const kookInfo = u.kook ? `<span class="text-slate-400 text-[11px]">${u.kook}</span>` : '';
+              div.innerHTML = `
+                <img src="${u.avatar}" class="w-8 h-8 rounded-full flex-shrink-0" alt="" referrerpolicy="no-referrer">
+                <div class="min-w-0 flex-1">
+                  <div class="text-sm font-medium text-slate-800 dark:text-white truncate">${mainName}</div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-slate-400 text-[11px]">${u.user_code}</span>
+                    ${kookInfo}
+                  </div>
+                </div>
+              `;
+              div.addEventListener('click', () => {
+                hidden.value = u.id;
+                input.value = mainName;
+                selectedEl.innerHTML = '<span class="flex items-center gap-2"><img src="' + u.avatar + '" class="w-5 h-5 rounded-full inline" referrerpolicy="no-referrer"> 已选择: ' + mainName + '</span>';
+                selectedEl.classList.remove('hidden');
+                dropdown.classList.add('hidden');
+              });
+              dropdown.appendChild(div);
+            });
+          }
+          dropdown.classList.remove('hidden');
+        });
+    }, 300);
+  });
+
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  });
+}
+
+setupSearch('boss-search', 'boss-dropdown', 'boss-id', 'boss-selected', 'boss');
+setupSearch('player-search', 'player-dropdown', 'player-id', 'player-selected', 'player');
+
+// 表单验证
+document.getElementById('dispatch-form').addEventListener('submit', function(e) {
+  if (!document.getElementById('sel-item').value) {
+    e.preventDefault(); alert('请选择子项目'); return;
+  }
+  if (!document.getElementById('boss-id').value) {
+    e.preventDefault(); alert('请选择老板'); return;
+  }
+  if (!document.getElementById('player-id').value) {
+    e.preventDefault(); alert('请选择陪玩'); return;
+  }
+});
+</script>
+{% endblock %}

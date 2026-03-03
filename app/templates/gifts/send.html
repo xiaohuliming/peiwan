@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block header_title %}赠送礼物{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="glass-card p-8">
+    <div class="flex items-center gap-3 mb-6">
+      <a href="{{ url_for('gifts.index') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+        <i data-lucide="arrow-left" width="20" height="20"></i>
+      </a>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-white">赠送礼物</h2>
+    </div>
+
+    <form method="post" action="{{ url_for('gifts.send') }}" class="space-y-5" id="gift-form">
+      {# 礼物选择 #}
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">礼物</label>
+        <select name="gift_id" id="gift_select" required
+          class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">请选择礼物</option>
+          {% for gift in gifts %}
+          <option value="{{ gift.id }}" data-price="{{ gift.price }}">
+            {{ gift.name }} - {{ "%.2f"|format(gift.price) }} 嗯呢币
+            {% if gift.gift_type == 'crown' %}(冠名){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {# 数量 #}
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">数量</label>
+        <input type="number" name="quantity" id="gift_qty" value="1" min="1" required
+          class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+
+      {# 预计总价 #}
+      <div class="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/30">
+        <p class="text-sm text-purple-600 dark:text-purple-300">
+          预计总价: <span id="total_price" class="font-bold text-lg">0.00</span> 嗯呢币
+        </p>
+      </div>
+
+      {# 老板搜索 #}
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">老板</label>
+        <div class="relative">
+          <input type="text" id="boss_search" placeholder="搜索老板昵称/KOOK/编号..." autocomplete="off"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="hidden" name="boss_id" id="boss_id" required>
+          <div id="boss_dropdown" class="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto hidden"></div>
+          <p id="boss_selected" class="text-xs text-green-500 mt-1 hidden"></p>
+        </div>
+      </div>
+
+      {# 收礼人搜索 #}
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2 block">收礼人（陪玩/老板）</label>
+        <div class="relative">
+          <input type="text" id="player_search" placeholder="搜索陪玩昵称/客户昵称/编号..." autocomplete="off"
+            class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <input type="hidden" name="player_id" id="player_id" required>
+          <div id="player_dropdown" class="absolute z-10 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto hidden"></div>
+          <p id="player_selected" class="text-xs text-green-500 mt-1 hidden"></p>
+        </div>
+      </div>
+
+      <button type="submit" class="w-full bg-pink-600 hover:bg-pink-700 text-white py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
+        <i data-lucide="gift" width="18" height="18"></i> 确认赠送
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 计算总价
+function updateTotal() {
+  const sel = document.getElementById('gift_select');
+  const qty = parseInt(document.getElementById('gift_qty').value) || 0;
+  const opt = sel.options[sel.selectedIndex];
+  const price = parseFloat(opt?.dataset.price || 0);
+  document.getElementById('total_price').textContent = (price * qty).toFixed(2);
+}
+document.getElementById('gift_select').addEventListener('change', updateTotal);
+document.getElementById('gift_qty').addEventListener('input', updateTotal);
+
+// 用户搜索（与派单页面一致）
+function setupSearch(inputId, dropdownId, hiddenId, selectedId, role) {
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(dropdownId);
+  const hidden = document.getElementById(hiddenId);
+  const selectedEl = document.getElementById(selectedId);
+  let timer;
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 1) {
+      dropdown.classList.add('hidden');
+      selectedEl.classList.add('hidden');
+      return;
+    }
+
+    timer = setTimeout(() => {
+      fetch(`/api/users/search?q=${encodeURIComponent(q)}&role=${role}`)
+        .then(r => r.json())
+        .then(users => {
+          dropdown.innerHTML = '';
+          if (users.length === 0) {
+            dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-slate-400">无结果</div>';
+          } else {
+            users.forEach(u => {
+              const div = document.createElement('div');
+              div.className = 'flex items-center gap-3 px-4 py-2.5 hover:bg-purple-50 dark:hover:bg-slate-700 cursor-pointer transition-colors';
+              const mainName = (role === 'player' || role === 'gift_receiver')
+                ? (u.player_name || u.boss_name || u.display)
+                : (u.display || '');
+              const kookInfo = u.kook ? `<span class="text-slate-400 text-[11px]">${u.kook}</span>` : '';
+              div.innerHTML = `
+                <img src="${u.avatar}" class="w-8 h-8 rounded-full flex-shrink-0" alt="" referrerpolicy="no-referrer">
+                <div class="min-w-0 flex-1">
+                  <div class="text-sm font-medium text-slate-800 dark:text-white truncate">${mainName}</div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-slate-400 text-[11px]">${u.user_code}</span>
+                    ${kookInfo}
+                  </div>
+                </div>
+              `;
+              div.addEventListener('click', () => {
+                hidden.value = u.id;
+                input.value = mainName;
+                selectedEl.innerHTML = '<span class="flex items-center gap-2"><img src="' + u.avatar + '" class="w-5 h-5 rounded-full inline" referrerpolicy="no-referrer"> 已选择: ' + mainName + '</span>';
+                selectedEl.classList.remove('hidden');
+                dropdown.classList.add('hidden');
+              });
+              dropdown.appendChild(div);
+            });
+          }
+          dropdown.classList.remove('hidden');
+        });
+    }, 300);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.add('hidden');
+    }
+  });
+}
+
+setupSearch('boss_search', 'boss_dropdown', 'boss_id', 'boss_selected', 'boss');
+setupSearch('player_search', 'player_dropdown', 'player_id', 'player_selected', 'gift_receiver');
+
+// 表单验证
+document.getElementById('gift-form').addEventListener('submit', function(e) {
+  if (!document.getElementById('boss_id').value) {
+    e.preventDefault();
+    alert('请选择老板');
+    return;
+  }
+  if (!document.getElementById('player_id').value) {
+    e.preventDefault();
+    alert('请选择收礼人');
+  }
+});
+</script>
+{% endblock %}

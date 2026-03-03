@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block header_title %}创建抽奖{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-3xl">
+
+  <div class="flex items-center gap-3">
+    <a href="{{ url_for('lottery_admin.index') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+      <i data-lucide="arrow-left" width="20" height="20"></i>
+    </a>
+    <h2 class="text-xl font-bold text-slate-800 dark:text-white">创建抽奖</h2>
+  </div>
+
+  <form action="{{ url_for('lottery_admin.create') }}" method="post" class="glass-card p-6 space-y-5">
+
+    {# 基本信息 #}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">抽奖标题 <span class="text-red-400">*</span></label>
+        <input type="text" name="title" required maxlength="200"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+          placeholder="例: 周末福利抽奖">
+      </div>
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">奖品名称 <span class="text-red-400">*</span></label>
+        <input type="text" name="prize" required maxlength="500"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+          placeholder="例: 100 嗯呢币">
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">中奖名额 <span class="text-red-400">*</span></label>
+        <input type="number" name="winner_count" value="1" min="1" max="100" required
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+      </div>
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">KOOK 频道 ID <span class="text-red-400">*</span></label>
+        <input type="text" name="channel_id" required
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+          placeholder="频道 ID">
+      </div>
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">参与表情</label>
+        <input type="text" name="emoji" value="🎉" maxlength="50"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+          placeholder="默认 🎉">
+        <p class="text-[11px] text-slate-400 mt-1">用户点此表情参与，默认 🎉</p>
+      </div>
+    </div>
+
+    <div>
+      <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">开奖时间 <span class="text-red-400">*</span></label>
+      <input type="datetime-local" name="draw_time" required
+        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+    </div>
+
+    <div>
+      <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">活动描述</label>
+      <textarea name="description" rows="3"
+        class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+        placeholder="可选，补充说明"></textarea>
+    </div>
+
+    {# 参与资格 #}
+    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-4">
+      <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+        <i data-lucide="shield-check" width="16" height="16" class="text-purple-500"></i> 参与资格（可选）
+      </h4>
+
+      <div>
+        <label class="text-sm text-slate-600 dark:text-slate-400 mb-2 block">允许参与的角色（不选=所有人）</label>
+        <div class="flex flex-wrap gap-3">
+          <label class="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" name="eligible_roles" value="god" class="rounded"> 老板
+          </label>
+          <label class="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" name="eligible_roles" value="player" class="rounded"> 陪玩
+          </label>
+          <label class="flex items-center gap-1.5 text-sm">
+            <input type="checkbox" name="eligible_roles" value="staff" class="rounded"> 客服
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-sm text-slate-600 dark:text-slate-400 mb-1 block">最低 VIP 等级（留空=不限）</label>
+        <select name="min_vip_level"
+          class="w-full md:w-1/2 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+          <option value="">不限</option>
+          {% for vip in vip_levels %}
+          <option value="{{ vip.name }}">{{ vip.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    {# 内定用户 #}
+    <div class="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 space-y-2">
+      <h4 class="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <i data-lucide="star" width="16" height="16"></i> 内定用户（可选）
+      </h4>
+      <p class="text-xs text-amber-600 dark:text-amber-400/70">填写系统用户 ID，逗号分隔。内定用户需要实际参与（点击表情）且符合资格才会生效。</p>
+      <input type="text" name="rigged_user_ids"
+        class="w-full px-4 py-2.5 rounded-xl border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 text-sm"
+        placeholder="例: 1, 5, 12">
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
+        创建抽奖
+      </button>
+      <a href="{{ url_for('lottery_admin.index') }}" class="flex-1 text-center bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2.5 rounded-xl text-sm font-medium transition-colors">
+        取消
+      </a>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}

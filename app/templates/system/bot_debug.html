@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Bot 调测 - 嗯呢呗电竞{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+  
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-bold text-slate-800 dark:text-white">Bot 调测</h1>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    
+    <!-- 调测表单 -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+      <h3 class="text-lg font-semibold mb-4 text-slate-800 dark:text-white">消息发送测试</h3>
+      
+      <form method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-400">目标 KOOK ID</label>
+          <input type="text" name="target_id" required placeholder="用户 ID" 
+                 class="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <p class="text-xs text-slate-400 mt-1">请确保 Bot 与该用户有共同服务器或已有私信会话</p>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-400">消息内容</label>
+          <textarea name="content" rows="4" required placeholder="输入测试内容..."
+                    class="w-full px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium mb-1 text-slate-600 dark:text-slate-400">发送类型</label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2">
+              <input type="radio" name="action" value="send_dm" checked class="text-purple-600 focus:ring-purple-500">
+              <span class="text-sm">普通私信</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input type="radio" name="action" value="test_card" class="text-purple-600 focus:ring-purple-500">
+              <span class="text-sm">卡片消息</span>
+            </label>
+          </div>
+        </div>
+        
+        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-medium transition-colors">
+          发送测试
+        </button>
+      </form>
+    </div>
+
+    <!-- 结果反馈 -->
+    <div class="space-y-6">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
+        <h3 class="text-lg font-semibold mb-4 text-slate-800 dark:text-white">测试结果</h3>
+        
+        {% if result %}
+          <div class="p-4 rounded-xl {{ 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' if result.success else 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' }}">
+            <div class="flex items-center gap-2 mb-1">
+              <i data-lucide="{{ 'check-circle' if result.success else 'alert-circle' }}" class="w-5 h-5"></i>
+              <span class="font-bold">{{ '发送成功' if result.success else '发送失败' }}</span>
+            </div>
+            <p class="text-sm opacity-90">{{ result.message }}</p>
+          </div>
+        {% else %}
+          <div class="text-center py-10 text-slate-400">
+            <i data-lucide="terminal" class="w-12 h-12 mx-auto mb-2 opacity-50"></i>
+            <p>暂无测试结果</p>
+          </div>
+        {% endif %}
+      </div>
+      
+      <div class="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-6 border border-blue-100 dark:border-blue-800">
+        <h4 class="font-semibold text-blue-800 dark:text-blue-300 mb-2">调试说明</h4>
+        <ul class="text-sm text-blue-700 dark:text-blue-400 space-y-1 list-disc list-inside">
+          <li>确保 Bot Token 配置正确</li>
+          <li>确保服务器防火墙允许出站连接</li>
+          <li>KOOK API 有频率限制，请勿频繁测试</li>
+        </ul>
+      </div>
+    </div>
+    
+  </div>
+</div>
+{% endblock %}

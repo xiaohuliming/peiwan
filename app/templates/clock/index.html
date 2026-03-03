@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block header_title %}{% if is_admin_view %}打卡管理{% else %}工作打卡{% endif %}{% endblock %}
+
+{% block content %}
+<div class="space-y-8 mt-4">
+
+{% if is_admin_view %}
+{# ====== 管理员视图 ====== #}
+
+  <!-- 概览统计卡片 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <!-- 当前在班 -->
+    <div class="glass-card p-6 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-green-500/10 text-green-500">
+        <i data-lucide="user-check" width="24" height="24" stroke-width="2"></i>
+      </div>
+      <div>
+        <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">当前在班</h3>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ online_count }} 人</p>
+      </div>
+    </div>
+
+    <!-- 今日打卡人数 -->
+    <div class="glass-card p-6 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+        <i data-lucide="users" width="24" height="24" stroke-width="2"></i>
+      </div>
+      <div>
+        <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">今日打卡人数</h3>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ today_clocked_count }} 人</p>
+      </div>
+    </div>
+
+    <!-- 今日累计工时 -->
+    <div class="glass-card p-6 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500">
+        <i data-lucide="timer" width="24" height="24" stroke-width="2"></i>
+      </div>
+      <div>
+        <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">今日累计工时</h3>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ (today_total_minutes // 60) }}h {{ (today_total_minutes % 60) }}m</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 当前在班人员 -->
+  {% if online_records %}
+  <div class="glass-card p-8">
+    <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2 mb-6">
+      <span class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+      当前在班人员
+    </h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for record in online_records %}
+      <div class="flex items-center gap-3 p-4 rounded-2xl border border-white/40 dark:border-slate-700/50 bg-white/20 dark:bg-slate-800/20">
+        <img src="{{ record.user.avatar_url }}" alt="" class="w-10 h-10 rounded-full border border-white dark:border-slate-700" />
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{{ record.user.nickname or record.user.username }}</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {% if record.user.role == 'staff' %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300{% else %}bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300{% endif %}">
+              {{ record.user.role_name }}
+            </span>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">{{ record.clock_in.strftime('%H:%M') }} 上班</p>
+        </div>
+        <div class="text-right">
+          <span class="text-sm font-mono font-bold text-green-600 dark:text-green-400 online-timer" data-clock-in="{{ record.clock_in.strftime('%Y-%m-%dT%H:%M:%S') }}">--:--:--</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- 全员打卡历史 -->
+  <div class="glass-card p-8">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+        <i data-lucide="history" width="22" height="22" class="text-slate-400"></i>
+        打卡记录
+      </h2>
+
+      <form method="GET" class="flex items-center gap-2 flex-wrap">
+        <select name="user_id" class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200">
+          <option value="">全部人员</option>
+          {% for w in workers %}
+          <option value="{{ w.id }}" {% if filter_user == w.id|string %}selected{% endif %}>{{ w.nickname or w.username }} ({{ w.role_name }})</option>
+          {% endfor %}
+        </select>
+        <input type="date" name="date" value="{{ filter_date }}"
+               class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
+          筛选
+        </button>
+        {% if filter_date or filter_user %}
+        <a href="{{ url_for('clock.index') }}" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          清除
+        </a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[600px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-4 font-medium">人员</th>
+            <th class="pb-4 font-medium">角色</th>
+            <th class="pb-4 font-medium">日期</th>
+            <th class="pb-4 font-medium">上班时间</th>
+            <th class="pb-4 font-medium">下班时间</th>
+            <th class="pb-4 font-medium">工时</th>
+            <th class="pb-4 font-medium">状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in history.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors">
+            <td class="py-4">
+              <div class="flex items-center gap-2">
+                <img src="{{ record.user.avatar_url }}" alt="" class="w-7 h-7 rounded-full border border-white dark:border-slate-700" />
+                <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ record.user.nickname or record.user.username }}</span>
+              </div>
+            </td>
+            <td class="py-4">
+              <span class="px-2 py-0.5 rounded-full text-xs font-bold {% if record.user.role == 'staff' %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300{% else %}bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300{% endif %}">
+                {{ record.user.role_name }}
+              </span>
+            </td>
+            <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">{{ record.clock_in.strftime('%Y-%m-%d') }}</td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">{{ record.clock_in.strftime('%H:%M:%S') }}</td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">
+              {% if record.clock_out %}
+                {{ record.clock_out.strftime('%H:%M:%S') }}
+              {% else %}
+                <span class="text-green-500 font-medium">进行中...</span>
+              {% endif %}
+            </td>
+            <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
+              {% if record.status == 'clocked_in' %}--{% else %}{{ record.duration_display }}{% endif %}
+            </td>
+            <td class="py-4">
+              {% if record.status == 'clocked_in' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300">工作中</span>
+              {% elif record.status == 'clocked_out' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">正常</span>
+              {% elif record.status == 'auto_timeout' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">自动超时</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="py-12 text-center text-slate-400">
+              <i data-lucide="inbox" width="48" height="48" class="mx-auto mb-3 opacity-50"></i>
+              <p class="text-sm">暂无打卡记录</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 分页 -->
+    {% if history.pages > 1 %}
+    <div class="flex justify-center gap-2 mt-6">
+      {% if history.has_prev %}
+      <a href="?page={{ history.prev_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}{% if filter_user %}&user_id={{ filter_user }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        上一页
+      </a>
+      {% endif %}
+      <span class="px-4 py-2 text-sm text-slate-500">第 {{ history.page }} / {{ history.pages }} 页</span>
+      {% if history.has_next %}
+      <a href="?page={{ history.next_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}{% if filter_user %}&user_id={{ filter_user }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        下一页
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+{% else %}
+{# ====== 客服/陪玩视图 ====== #}
+
+  <!-- 打卡操作卡片 -->
+  <div class="glass-card p-8 relative overflow-hidden">
+    <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full blur-3xl -z-10"></div>
+
+    {% if active_clock %}
+    {# === 已打卡状态 === #}
+    <div class="text-center">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300 text-sm font-bold mb-6">
+        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+        工作中
+      </div>
+
+      <p class="text-slate-500 dark:text-slate-400 text-sm mb-2">打卡时间: {{ active_clock.clock_in.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+
+      <!-- 实时计时器 -->
+      <div class="my-6">
+        <p id="timer" class="text-6xl font-bold tracking-tight text-slate-800 dark:text-white font-mono">00:00:00</p>
+        <p class="text-sm text-slate-400 mt-2">已工作时长</p>
+      </div>
+
+      <form method="POST" action="{{ url_for('clock.clock_out') }}">
+        <button type="submit" class="px-8 py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-semibold text-lg transition-all shadow-lg shadow-red-200 dark:shadow-none hover:shadow-xl active:scale-[0.98] flex items-center gap-3 mx-auto">
+          <i data-lucide="log-out" width="22" height="22"></i>
+          下班打卡
+        </button>
+      </form>
+
+      <p class="text-xs text-slate-400 mt-4">超过 4 小时未打卡将自动记录为超时</p>
+    </div>
+
+    {% else %}
+    {# === 未打卡状态 === #}
+    <div class="text-center">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 text-sm font-bold mb-6">
+        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+        未在班
+      </div>
+
+      <p class="text-slate-500 dark:text-slate-400 text-sm mb-2" id="current-time-display"></p>
+
+      <div class="my-6">
+        <p class="text-5xl font-bold tracking-tight text-slate-300 dark:text-slate-600 font-mono">--:--:--</p>
+      </div>
+
+      <form method="POST" action="{{ url_for('clock.clock_in') }}">
+        <button type="submit" class="px-8 py-4 bg-green-500 hover:bg-green-600 text-white rounded-2xl font-semibold text-lg transition-all shadow-lg shadow-green-200 dark:shadow-none hover:shadow-xl active:scale-[0.98] flex items-center gap-3 mx-auto">
+          <i data-lucide="log-in" width="22" height="22"></i>
+          上班打卡
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 今日信息 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="glass-card p-6 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+        <i data-lucide="hash" width="24" height="24" stroke-width="2"></i>
+      </div>
+      <div>
+        <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">今日打卡次数</h3>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ today_clock_count }}</p>
+      </div>
+    </div>
+
+    <div class="glass-card p-6 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500">
+        <i data-lucide="timer" width="24" height="24" stroke-width="2"></i>
+      </div>
+      <div>
+        <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">今日累计工时</h3>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ (today_total_minutes // 60) }}h {{ (today_total_minutes % 60) }}m</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 打卡历史表格 -->
+  <div class="glass-card p-8">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+        <i data-lucide="history" width="22" height="22" class="text-slate-400"></i>
+        打卡历史
+      </h2>
+
+      <form method="GET" class="flex items-center gap-2">
+        <input type="date" name="date" value="{{ filter_date }}"
+               class="px-4 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
+          筛选
+        </button>
+        {% if filter_date %}
+        <a href="{{ url_for('clock.index') }}" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          清除
+        </a>
+        {% endif %}
+      </form>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[500px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-4 font-medium">日期</th>
+            <th class="pb-4 font-medium">上班时间</th>
+            <th class="pb-4 font-medium">下班时间</th>
+            <th class="pb-4 font-medium">工时</th>
+            <th class="pb-4 font-medium">状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in history.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors">
+            <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">{{ record.clock_in.strftime('%Y-%m-%d') }}</td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">{{ record.clock_in.strftime('%H:%M:%S') }}</td>
+            <td class="py-4 text-sm text-slate-800 dark:text-slate-200">
+              {% if record.clock_out %}
+                {{ record.clock_out.strftime('%H:%M:%S') }}
+              {% else %}
+                <span class="text-green-500 font-medium">进行中...</span>
+              {% endif %}
+            </td>
+            <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">
+              {% if record.status == 'clocked_in' %}--{% else %}{{ record.duration_display }}{% endif %}
+            </td>
+            <td class="py-4">
+              {% if record.status == 'clocked_in' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300">工作中</span>
+              {% elif record.status == 'clocked_out' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">正常</span>
+              {% elif record.status == 'auto_timeout' %}
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">自动超时</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="py-12 text-center text-slate-400">
+              <i data-lucide="inbox" width="48" height="48" class="mx-auto mb-3 opacity-50"></i>
+              <p class="text-sm">暂无打卡记录</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 分页 -->
+    {% if history.pages > 1 %}
+    <div class="flex justify-center gap-2 mt-6">
+      {% if history.has_prev %}
+      <a href="?page={{ history.prev_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        上一页
+      </a>
+      {% endif %}
+      <span class="px-4 py-2 text-sm text-slate-500">第 {{ history.page }} / {{ history.pages }} 页</span>
+      {% if history.has_next %}
+      <a href="?page={{ history.next_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}"
+         class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
+        下一页
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  {% if not is_admin_view and active_clock %}
+  // 客服/陪玩 — 个人实时计时器
+  const clockInTime = new Date('{{ active_clock.clock_in.strftime("%Y-%m-%dT%H:%M:%S") }}');
+  const timerEl = document.getElementById('timer');
+
+  function updateTimer() {
+    const now = new Date();
+    const diff = Math.floor((now - clockInTime) / 1000);
+    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+    const s = String(diff % 60).padStart(2, '0');
+    timerEl.textContent = `${h}:${m}:${s}`;
+  }
+
+  updateTimer();
+  setInterval(updateTimer, 1000);
+  {% elif not is_admin_view %}
+  // 显示当前时间
+  const timeDisplay = document.getElementById('current-time-display');
+  if (timeDisplay) {
+    function showCurrentTime() {
+      const now = new Date();
+      timeDisplay.textContent = '当前时间: ' + now.toLocaleString('zh-CN');
+    }
+    showCurrentTime();
+    setInterval(showCurrentTime, 1000);
+  }
+  {% endif %}
+
+  {% if is_admin_view %}
+  // 管理员视图 — 在班人员实时计时器
+  document.querySelectorAll('.online-timer').forEach(el => {
+    const clockIn = new Date(el.dataset.clockIn);
+    function tick() {
+      const diff = Math.floor((Date.now() - clockIn) / 1000);
+      const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+      const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+      const s = String(diff % 60).padStart(2, '0');
+      el.textContent = `${h}:${m}:${s}`;
+    }
+    tick();
+    setInterval(tick, 1000);
+  });
+  {% endif %}
+</script>
+{% endblock %}

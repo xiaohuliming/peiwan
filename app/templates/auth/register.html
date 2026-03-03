@@ -1,0 +1,82 @@
+{% extends "layouts/auth_base.html" %}
+
+{% block title %}注册 - 嗯呢呗电竞{% endblock %}
+
+{% block content %}
+<div class="glass-card p-8 animate-fade-in-up">
+  <form method="post">
+    <div class="space-y-5">
+
+      <!-- 身份选择 -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">我是</label>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="relative cursor-pointer">
+            <input type="radio" name="role" value="god" class="peer sr-only" checked>
+            <div class="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 peer-checked:border-purple-500 peer-checked:bg-purple-50 dark:peer-checked:bg-purple-900/20 transition-all text-center">
+              <span class="block text-sm font-medium text-slate-800 dark:text-slate-200">GOD (老板)</span>
+            </div>
+          </label>
+          <label class="relative cursor-pointer">
+            <input type="radio" name="role" value="player" class="peer sr-only">
+            <div class="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 peer-checked:border-purple-500 peer-checked:bg-purple-50 dark:peer-checked:bg-purple-900/20 transition-all text-center">
+              <span class="block text-sm font-medium text-slate-800 dark:text-slate-200">小猪崽 (陪玩)</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- KOOK 名称 -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="kook_name">KOOK 名称</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="at-sign" width="18" height="18"></i>
+          </div>
+          <input
+            type="text"
+            id="kook_name"
+            name="kook_name"
+            class="block w-full pl-10 pr-3 py-2.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white/50 dark:bg-slate-800/50 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all dark:text-white"
+            placeholder="例如: abc#1234"
+          >
+        </div>
+        <p class="text-[11px] text-slate-400 mt-1">填写后系统自动绑定 KOOK 账号并拉取头像，不填也可注册</p>
+      </div>
+
+      <!-- 账号 -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="username">账号</label>
+        <div class="relative">
+          <i data-lucide="user" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+          <input
+            class="w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all placeholder:text-slate-400 text-slate-800 dark:text-slate-200"
+            id="username" name="username" type="text" placeholder="设置登录账号 (数字/字母)" required
+          >
+        </div>
+      </div>
+
+      <!-- 密码 -->
+      <div>
+        <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5" for="password">密码</label>
+        <div class="relative">
+          <i data-lucide="lock" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+          <input
+            class="w-full pl-10 pr-4 py-2.5 bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all placeholder:text-slate-400 text-slate-800 dark:text-slate-200"
+            id="password" name="password" type="password" placeholder="设置密码" required
+          >
+        </div>
+      </div>
+
+      <button class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium tracking-wide shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 active:scale-[0.98] transition-all duration-200" type="submit">
+        立即注册
+      </button>
+    </div>
+  </form>
+</div>
+
+<p class="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+  已有账号?
+  <a href="{{ url_for('auth.login') }}" class="text-purple-600 hover:text-purple-500 dark:text-purple-400 font-medium transition-colors">返回登录</a>
+</p>
+{% endblock %}

@@ -1,0 +1,62 @@
+"""数据导出路由"""
+from datetime import datetime
+from flask import Blueprint, send_file, flash, redirect, url_for
+from flask_login import login_required
+
+from app.utils.permissions import admin_required
+from app.services import export_service
+from app.models.user import User
+from app.models.order import Order
+from app.models.gift import GiftOrder
+from app.models.finance import WithdrawRequest
+from app.models.clock import ClockRecord
+
+export_bp = Blueprint('export', __name__, template_folder='../templates')
+
+
+def _send_excel(output, filename):
+    if output is None:
+        flash('导出失败，请安装 openpyxl: pip install openpyxl', 'error')
+        return redirect(url_for('dashboard.index'))
+    return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=filename)
+
+
+@export_bp.route('/users')
+@login_required
+@admin_required
+def export_users():
+    output = export_service.export_users(User.query)
+    return _send_excel(output, f'用户列表_{datetime.now().strftime("%Y%m%d")}.xlsx')
+
+
+@export_bp.route('/orders')
+@login_required
+@admin_required
+def export_orders():
+    output = export_service.export_orders(Order.query.order_by(Order.created_at.desc()))
+    return _send_excel(output, f'订单列表_{datetime.now().strftime("%Y%m%d")}.xlsx')
+
+
+@export_bp.route('/gifts')
+@login_required
+@admin_required
+def export_gifts():
+    output = export_service.export_gift_orders(GiftOrder.query.order_by(GiftOrder.created_at.desc()))
+    return _send_excel(output, f'礼物记录_{datetime.now().strftime("%Y%m%d")}.xlsx')
+
+
+@export_bp.route('/withdrawals')
+@login_required
+@admin_required
+def export_withdrawals():
+    output = export_service.export_withdrawals(WithdrawRequest.query.order_by(WithdrawRequest.created_at.desc()))
+    return _send_excel(output, f'提现记录_{datetime.now().strftime("%Y%m%d")}.xlsx')
+
+
+@export_bp.route('/clock')
+@login_required
+@admin_required
+def export_clock():
+    output = export_service.export_clock_records(ClockRecord.query.order_by(ClockRecord.clock_in.desc()))
+    return _send_excel(output, f'打卡记录_{datetime.now().strftime("%Y%m%d")}.xlsx')

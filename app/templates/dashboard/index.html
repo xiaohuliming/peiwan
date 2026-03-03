@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block content %}
+      <!-- 核心数据区 -->
+      <div class="space-y-8 mt-4">
+
+        {# ====== 管理统计区块 (仅客服/管理员可见) ====== #}
+        {% if current_user.is_staff and mgmt_stats %}
+
+        <!-- 管理统计卡片 -->
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+              <i data-lucide="bar-chart-3" width="22" height="22" class="text-purple-500"></i>
+              经营概览
+            </h2>
+            <div class="flex items-center gap-1 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full p-1">
+              <a href="?period=day{% if current_perf_period != 'today' %}&perf_period={{ current_perf_period }}{% endif %}"
+                 class="px-3 py-1.5 rounded-full text-sm font-medium transition-all {% if current_period == 'day' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+                今日
+              </a>
+              <a href="?period=week{% if current_perf_period != 'today' %}&perf_period={{ current_perf_period }}{% endif %}"
+                 class="px-3 py-1.5 rounded-full text-sm font-medium transition-all {% if current_period == 'week' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+                本周
+              </a>
+              <a href="?period=month{% if current_perf_period != 'today' %}&perf_period={{ current_perf_period }}{% endif %}"
+                 class="px-3 py-1.5 rounded-full text-sm font-medium transition-all {% if current_period == 'month' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+                本月
+              </a>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 交易额 -->
+            <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+              <div class="flex justify-between items-start">
+                <div class="p-3 rounded-2xl bg-green-500/10 text-green-500 group-hover:scale-110 transition-transform duration-300">
+                  <i data-lucide="banknote" width="24" height="24" stroke-width="2"></i>
+                </div>
+              </div>
+              <div class="mt-4">
+                <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">交易额</h3>
+                <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ "%.2f"|format(mgmt_stats.revenue) }} 嗯呢币</p>
+              </div>
+            </div>
+
+            <!-- 订单数量 -->
+            <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+              <div class="flex justify-between items-start">
+                <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform duration-300">
+                  <i data-lucide="shopping-bag" width="24" height="24" stroke-width="2"></i>
+                </div>
+              </div>
+              <div class="mt-4">
+                <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">订单数量</h3>
+                <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ mgmt_stats.order_count }}</p>
+              </div>
+            </div>
+
+            <!-- 客户总量 -->
+            <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+              <div class="flex justify-between items-start">
+                <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500 group-hover:scale-110 transition-transform duration-300">
+                  <i data-lucide="users" width="24" height="24" stroke-width="2"></i>
+                </div>
+              </div>
+              <div class="mt-4">
+                <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">客户总量</h3>
+                <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ mgmt_stats.customer_count }}</p>
+              </div>
+            </div>
+
+            <!-- 订单总量 -->
+            <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+              <div class="flex justify-between items-start">
+                <div class="p-3 rounded-2xl bg-orange-500/10 text-orange-500 group-hover:scale-110 transition-transform duration-300">
+                  <i data-lucide="file-text" width="24" height="24" stroke-width="2"></i>
+                </div>
+              </div>
+              <div class="mt-4">
+                <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">订单总量</h3>
+                <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ mgmt_stats.total_orders }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 待办事项 -->
+        {% if todo_stats %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- 待解冻订单 -->
+          <a href="{{ url_for('orders.index', freeze_status='frozen') }}" class="glass-card p-6 flex items-center gap-4 hover:-translate-y-1 transition-transform duration-300 group">
+            {% if todo_stats.frozen_orders > 0 %}
+            <div class="p-3 rounded-2xl bg-red-500/10 text-red-500">
+              <i data-lucide="alert-triangle" width="24" height="24" stroke-width="2"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-semibold text-slate-800 dark:text-white">待解冻订单</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">有订单被冻结，需要处理</p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-sm font-bold bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-300">{{ todo_stats.frozen_orders }}</span>
+            {% else %}
+            <div class="p-3 rounded-2xl bg-green-500/10 text-green-500">
+              <i data-lucide="check-circle-2" width="24" height="24" stroke-width="2"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-semibold text-slate-800 dark:text-white">待解冻订单</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">暂无冻结订单</p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300">0</span>
+            {% endif %}
+          </a>
+
+          <!-- 待审提现 -->
+          <a href="{{ url_for('finance.withdraw_list', status='pending') if current_user.is_admin else '#' }}"
+             class="glass-card p-6 flex items-center gap-4 transition-transform duration-300 group {% if current_user.is_admin %}hover:-translate-y-1{% else %}opacity-70 cursor-not-allowed{% endif %}">
+            {% if todo_stats.pending_withdrawals > 0 %}
+            <div class="p-3 rounded-2xl bg-yellow-500/10 text-yellow-500">
+              <i data-lucide="clock" width="24" height="24" stroke-width="2"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-semibold text-slate-800 dark:text-white">待审提现</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{% if current_user.is_admin %}有提现申请等待审批{% else %}仅管理员可审批提现{% endif %}</p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-300">{{ todo_stats.pending_withdrawals }}</span>
+            {% else %}
+            <div class="p-3 rounded-2xl bg-green-500/10 text-green-500">
+              <i data-lucide="check-circle-2" width="24" height="24" stroke-width="2"></i>
+            </div>
+            <div class="flex-1">
+              <h3 class="font-semibold text-slate-800 dark:text-white">待审提现</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{% if current_user.is_admin %}暂无待审提现{% else %}仅管理员可审批提现{% endif %}</p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-300">0</span>
+            {% endif %}
+          </a>
+        </div>
+        {% endif %}
+
+        {% endif %}
+
+        <!-- 四大数据卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+          <!-- Card 1 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="wallet" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 {% if revenue_growth >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                <i data-lucide="{% if revenue_growth >= 0 %}trending-up{% else %}trending-down{% endif %}" width="14" height="14"></i>
+                {{ "%.1f"|format(revenue_growth) }}%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">
+                {% if current_user.is_player %}今日收益{% elif current_user.is_god %}今日消费{% else %}今日营业额{% endif %}
+              </h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">
+                {% if current_user.is_player %}
+                  {{ "%.2f"|format(today_revenue) }} 小猪粮
+                {% else %}
+                  {{ "%.2f"|format(today_revenue) }} 嗯呢币
+                {% endif %}
+              </p>
+            </div>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="users" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 {% if stat_growth >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                <i data-lucide="{% if stat_growth >= 0 %}trending-up{% else %}trending-down{% endif %}" width="14" height="14"></i>
+                {{ "%.1f"|format(stat_growth) }}%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">{{ stat_label }}</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ stat_count }}</p>
+            </div>
+          </div>
+
+          <!-- Card 3 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-orange-500/10 text-orange-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="gamepad-2" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 {% if pending_confirm_count > 0 %}text-orange-500{% else %}text-slate-500{% endif %}">
+                待确认 {{ pending_confirm_count }}
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">进行中订单</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ ongoing_orders_count }}</p>
+            </div>
+          </div>
+
+          <!-- Card 4 -->
+          <div class="glass-card p-6 hover:-translate-y-1 transition-transform duration-300 cursor-pointer group">
+            <div class="flex justify-between items-start">
+              <div class="p-3 rounded-2xl bg-yellow-500/10 text-yellow-500 group-hover:scale-110 transition-transform duration-300">
+                <i data-lucide="star" width="24" height="24" stroke-width="2"></i>
+              </div>
+              <span class="text-sm font-semibold flex items-center gap-1 {% if card4_growth >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                <i data-lucide="{% if card4_growth >= 0 %}trending-up{% else %}trending-down{% endif %}" width="14" height="14"></i>
+                {{ "%.1f"|format(card4_growth) }}%
+              </span>
+            </div>
+            <div class="mt-4">
+              <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">{{ card4_label }}</h3>
+              <p class="text-3xl font-bold tracking-tight mt-1 text-slate-800 dark:text-white">{{ card4_value }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+          <!-- 左侧两列：图表与订单 -->
+          <div class="lg:col-span-2 space-y-8">
+
+            <!-- 图表区块 -->
+            <div class="glass-card p-8">
+              <div class="flex justify-between items-center mb-8">
+                <div>
+                  <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">
+                    {% if current_user.is_player %}收益趋势{% elif current_user.is_god %}消费趋势{% else %}流水趋势{% endif %}
+                  </h2>
+                  <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">本周数据分析</p>
+                </div>
+                <button class="p-2 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-full transition-colors">
+                  <i data-lucide="more-horizontal" width="20" height="20" class="text-slate-400"></i>
+                </button>
+              </div>
+
+              <!-- 纯 CSS 拟物柱状图 -->
+              <div class="h-48 flex items-end justify-between gap-2 sm:gap-4 mt-4" id="chart-container">
+                <!-- 柱子通过JS渲染 -->
+              </div>
+              <div class="flex justify-between mt-4 text-xs font-medium text-slate-400 px-1">
+                {% for day in days %}
+                <span>{{ day }}</span>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- 最新订单 -->
+            <div class="glass-card p-8">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">实时订单</h2>
+                <a href="{{ url_for('orders.index') }}" class="text-sm text-purple-600 dark:text-purple-400 font-medium hover:bg-purple-50 dark:hover:bg-purple-900/20 px-3 py-1.5 rounded-full transition-colors flex items-center gap-1">
+                  查看全部 <i data-lucide="chevron-right" width="16" height="16"></i>
+                </a>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[500px]">
+                  <thead>
+                    <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+                      <th class="pb-4 font-medium">订单编号</th>
+                      <th class="pb-4 font-medium">客户 / 陪玩</th>
+                      <th class="pb-4 font-medium">项目</th>
+                      <th class="pb-4 font-medium">金额</th>
+                      <th class="pb-4 font-medium">状态</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for order in recent_orders %}
+                    <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors group">
+                      <td class="py-4 text-sm font-medium text-slate-600 dark:text-slate-300">#{{ order.order_no.split('-')[2] }}</td>
+                      <td class="py-4">
+                        <div class="flex flex-col">
+                          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ order.boss.nickname }} / {{ order.player.player_nickname }}</span>
+                          <span class="text-xs text-slate-500 dark:text-slate-500 flex items-center gap-1 mt-0.5">
+                            <i data-lucide="clock" width="10" height="10"></i> {{ order.created_at.strftime('%H:%M') }}
+                          </span>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-slate-100/50 dark:bg-slate-800/50 flex items-center justify-center backdrop-blur-sm">
+                            <i data-lucide="gamepad-2" width="14" height="14" class="text-slate-600 dark:text-slate-400"></i>
+                          </div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ order.project_display }}</span>
+                        </div>
+                      </td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{{ "%.0f"|format(order.total_price) }} 嗯呢币</td>
+                      <td class="py-4">
+                        <div class="flex items-center gap-2">
+                          {% set sc = order.status_color %}
+                          <div class="w-2 h-2 rounded-full bg-{{ sc }}-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"></div>
+                          <span class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ order.status_label }}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {# ====== 客服绩效表 (仅客服/管理员) ====== #}
+            {% if current_user.is_staff and staff_perf is not none %}
+            <div class="glass-card p-8">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+                  <i data-lucide="trophy" width="22" height="22" class="text-yellow-500"></i>
+                  客服绩效
+                </h2>
+                <div class="flex items-center gap-1 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full p-1">
+                  <a href="?perf_period=today{% if current_period != 'day' %}&period={{ current_period }}{% endif %}"
+                     class="px-3 py-1.5 rounded-full text-sm font-medium transition-all {% if current_perf_period == 'today' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+                    今日
+                  </a>
+                  <a href="?perf_period=week{% if current_period != 'day' %}&period={{ current_period }}{% endif %}"
+                     class="px-3 py-1.5 rounded-full text-sm font-medium transition-all {% if current_perf_period == 'week' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+                    本周
+                  </a>
+                  <a href="?perf_period=month{% if current_period != 'day' %}&period={{ current_period }}{% endif %}"
+                     class="px-3 py-1.5 rounded-full text-sm font-medium transition-all {% if current_perf_period == 'month' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
+                    本月
+                  </a>
+                </div>
+              </div>
+
+              {% if staff_perf %}
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                  <thead>
+                    <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+                      <th class="pb-4 font-medium">客服</th>
+                      <th class="pb-4 font-medium">派发订单数</th>
+                      <th class="pb-4 font-medium">累计订单时长</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in staff_perf %}
+                    <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors">
+                      <td class="py-4">
+                        <div class="flex items-center gap-3">
+                          <img src="{{ item.user.avatar_url }}" alt="" class="w-8 h-8 rounded-full border border-white dark:border-slate-700" />
+                          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ item.user.staff_display_name }}</span>
+                        </div>
+                      </td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{{ item.order_count }}</td>
+                      <td class="py-4 text-sm text-slate-600 dark:text-slate-300">{{ "%.1f"|format(item.total_duration) }} 小时</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% else %}
+              <div class="text-center py-12 text-slate-400">
+                <i data-lucide="inbox" width="48" height="48" class="mx-auto mb-3 opacity-50"></i>
+                <p class="text-sm">暂无绩效数据</p>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- 右侧一列：排行榜与操作 -->
+          <div class="space-y-8">
+            <div class="glass-card p-8 h-full flex flex-col">
+              <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">金牌陪玩榜</h2>
+                <button class="p-2 hover:bg-white/50 dark:hover:bg-slate-700/50 rounded-full transition-colors">
+                  <i data-lucide="more-horizontal" width="20" height="20" class="text-slate-400"></i>
+                </button>
+              </div>
+
+              <div class="space-y-6 flex-1">
+                {% for player, income in top_players %}
+                <!-- 陪玩 {{ loop.index }} -->
+                <div class="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/40 dark:hover:bg-slate-700/30 transition-colors border border-transparent hover:border-white/60 dark:hover:border-slate-600/50">
+                  <div class="relative">
+                    <img src="{{ player.avatar_url }}" alt="{{ player.player_nickname }}" class="w-12 h-12 rounded-2xl object-cover shadow-sm border border-white dark:border-slate-700" />
+                    <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-bold shadow-sm">{{ loop.index }}</div>
+                  </div>
+                  <div class="flex-1">
+                    <h4 class="text-sm font-bold text-slate-800 dark:text-white">{{ player.player_nickname }}</h4>
+                    <div class="flex items-center gap-1 mt-1">
+                      <i data-lucide="bar-chart-3" width="12" height="12" class="text-purple-500"></i>
+                      <span class="text-xs font-medium text-slate-500 dark:text-slate-400">本周收益排行</span>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-sm font-bold text-slate-800 dark:text-white">{{ "%.0f"|format(income) }} 小猪粮</div>
+                    <div class="text-[10px] text-slate-400 uppercase tracking-wider mt-0.5">本周创收</div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+
+              <!-- 快捷操作按钮 -->
+              <div class="mt-8 pt-6 border-t border-white/40 dark:border-slate-700/50">
+                <button class="w-full py-4 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 text-white rounded-2xl font-semibold tracking-wide transition-all shadow-[0_8px_16px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_24px_rgba(0,0,0,0.15)] active:scale-[0.98] flex items-center justify-center gap-2">
+                  <i data-lucide="users" width="18" height="18"></i>
+                  招募新陪玩
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 图表数据生成
+    const chartData = {{ chart_data | tojson }};
+    const chartContainer = document.getElementById('chart-container');
+
+    const chartUnit = {% if current_user.is_player %}"小猪粮"{% else %}"嗯呢币"{% endif %};
+    chartData.forEach(val => {
+      // Normalize height for display (max value ~2000 for example, or dynamic)
+      const maxVal = Math.max(...chartData) || 1;
+      const heightPercent = (val / maxVal) * 100;
+
+      const colDiv = document.createElement('div');
+      colDiv.className = 'w-full relative group';
+
+      const barDiv = document.createElement('div');
+      barDiv.className = 'w-full bg-gradient-to-t from-purple-500/80 to-blue-400/80 rounded-t-xl transition-all duration-500 ease-out group-hover:opacity-100 opacity-80 cursor-pointer';
+      barDiv.style.height = `${heightPercent}%`;
+
+      const tooltipDiv = document.createElement('div');
+      tooltipDiv.className = 'absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white text-xs py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-30 shadow-lg';
+      tooltipDiv.innerText = `${val} ${chartUnit}`;
+
+      colDiv.appendChild(barDiv);
+      colDiv.appendChild(tooltipDiv);
+      chartContainer.appendChild(colDiv);
+    });
+</script>
+{% endblock %}

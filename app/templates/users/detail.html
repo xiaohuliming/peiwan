@@ -1,0 +1,490 @@
+{% extends "base.html" %}
+
+{% block header_title %}用户详情 - {{ user.nickname or user.player_nickname or user.username }}{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 返回 + 用户头部 #}
+  <div class="flex items-center gap-4">
+    <a href="{{ url_for('users.index') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+      <i data-lucide="arrow-left" width="20" height="20"></i>
+    </a>
+    <img src="{{ user.avatar_url }}" class="w-12 h-12 rounded-full border-2 border-white dark:border-slate-700 shadow" alt="">
+    <div>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-white">{{ user.nickname or user.player_nickname or user.username }}</h2>
+      <p class="text-sm text-slate-500">{{ user.role_name }} | ID: {{ user.user_code }}</p>
+    </div>
+  </div>
+
+  {# 资产卡片 #}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500"><i data-lucide="wallet" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">嗯呢币余额</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(user.m_coin) }}</p>
+        <p class="text-xs text-slate-400">赠金: {{ "%.2f"|format(user.m_coin_gift) }}</p>
+      </div>
+    </div>
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-green-500/10 text-green-500"><i data-lucide="coins" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">小猪粮佣金</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(user.m_bean) }}</p>
+        <p class="text-xs text-slate-400">冻结: {{ "%.2f"|format(user.m_bean_frozen) }}</p>
+      </div>
+    </div>
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500"><i data-lucide="star" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">经验值</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ user.experience }}</p>
+        <p class="text-xs text-slate-400">{{ user.vip_level }} | 折扣 {{ user.vip_discount }}%</p>
+      </div>
+    </div>
+  </div>
+
+  {# 标签导航 #}
+  <div class="flex gap-2 flex-wrap">
+    {% set tabs = [('info', '基础资料'), ('balance', '嗯呢币'), ('commission', '小猪粮'), ('orders', '订单数据'), ('intimacy', '亲密度'), ('summary', '合并数据')] %}
+    {% for key, label in tabs %}
+    <a href="{{ url_for('users.detail', user_id=user.id, tab=key) }}"
+       class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if tab == key %}bg-purple-600 text-white{% else %}bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700{% endif %}">
+      {{ label }}
+    </a>
+    {% endfor %}
+  </div>
+
+  {# ===== 基础资料标签 ===== #}
+  {% if tab == 'info' %}
+  <div class="glass-card p-6 space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="space-y-4">
+        <div>
+          <p class="text-xs text-slate-400 mb-1">KOOK</p>
+          <p class="text-sm font-medium text-slate-800 dark:text-white">{{ user.kook_username or '未绑定' }}</p>
+          <p class="text-xs text-slate-400 font-mono">ID: {{ user.kook_id or '-' }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">用户名</p>
+          <p class="text-sm font-medium text-slate-800 dark:text-white">{{ user.username }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">注册方式</p>
+          <p class="text-sm text-slate-800 dark:text-white">{{ user.register_type }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">第三方关联</p>
+          <div class="flex gap-2">
+            <span class="px-2 py-1 text-xs rounded-full {% if user.kook_bound %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300{% else %}bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+              KOOK {% if user.kook_bound %}已绑定{% else %}未绑定{% endif %}
+            </span>
+            <span class="px-2 py-1 text-xs rounded-full {% if user.wechat_bound %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300{% else %}bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+              微信 {% if user.wechat_bound %}已绑定{% else %}未绑定{% endif %}
+            </span>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">推荐人</p>
+          <p class="text-sm text-slate-800 dark:text-white">{{ '无' if not user.referrer_id else '用户#' ~ user.referrer_id }}</p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">匿名设置</p>
+          <div class="flex gap-2 flex-wrap">
+            <span class="text-xs px-2 py-1 rounded-full {% if user.anonymous_recharge %}bg-blue-100 text-blue-700{% else %}bg-slate-100 text-slate-400{% endif %}">充值播报{% if user.anonymous_recharge %}匿名{% endif %}</span>
+            <span class="text-xs px-2 py-1 rounded-full {% if user.anonymous_consume %}bg-blue-100 text-blue-700{% else %}bg-slate-100 text-slate-400{% endif %}">消费通知{% if user.anonymous_consume %}匿名{% endif %}</span>
+            <span class="text-xs px-2 py-1 rounded-full {% if user.anonymous_gift_send %}bg-blue-100 text-blue-700{% else %}bg-slate-100 text-slate-400{% endif %}">送礼冠名{% if user.anonymous_gift_send %}匿名{% endif %}</span>
+            <span class="text-xs px-2 py-1 rounded-full {% if user.anonymous_upgrade %}bg-blue-100 text-blue-700{% else %}bg-slate-100 text-slate-400{% endif %}">升级播报{% if user.anonymous_upgrade %}匿名{% endif %}</span>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-1">播报频道</p>
+          <p class="text-sm text-slate-800 dark:text-white">{{ user.broadcast_channel or '未设置' }}</p>
+        </div>
+      </div>
+
+      {# 操作按钮 #}
+      <div class="space-y-3">
+        <h3 class="text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">快捷操作</h3>
+
+        {# 修改昵称 #}
+        <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end">
+          <input type="hidden" name="action" value="update_nickname">
+          <div class="flex-1">
+            <label class="text-xs text-slate-400 mb-1 block">客户昵称</label>
+            <input type="text" name="nickname" value="{{ user.nickname or '' }}" placeholder="昵称"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+          <div class="flex-1">
+            <label class="text-xs text-slate-400 mb-1 block">陪玩昵称</label>
+            <input type="text" name="player_nickname" value="{{ user.player_nickname or '' }}" placeholder="陪玩昵称"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-medium">保存</button>
+        </form>
+
+        {# 管理员操作 #}
+        {% if current_user.is_admin %}
+        <div class="border-t border-slate-200 dark:border-slate-700 pt-3 mt-3 space-y-2">
+          <p class="text-xs text-red-500 font-medium mb-2">管理员操作</p>
+
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="inline">
+            <input type="hidden" name="action" value="reset_password">
+            <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-xl text-xs font-medium" onclick="return confirm('确认重置密码为 123456789?')">重置密码</button>
+          </form>
+
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2">
+            <input type="hidden" name="action" value="update_experience">
+            <input type="number" name="experience" value="{{ user.experience }}" class="w-32 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-medium">修改经验值</button>
+          </form>
+
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="inline">
+            <input type="hidden" name="action" value="toggle_anonymous_upgrade">
+            <button type="submit" class="bg-slate-500 hover:bg-slate-600 text-white px-4 py-2 rounded-xl text-xs font-medium">
+              {{ '关闭' if user.anonymous_upgrade else '开启' }}升级匿名播报
+            </button>
+          </form>
+
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2">
+            <input type="hidden" name="action" value="update_broadcast_channel">
+            <input type="text" name="broadcast_channel" value="{{ user.broadcast_channel or '' }}" placeholder="频道ID" class="w-40 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-medium">设置播报频道</button>
+          </form>
+
+          {# 微信绑定 #}
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="inline-block mt-2">
+            <input type="hidden" name="action" value="bind_wechat">
+            <input type="hidden" name="is_bind" value="{{ 'false' if user.wechat_bound else 'true' }}">
+            <button type="submit" class="{{ 'bg-red-500 hover:bg-red-600' if user.wechat_bound else 'bg-green-600 hover:bg-green-700' }} text-white px-4 py-2 rounded-xl text-xs font-medium" onclick="return confirm('确认{{ '解绑' if user.wechat_bound else '绑定' }}微信?')">
+              {{ '解绑微信' if user.wechat_bound else '手动绑定微信' }}
+            </button>
+          </form>
+
+          {# 货币转换 #}
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+            <input type="hidden" name="action" value="exchange_currency">
+            <div class="flex flex-col">
+              <label class="text-xs text-slate-400 mb-1">小猪粮转嗯呢币 (当前小猪粮: {{ "%.2f"|format(user.m_bean) }})</label>
+              <div class="flex gap-2">
+                <input type="number" step="0.01" name="amount" placeholder="转换金额" class="w-32 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-medium">转换</button>
+              </div>
+            </div>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ===== 嗯呢币标签 ===== #}
+  {% elif tab == 'balance' %}
+  <div class="glass-card p-6 space-y-4">
+    {# 筛选 + 变账按钮 #}
+    <div class="flex flex-wrap gap-3 justify-between items-end">
+      <form method="get" action="{{ url_for('users.detail', user_id=user.id) }}" class="flex gap-2 items-end flex-wrap">
+        <input type="hidden" name="tab" value="balance">
+        <select name="change_type" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">全部类型</option>
+          <option value="recharge" {% if request.args.get('change_type')=='recharge' %}selected{% endif %}>充值</option>
+          <option value="consume" {% if request.args.get('change_type')=='consume' %}selected{% endif %}>消费</option>
+          <option value="gift_send" {% if request.args.get('change_type')=='gift_send' %}selected{% endif %}>赠送/赠金</option>
+          <option value="refund" {% if request.args.get('change_type')=='refund' %}selected{% endif %}>退款</option>
+          <option value="admin_adjust" {% if request.args.get('change_type')=='admin_adjust' %}selected{% endif %}>管理变账</option>
+        </select>
+        <input type="date" name="date_from" value="{{ date_from }}" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+        <input type="date" name="date_to" value="{{ date_to }}" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium">筛选</button>
+      </form>
+      <button onclick="document.getElementById('adjust-modal').classList.remove('hidden');document.getElementById('adjust-modal').classList.add('flex')"
+        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1">
+        <i data-lucide="plus-circle" width="16" height="16"></i> 手动变账
+      </button>
+    </div>
+
+    {# 日志列表 #}
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">类型</th>
+            <th class="pb-3 font-medium">变动金额</th>
+            <th class="pb-3 font-medium">变动后余额</th>
+            <th class="pb-3 font-medium">原因</th>
+            <th class="pb-3 font-medium">时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if balance_logs %}
+          {% for log in balance_logs.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+            <td class="py-3">
+              {% set type_labels = {'recharge':'充值','consume':'消费','gift_send':'赠送/赠金','refund':'退款','admin_adjust':'管理变账'} %}
+              <span class="px-2 py-1 text-xs rounded-full {% if log.amount > 0 %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300{% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300{% endif %}">
+                {{ type_labels.get(log.change_type, log.change_type) }}
+              </span>
+            </td>
+            <td class="py-3 font-bold {% if log.amount > 0 %}text-green-600{% else %}text-red-600{% endif %}">
+              {{ '+' if log.amount > 0 else '' }}{{ "%.2f"|format(log.amount) }}
+            </td>
+            <td class="py-3 text-slate-800 dark:text-white">{{ "%.2f"|format(log.balance_after) }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[200px] truncate">{{ log.reason or '-' }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ log.created_at.strftime('%m-%d %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+          {% else %}
+          <tr><td colspan="5" class="py-8 text-center text-slate-500">暂无记录</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if balance_logs and balance_logs.pages > 1 %}
+    <div class="mt-4 flex justify-center">
+      <div class="flex gap-2">
+        {% if balance_logs.has_prev %}
+        <a href="{{ url_for('users.detail', user_id=user.id, tab='balance', page=balance_logs.prev_num) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">{{ balance_logs.page }}/{{ balance_logs.pages }}</span>
+        {% if balance_logs.has_next %}
+        <a href="{{ url_for('users.detail', user_id=user.id, tab='balance', page=balance_logs.next_num) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# 变账弹窗 #}
+  <div id="adjust-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex')}">
+    <div class="glass-card p-8 max-w-md w-full mx-4">
+      <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4">手动变账</h3>
+      <form method="post" action="{{ url_for('users.adjust_balance', user_id=user.id) }}" class="space-y-4">
+        <div>
+          <label class="text-sm text-slate-600 dark:text-slate-300 mb-1 block">操作类型</label>
+          <select name="op_type" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+            <optgroup label="嗯呢币操作">
+              <option value="recharge">充值（+嗯呢币）</option>
+              <option value="gift">赠金（+赠金嗯呢币）</option>
+              {% if current_user.is_admin %}
+              <option value="deduct">扣款（-嗯呢币）</option>
+              {% endif %}
+            </optgroup>
+            {% if current_user.is_superadmin %}
+            <optgroup label="小猪粮操作（仅高级管理员）">
+              <option value="bean_add">增加（+小猪粮）</option>
+              <option value="bean_deduct">扣减（-小猪粮）</option>
+            </optgroup>
+            {% endif %}
+          </select>
+        </div>
+        <div>
+          <label class="text-sm text-slate-600 dark:text-slate-300 mb-1 block">金额</label>
+          <input type="number" name="amount" step="0.01" min="0.01" required class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+        </div>
+        <div>
+          <label class="text-sm text-slate-600 dark:text-slate-300 mb-1 block">变动理由</label>
+          <input type="text" name="reason" required class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+        </div>
+        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-medium">确认</button>
+      </form>
+    </div>
+  </div>
+
+  {# ===== 小猪粮标签 ===== #}
+  {% elif tab == 'commission' %}
+  <div class="glass-card p-6">
+    <form method="get" action="{{ url_for('users.detail', user_id=user.id) }}" class="flex gap-2 items-end flex-wrap mb-4">
+      <input type="hidden" name="tab" value="commission">
+      <select name="change_type" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+        <option value="">全部</option>
+        <option value="order_income" {% if request.args.get('change_type')=='order_income' %}selected{% endif %}>订单收入</option>
+        <option value="gift_income" {% if request.args.get('change_type')=='gift_income' %}selected{% endif %}>礼物收入</option>
+        <option value="withdraw" {% if request.args.get('change_type')=='withdraw' %}selected{% endif %}>提现</option>
+        <option value="refund_deduct" {% if request.args.get('change_type')=='refund_deduct' %}selected{% endif %}>退款扣回</option>
+        <option value="admin_adjust" {% if request.args.get('change_type')=='admin_adjust' %}selected{% endif %}>管理调整</option>
+      </select>
+      <input type="date" name="date_from" value="{{ date_from }}" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+      <input type="date" name="date_to" value="{{ date_to }}" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium">筛选</button>
+    </form>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">变动金额</th>
+            <th class="pb-3 font-medium">变动理由</th>
+            <th class="pb-3 font-medium">剩余金额</th>
+            <th class="pb-3 font-medium">时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if commission_logs %}
+          {% for log in commission_logs.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+            <td class="py-3 font-bold {% if log.amount > 0 %}text-green-600{% else %}text-red-600{% endif %}">
+              {{ '+' if log.amount > 0 else '' }}{{ "%.2f"|format(log.amount) }}
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ log.reason or '-' }}</td>
+            <td class="py-3 text-slate-800 dark:text-white">{{ "%.2f"|format(log.balance_after) }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ log.created_at.strftime('%m-%d %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+          {% else %}
+          <tr><td colspan="4" class="py-8 text-center text-slate-500">暂无记录</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ===== 订单数据标签 ===== #}
+  {% elif tab == 'orders' %}
+  <div class="glass-card p-6">
+    <form method="get" action="{{ url_for('users.detail', user_id=user.id) }}" class="flex gap-2 items-end flex-wrap mb-4">
+      <input type="hidden" name="tab" value="orders">
+      <input type="date" name="date_from" value="{{ date_from }}" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+      <input type="date" name="date_to" value="{{ date_to }}" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-sm font-medium">筛选</button>
+    </form>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">订单号</th>
+            <th class="pb-3 font-medium">{% if user.role == 'god' %}陪玩{% else %}老板{% endif %}</th>
+            <th class="pb-3 font-medium">游戏项目</th>
+            <th class="pb-3 font-medium">实际价格</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium">客服</th>
+            <th class="pb-3 font-medium">日期</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if orders %}
+          {% for order in orders.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+            <td class="py-3 font-mono text-xs text-slate-600 dark:text-slate-300">{{ order.order_no }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">
+              {% if user.role == 'god' %}{{ order.player.player_nickname if order.player else '-' }}{% else %}{{ order.boss.nickname if order.boss else '-' }}{% endif %}
+            </td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">{{ order.project_display }}</td>
+            <td class="py-3 font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(order.total_price) }}</td>
+            <td class="py-3"><span class="px-2 py-1 bg-{{ order.status_color }}-100 text-{{ order.status_color }}-800 dark:bg-{{ order.status_color }}-900/30 dark:text-{{ order.status_color }}-300 text-xs rounded-full font-medium">{{ order.status_label }}</span></td>
+            <td class="py-3 text-slate-500 text-xs">{{ order.staff.staff_display_name if order.staff else '-' }}</td>
+            <td class="py-3 text-slate-500 text-xs">{{ order.created_at.strftime('%m-%d %H:%M') }}</td>
+          </tr>
+          {% endfor %}
+          {% else %}
+          <tr><td colspan="7" class="py-8 text-center text-slate-500">暂无订单</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ===== 亲密度标签 ===== #}
+  {% elif tab == 'intimacy' %}
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">{% if user.role == 'god' %}陪玩{% else %}老板{% endif %}</th>
+            <th class="pb-3 font-medium">亲密度值</th>
+            {% if current_user.is_admin %}
+            <th class="pb-3 font-medium text-right">操作</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% if intimacies %}
+          {% for item in intimacies %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+            <td class="py-3 font-medium text-slate-800 dark:text-white">
+              {% if user.role == 'god' %}{{ item.player.player_nickname if item.player else '-' }}{% else %}{{ item.boss.nickname if item.boss else '-' }}{% endif %}
+            </td>
+            <td class="py-3 text-pink-600 dark:text-pink-400 font-bold">{{ "%.2f"|format(item.value) }}</td>
+            {% if current_user.is_admin %}
+            <td class="py-3 text-right">
+              <div class="flex justify-end gap-2 items-center">
+                <form method="post" action="{{ url_for('users.update_intimacy', user_id=user.id, intimacy_id=item.id) }}" class="flex gap-1 items-center">
+                  <input type="number" name="value" value="{{ item.value }}" step="0.01" class="w-24 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white">
+                  <button type="submit" class="text-blue-500 hover:text-blue-600 text-xs font-medium">修改</button>
+                </form>
+                <form method="post" action="{{ url_for('users.delete_intimacy', user_id=user.id, intimacy_id=item.id) }}" class="inline">
+                  <button type="submit" class="text-red-500 hover:text-red-600 text-xs font-medium" onclick="return confirm('确认删除?')">删除</button>
+                </form>
+              </div>
+            </td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+          {% else %}
+          <tr><td colspan="{{ 3 if current_user.is_admin else 2 }}" class="py-8 text-center text-slate-500">暂无亲密度数据</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ===== 合并数据标签 ===== #}
+  {% elif tab == 'summary' %}
+  <div class="glass-card p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-bold text-slate-600 dark:text-slate-300">下单/礼物合并数据（老板视角）</h3>
+      <p class="text-xs text-slate-400">退款后会自动扣除对应金额</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-sm min-w-[680px]">
+        <thead>
+          <tr class="text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-2 font-medium">陪玩</th>
+            <th class="pb-2 font-medium text-right">下单金额</th>
+            <th class="pb-2 font-medium text-right">礼物金额</th>
+            <th class="pb-2 font-medium text-right">合计金额</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if summary_items %}
+          {% for item in summary_items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50">
+            <td class="py-2 text-slate-800 dark:text-white">
+              <div class="flex items-center gap-2">
+                <img src="{{ item.avatar }}" class="w-7 h-7 rounded-full border border-white dark:border-slate-700" alt="">
+                <span class="font-medium">{{ item.name or '-' }}</span>
+              </div>
+            </td>
+            <td class="py-2 text-right font-bold text-slate-700 dark:text-slate-200">{{ "%.2f"|format(item.order_amount) }}</td>
+            <td class="py-2 text-right font-bold text-pink-600 dark:text-pink-400">{{ "%.2f"|format(item.gift_amount) }}</td>
+            <td class="py-2 text-right font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(item.total_amount) }}</td>
+          </tr>
+          {% endfor %}
+          {% else %}
+          <tr><td colspan="4" class="py-4 text-center text-slate-500">暂无数据</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+{% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if tab == 'balance' and request.args.get('open_adjust') == '1' %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const modal = document.getElementById('adjust-modal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

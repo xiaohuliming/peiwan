@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block header_title %}升级记录{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="flex justify-between items-center">
+    <h2 class="text-xl font-bold text-slate-800 dark:text-white">VIP升级记录</h2>
+    <div class="flex gap-2">
+      <a href="{{ url_for('upgrade_admin.index') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if not status %}bg-purple-600 text-white{% else %}bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300{% endif %}">全部</a>
+      <a href="{{ url_for('upgrade_admin.index', status='pending') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if status == 'pending' %}bg-orange-500 text-white{% else %}bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300{% endif %}">待发放</a>
+      <a href="{{ url_for('upgrade_admin.index', status='granted') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if status == 'granted' %}bg-green-500 text-white{% else %}bg-white/40 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300{% endif %}">已发放</a>
+    </div>
+  </div>
+
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">用户</th>
+            <th class="pb-3 font-medium">升级</th>
+            <th class="pb-3 font-medium">时间</th>
+            <th class="pb-3 font-medium">权益状态</th>
+            <th class="pb-3 font-medium">发放人</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              <div class="flex items-center gap-2">
+                <img src="{{ r.user.avatar_url }}" class="w-8 h-8 rounded-full" alt="">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-white">{{ r.user.nickname or r.user.username }}</p>
+                  <p class="text-xs text-slate-400">经验: {{ r.user.experience }}</p>
+                </div>
+              </div>
+            </td>
+            <td class="py-3">
+              <span class="text-slate-500">{{ r.from_level }}</span>
+              <i data-lucide="arrow-right" width="14" height="14" class="inline-block text-purple-400 mx-1"></i>
+              <span class="font-bold text-purple-600 dark:text-purple-400">{{ r.to_level }}</span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '-' }}</td>
+            <td class="py-3">
+              {% if r.benefit_status == 'granted' %}
+              <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium">已发放</span>
+              {% else %}
+              <span class="px-2 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-xs rounded-full font-medium">待发放</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">
+              {% if r.granter %}{{ r.granter.nickname }} · {{ r.granted_at.strftime('%m-%d %H:%M') if r.granted_at else '' }}{% else %}-{% endif %}
+            </td>
+            <td class="py-3 text-right">
+              {% if r.benefit_status == 'pending' %}
+              <form action="{{ url_for('upgrade_admin.grant', record_id=r.id) }}" method="post" class="inline">
+                <button type="submit" class="bg-green-500 hover:bg-green-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors" onclick="return confirm('确认发放权益?')">确认发放</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="py-8 text-center text-slate-500">暂无升级记录</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if records.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if records.has_prev %}
+        <a href="{{ url_for('upgrade_admin.index', page=records.prev_num, status=status) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">{{ records.page }} / {{ records.pages }}</span>
+        {% if records.has_next %}
+        <a href="{{ url_for('upgrade_admin.index', page=records.next_num, status=status) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

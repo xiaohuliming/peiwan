@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block header_title %}用户管理{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 搜索栏 #}
+  <div class="glass-card p-6">
+    <form method="get" action="{{ url_for('users.index') }}" class="flex gap-3 items-end flex-wrap">
+      <div class="flex-1 min-w-[200px]">
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">搜索</label>
+        <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="KOOK名称/KOOK ID / 昵称 / 用户名..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div class="w-40">
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">角色</label>
+        <select name="role"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <option value="">全部</option>
+          <option value="god" {% if request.args.get('role')=='god' %}selected{% endif %}>老板(GOD)</option>
+          <option value="player" {% if request.args.get('role')=='player' %}selected{% endif %}>陪玩</option>
+          <option value="staff" {% if request.args.get('role')=='staff' %}selected{% endif %}>客服</option>
+          <option value="admin" {% if request.args.get('role')=='admin' %}selected{% endif %}>管理员</option>
+        </select>
+      </div>
+      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1">
+        <i data-lucide="search" width="16" height="16"></i> 搜索
+      </button>
+      <a href="{{ url_for('users.index') }}" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
+      <button type="button" onclick="document.getElementById('addUserModal').classList.remove('hidden')"
+        class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1 ml-auto">
+        <i data-lucide="user-plus" width="16" height="16"></i> 新增用户
+      </button>
+    </form>
+  </div>
+
+  {# 用户列表 #}
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[900px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">头像</th>
+            <th class="pb-3 font-medium">KOOK</th>
+            <th class="pb-3 font-medium">客户昵称</th>
+            <th class="pb-3 font-medium">陪玩昵称</th>
+            <th class="pb-3 font-medium">角色</th>
+            <th class="pb-3 font-medium">余额</th>
+            <th class="pb-3 font-medium">佣金</th>
+            <th class="pb-3 font-medium">等级</th>
+            <th class="pb-3 font-medium">经验值</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              <img src="{{ u.avatar_url }}" class="w-8 h-8 rounded-full" alt="">
+            </td>
+            <td class="py-3">
+              {% if u.kook_username or u.kook_id %}
+                <div class="flex flex-col">
+                  <span class="text-slate-700 dark:text-slate-200 text-xs">{{ u.kook_username or '未获取名称' }}</span>
+                  <span class="text-slate-400 dark:text-slate-500 font-mono text-[11px]">ID: {{ u.kook_id or '-' }}</span>
+                </div>
+              {% else %}
+                <span class="text-slate-400 text-xs">-</span>
+              {% endif %}
+            </td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ u.nickname or '-' }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">{{ u.player_nickname or '-' }}</td>
+            <td class="py-3">
+              {% if u.role == 'god' %}
+              <span class="px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-xs rounded-full font-medium">GOD</span>
+              {% elif u.role == 'player' %}
+              <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium">陪玩</span>
+              {% elif u.role == 'staff' %}
+              <span class="px-2 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-xs rounded-full font-medium">客服</span>
+              {% elif u.role == 'admin' %}
+              <span class="px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 text-xs rounded-full font-medium">管理</span>
+              {% else %}
+              <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">高管</span>
+              {% endif %}
+            </td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ "%.2f"|format(u.m_coin + u.m_coin_gift) }}</td>
+            <td class="py-3 text-green-600 dark:text-green-400 font-medium">{{ "%.2f"|format(u.m_bean) }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300 text-xs">{{ u.vip_level }}</td>
+            <td class="py-3 font-bold text-purple-600 dark:text-purple-400">{{ u.experience }}</td>
+            <td class="py-3 text-right">
+              {% if u.kook_id %}
+              <form method="post" action="{{ url_for('users.sync_kook_username', user_id=u.id) }}" class="inline">
+                <button type="submit" class="text-cyan-600 hover:text-cyan-700 text-xs font-medium px-2 py-1 rounded hover:bg-cyan-50 dark:hover:bg-cyan-900/20 transition-colors">同步KOOK</button>
+              </form>
+              {% endif %}
+              <a href="{{ url_for('users.detail', user_id=u.id, tab='balance', open_adjust=1) }}" class="text-green-600 hover:text-green-700 text-xs font-medium px-2 py-1 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">变账</a>
+              <a href="{{ url_for('users.detail', user_id=u.id) }}" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">详情</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="py-8 text-center text-slate-500">暂无用户数据</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if users.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if users.has_prev %}
+        <a href="{{ url_for('users.index', page=users.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">第 {{ users.page }} / {{ users.pages }} 页</span>
+        {% if users.has_next %}
+        <a href="{{ url_for('users.index', page=users.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# 新增用户弹窗 #}
+  <div id="addUserModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="glass-card p-8 w-full max-w-md mx-4 relative">
+      <button onclick="document.getElementById('addUserModal').classList.add('hidden')"
+        class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+        <i data-lucide="x" width="20" height="20"></i>
+      </button>
+      <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
+        <i data-lucide="user-plus" width="20" height="20" class="text-green-500"></i> 新增用户
+      </h3>
+      <form method="post" action="{{ url_for('users.create') }}" class="space-y-4">
+        <div>
+          <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">身份 <span class="text-red-400">*</span></label>
+          <select name="role" id="addUserRole" onchange="togglePlayerNickname()"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <option value="god">GOD（老板）</option>
+            <option value="player">小猪崽（陪玩）</option>
+            {% if current_user.is_admin %}
+            <option value="staff">客服</option>
+            {% endif %}
+            {% if current_user.is_superadmin %}
+            <option value="admin">管理员</option>
+            <option value="superadmin">高级管理员</option>
+            {% endif %}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">账号 <span class="text-red-400">*</span></label>
+          <input type="text" name="username" required pattern="[A-Za-z0-9]+" title="仅支持数字和字母" placeholder="仅支持数字/字母"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">昵称</label>
+          <input type="text" name="nickname" placeholder="不填则默认与账号相同"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        <div id="playerNicknameField" class="hidden">
+          <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">陪玩昵称</label>
+          <input type="text" name="player_nickname" placeholder="陪玩展示名称"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">KOOK ID</label>
+          <div class="flex gap-2">
+            <input type="text" name="kook_id" id="addUserKookId" placeholder="选填，可后续绑定"
+              class="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <button type="button" onclick="fetchKookUser()"
+              class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-xl font-medium transition-colors whitespace-nowrap">获取</button>
+          </div>
+          <div id="kookUserResult" class="mt-1 text-xs hidden"></div>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">密码</label>
+          <input type="text" name="password" placeholder="默认: 123456789"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">确认创建</button>
+          <button type="button" onclick="document.getElementById('addUserModal').classList.add('hidden')"
+            class="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2.5 rounded-xl text-sm font-medium transition-colors">取消</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePlayerNickname() {
+  const role = document.getElementById('addUserRole').value;
+  const field = document.getElementById('playerNicknameField');
+  field.classList.toggle('hidden', role !== 'player');
+}
+
+function fetchKookUser() {
+  const kookId = document.getElementById('addUserKookId').value.trim();
+  const resultEl = document.getElementById('kookUserResult');
+  const nicknameInput = document.querySelector('input[name="nickname"]');
+
+  if (!kookId) {
+    resultEl.className = 'mt-1 text-xs text-red-500';
+    resultEl.textContent = '请先输入 KOOK ID';
+    resultEl.classList.remove('hidden');
+    return;
+  }
+
+  resultEl.className = 'mt-1 text-xs text-slate-400';
+  resultEl.textContent = '查询中...';
+  resultEl.classList.remove('hidden');
+
+  fetch('{{ url_for("api.kook_user_lookup") }}?kook_id=' + encodeURIComponent(kookId))
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        resultEl.className = 'mt-1 text-xs text-red-500';
+        resultEl.textContent = '查询失败: ' + data.error;
+      } else {
+        resultEl.className = 'mt-1 text-xs text-green-600 dark:text-green-400 font-medium';
+        resultEl.textContent = 'KOOK 用户: ' + data.kook_username;
+        if (!nicknameInput.value) {
+          nicknameInput.value = data.kook_username;
+        }
+      }
+    })
+    .catch(() => {
+      resultEl.className = 'mt-1 text-xs text-red-500';
+      resultEl.textContent = '网络请求失败';
+    });
+}
+</script>
+{% endblock %}

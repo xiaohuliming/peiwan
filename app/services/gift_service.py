@@ -1,0 +1,221 @@
+from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
+
+from app.extensions import db
+from app.models.gift import Gift, GiftOrder
+from app.models.user import User
+from app.models.finance import BalanceLog, CommissionLog
+from app.services.log_service import log_operation
+
+
+def send_gift(boss, player, gift, quantity, staff=None):
+    """
+    赠送礼物:
+    1. 扣老板嗯呢币余额
+    2. 发放陪玩佣金(小猪粮)
+    3. 冠名礼物自动冻结
+    """
+    quantity = int(quantity)
+    if quantity <= 0:
+        return None, '数量必须大于0'
+
+    unit_price = Decimal(str(gift.price))
+    total_price = unit_price * quantity
+
+    # 验证余额
+    total_available = boss.m_coin + boss.m_coin_gift
+    if total_available < total_price:
+        return None, '老板余额不足'
+
+    # 计算分成 (默认80%)
+    commission_rate = Decimal('80')
+    player_earning = (total_price * commission_rate / Decimal('100')).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
+    shop_earning = total_price - player_earning
+
+    # 创建礼物订单
+    gift_order = GiftOrder(
+        boss_id=boss.id,
+        player_id=player.id,
+        staff_id=staff.id if staff else None,
+        gift_id=gift.id,
+        quantity=quantity,
+        unit_price=unit_price,
+        total_price=total_price,
+        commission_rate=commission_rate,
+        player_earning=player_earning,
+        shop_earning=shop_earning,
+        status='paid',
+        freeze_status='frozen' if gift.gift_type == 'crown' else 'normal',
+    )
+    db.session.add(gift_order)
+    db.session.flush()
+
+    # 扣老板余额 (优先扣 m_coin)
+    amount = total_price
+    coin_deducted = Decimal('0')
+    if boss.m_coin >= amount:
+        boss.m_coin -= amount
+        coin_deducted = amount
+    else:
+        coin_deducted = boss.m_coin
+        gift_deducted = amount - boss.m_coin
+        boss.m_coin = Decimal('0')
+        boss.m_coin_gift -= gift_deducted
+
+    receiver_name = player.player_nickname or player.nickname or player.username
+
+    # 记录消费日志
+    balance_log = BalanceLog(
+        user_id=boss.id,
+        change_type='gift_send',
+        amount=-total_price,
+        balance_after=boss.m_coin + boss.m_coin_gift,
+        reason=f'赠送 {gift.name} x{quantity} 给 {receiver_name}'
+    )
+    db.session.add(balance_log)
+
+    # m_coin消费增加经验 (1:1)
+    boss.experience += int(coin_deducted)
+
+    # 检查VIP升级
+    from app.services.vip_service import check_and_upgrade
+    check_and_upgrade(boss)
+
+    # 发放陪玩佣金
+    if gift.gift_type == 'crown':
+        # 冠名礼物: 佣金冻结
+        player.m_bean_frozen += player_earning
+    else:
+        # 标准礼物: 直接到账
+        player.m_bean += player_earning
+        commission_log = CommissionLog(
+            user_id=player.id,
+            change_type='gift_income',
+            amount=player_earning,
+            balance_after=player.m_bean,
+            reason=f'收到 {boss.nickname or boss.username} 的 {gift.name} x{quantity}'
+        )
+        db.session.add(commission_log)
+
+    # 增加亲密度 (基于礼物总价, 1嗯呢币 = 1亲密度)
+    from app.services.intimacy_service import update_intimacy
+    update_intimacy(boss.id, player.id, total_price)
+
+    # KOOK 私信通知（老板消费）
+    try:
+        from app.services.kook_service import push_boss_consume_notice
+        operator = staff.staff_display_name if staff else ''
+        push_boss_consume_notice(
+            boss,
+            total_price,
+            reason=balance_log.reason,
+            operator=operator,
+        )
+    except Exception:
+        pass
+
+    # 操作日志
+    if staff:
+        log_operation(
+            operator_id=staff.id,
+            action_type='gift_send',
+            target_type='gift_order',
+            target_id=gift_order.id,
+            detail=f'派发礼物: {gift.name} x{quantity}, 老板: {boss.nickname or boss.username}, 收礼人: {receiver_name}'
+        )
+
+    return gift_order, None
+
+
+def freeze_gift_order(gift_order, operator_id=None):
+    """冻结礼物订单"""
+    if gift_order.freeze_status == 'frozen':
+        return False, '已冻结'
+    gift_order.freeze_status = 'frozen'
+    if operator_id:
+        log_operation(operator_id, 'gift_freeze', 'gift_order', gift_order.id, '冻结礼物订单')
+    return True, None
+
+
+def unfreeze_gift_order(gift_order, operator_id=None):
+    """解冻礼物订单 — 冠名礼物解冻后佣金到账"""
+    if gift_order.freeze_status != 'frozen':
+        return False, '未冻结'
+
+    gift_order.freeze_status = 'normal'
+
+    # 如果是冠名礼物且佣金还在冻结中, 将冻结佣金转为可用
+    player = gift_order.player
+    earning = gift_order.player_earning
+    if player.m_bean_frozen >= earning:
+        player.m_bean_frozen -= earning
+        player.m_bean += earning
+        commission_log = CommissionLog(
+            user_id=player.id,
+            change_type='gift_income',
+            amount=earning,
+            balance_after=player.m_bean,
+            reason=f'礼物订单 #{gift_order.id} 解冻到账'
+        )
+        db.session.add(commission_log)
+
+    if operator_id:
+        log_operation(operator_id, 'gift_unfreeze', 'gift_order', gift_order.id, '解冻礼物订单')
+    return True, None
+
+
+def refund_gift_order(gift_order, operator_id=None):
+    """礼物退款"""
+    if gift_order.status == 'refunded':
+        return False, '已退款'
+
+    boss = gift_order.boss
+    player = gift_order.player
+    total_price = gift_order.total_price
+    player_earning = gift_order.player_earning
+
+    # 退还老板余额
+    boss.m_coin += total_price
+    balance_log = BalanceLog(
+        user_id=boss.id,
+        change_type='refund',
+        amount=total_price,
+        balance_after=boss.m_coin + boss.m_coin_gift,
+        reason=f'礼物订单 #{gift_order.id} 退款'
+    )
+    db.session.add(balance_log)
+
+    # 扣回陪玩佣金
+    if gift_order.freeze_status == 'frozen':
+        # 冻结中: 直接扣冻结余额
+        if player.m_bean_frozen >= player_earning:
+            player.m_bean_frozen -= player_earning
+    else:
+        # 已到账: 扣可用余额
+        player.m_bean -= player_earning
+        if player.m_bean < 0:
+            player.m_bean = Decimal('0')
+
+    commission_log = CommissionLog(
+        user_id=player.id,
+        change_type='refund_deduct',
+        amount=-player_earning,
+        balance_after=player.m_bean,
+        reason=f'礼物订单 #{gift_order.id} 退款扣回'
+    )
+    db.session.add(commission_log)
+
+    gift_order.status = 'refunded'
+    gift_order.freeze_status = 'normal'
+    gift_order.refund_time = datetime.utcnow()
+
+    # 退款扣除亲密度
+    from app.services.intimacy_service import update_intimacy
+    update_intimacy(boss.id, player.id, -total_price)
+
+    if operator_id:
+        log_operation(operator_id, 'gift_refund', 'gift_order', gift_order.id,
+                      f'礼物退款: {gift_order.gift.name} x{gift_order.quantity}')
+    return True, None

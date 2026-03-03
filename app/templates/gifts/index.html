@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block header_title %}礼物中心{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 搜索栏 #}
+  <div class="glass-card p-6">
+    <form method="get" action="{{ url_for('gifts.index') }}" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">礼物名称</label>
+        <input type="text" name="gift_name" value="{{ request.args.get('gift_name', '') }}" placeholder="礼物名称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">老板昵称</label>
+        <input type="text" name="boss_name" value="{{ request.args.get('boss_name', '') }}" placeholder="老板昵称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">收礼人昵称</label>
+        <input type="text" name="player_name" value="{{ request.args.get('player_name', '') }}" placeholder="陪玩/老板昵称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">派单客服</label>
+        <input type="text" name="staff_name" value="{{ request.args.get('staff_name', '') }}" placeholder="客服昵称..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">开始日期</label>
+        <input type="date" name="date_from" value="{{ request.args.get('date_from', '') }}"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">结束日期</label>
+        <input type="date" name="date_to" value="{{ request.args.get('date_to', '') }}"
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div class="col-span-2 md:col-span-3 lg:col-span-6 flex gap-2 justify-end">
+        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1">
+          <i data-lucide="search" width="16" height="16"></i> 搜索
+        </button>
+        <a href="{{ url_for('gifts.index') }}" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
+      </div>
+    </form>
+  </div>
+
+  {# 统计卡片 #}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-pink-500/10 text-pink-500"><i data-lucide="gift" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">总订单额</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(stats.total_amount) }} 嗯呢币</p>
+      </div>
+    </div>
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-green-500/10 text-green-500"><i data-lucide="coins" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">收礼收益</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(stats.player_wages) }} 小猪粮</p>
+      </div>
+    </div>
+    <div class="glass-card p-5 flex items-center gap-4">
+      <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500"><i data-lucide="trending-up" width="24" height="24"></i></div>
+      <div>
+        <p class="text-sm text-slate-500 dark:text-slate-400">平台营收</p>
+        <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(stats.platform_revenue) }} 嗯呢币</p>
+      </div>
+    </div>
+  </div>
+
+  {# 快捷操作 #}
+  <div class="flex gap-3">
+    <a href="{{ url_for('gifts.send') }}" class="bg-pink-600 hover:bg-pink-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+      <i data-lucide="gift" width="18" height="18"></i> 赠送礼物
+    </a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('gift_admin.index') }}" class="bg-slate-600 hover:bg-slate-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+      <i data-lucide="settings" width="18" height="18"></i> 礼物配置
+    </a>
+    {% endif %}
+  </div>
+
+  {# 礼物订单表格 #}
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[900px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">老板</th>
+            <th class="pb-3 font-medium">收礼人</th>
+            <th class="pb-3 font-medium">礼物</th>
+            <th class="pb-3 font-medium">数量</th>
+            <th class="pb-3 font-medium">总价</th>
+            <th class="pb-3 font-medium">收礼收益</th>
+            <th class="pb-3 font-medium">客服</th>
+            <th class="pb-3 font-medium">时间</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for go in gift_orders.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ go.boss.nickname if go.boss else '-' }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ (go.player.player_nickname or go.player.nickname or go.player.username) if go.player else '-' }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">
+              <span class="flex items-center gap-1">
+                {% if go.gift.image %}
+                <img src="{{ url_for('static', filename=go.gift.image) }}" class="w-5 h-5 rounded" alt="">
+                {% endif %}
+                {{ go.gift.name if go.gift else '-' }}
+                {% if go.gift and go.gift.gift_type == 'crown' %}
+                <span class="text-yellow-500 text-xs">(冠名)</span>
+                {% endif %}
+              </span>
+            </td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">x{{ go.quantity }}</td>
+            <td class="py-3 font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(go.total_price) }}</td>
+            <td class="py-3 text-green-600 dark:text-green-400 font-medium">{{ "%.2f"|format(go.player_earning) }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ go.staff.staff_display_name if go.staff else '-' }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ go.created_at.strftime('%m-%d %H:%M') }}</td>
+            <td class="py-3">
+              {% if go.status == 'refunded' %}
+              <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">已退款</span>
+              {% elif go.is_frozen %}
+              <span class="px-2 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300 text-xs rounded-full font-medium">冻结中</span>
+              {% else %}
+              <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium">已完成</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-right">
+              <div class="flex justify-end gap-1">
+                {% if go.status != 'refunded' %}
+                  {% if not go.is_frozen %}
+                  <form action="{{ url_for('gifts.gift_action', order_id=go.id, action='freeze') }}" method="post" class="inline">
+                    <button type="submit" class="text-orange-500 hover:text-orange-600 text-xs font-medium px-2 py-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" onclick="return confirm('确认冻结?')">冻结</button>
+                  </form>
+                  {% else %}
+                  <form action="{{ url_for('gifts.gift_action', order_id=go.id, action='unfreeze') }}" method="post" class="inline">
+                    <button type="submit" class="text-blue-500 hover:text-blue-600 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" onclick="return confirm('确认解冻? 冠名礼物佣金将到账')">解冻</button>
+                  </form>
+                  {% endif %}
+                  {% if current_user.is_admin %}
+                  <form action="{{ url_for('gifts.gift_action', order_id=go.id, action='refund') }}" method="post" class="inline">
+                    <button type="submit" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" onclick="return confirm('确认退款?')">退款</button>
+                  </form>
+                  {% endif %}
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="py-8 text-center text-slate-500">暂无礼物记录</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# 分页 #}
+    {% if gift_orders.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if gift_orders.has_prev %}
+        <a href="{{ url_for('gifts.index', page=gift_orders.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">第 {{ gift_orders.page }} / {{ gift_orders.pages }} 页</span>
+        {% if gift_orders.has_next %}
+        <a href="{{ url_for('gifts.index', page=gift_orders.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

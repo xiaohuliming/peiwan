@@ -1,0 +1,866 @@
+{% extends "base.html" %}
+
+{% block header_title %}播报管理{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="flex justify-between items-center">
+    <h2 class="text-xl font-bold text-slate-800 dark:text-white">播报配置</h2>
+    <button onclick="showAddModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+      <i data-lucide="plus-circle" width="18" height="18"></i> 添加配置
+    </button>
+  </div>
+
+  {# 频道播报 #}
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+      <i data-lucide="radio" width="18" height="18" class="text-purple-500"></i> 频道播报
+    </h3>
+    <p class="text-xs text-slate-400 mb-4">发送到指定 KOOK 频道的公开播报，需要填写频道 ID</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">类型</th>
+            <th class="pb-3 font-medium">触发阈值</th>
+            <th class="pb-3 font-medium">模板内容</th>
+            <th class="pb-3 font-medium">图片</th>
+            <th class="pb-3 font-medium">频道ID</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set channel_types = ['recharge', 'gift', 'upgrade', 'channel_join', 'channel_leave'] %}
+          {% set has_channel = [] %}
+          {% for c in configs if c.broadcast_type in channel_types %}
+            {% set _ = has_channel.append(1) %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              <span class="px-2 py-1 text-xs rounded-full font-medium
+                {% if c.broadcast_type == 'recharge' %}bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300
+                {% elif c.broadcast_type == 'gift' %}bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300
+                {% elif c.broadcast_type == 'channel_join' %}bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300
+                {% elif c.broadcast_type == 'channel_leave' %}bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300
+                {% else %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300{% endif %}">
+                {{ broadcast_types[c.broadcast_type].label }}
+              </span>
+            </td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ "%.0f"|format(c.threshold) }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[300px]">
+              <span class="block truncate">{{ c.template or '（使用默认模板）' }}</span>
+            </td>
+            <td class="py-3">
+              {% if c.image_url %}
+              <img src="{{ c.image_url }}" class="w-10 h-10 rounded object-cover" title="{{ c.image_url }}">
+              {% else %}
+              <span class="text-slate-400 text-xs">-</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{{ c.channel_id or '-' }}</td>
+            <td class="py-3">
+              {% if c.status %}
+              <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium">启用</span>
+              {% else %}
+              <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">停用</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-right">
+              <div class="flex justify-end gap-1">
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
+                  <button type="submit" onclick="return confirm('确认删除此播报配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not has_channel %}
+          <tr><td colspan="7" class="py-6 text-center text-slate-400 text-sm">暂无频道播报配置</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# 私信通知 #}
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+      <i data-lucide="message-square" width="18" height="18" class="text-blue-500"></i> 私信通知模板
+    </h3>
+    <p class="text-xs text-slate-400 mb-4">发送给用户的私信通知，不填模板则使用系统默认内容</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">通知类型</th>
+            <th class="pb-3 font-medium">自定义模板</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set dm_types = ['boss_recharge', 'boss_consume', 'order_dispatch', 'boss_order_dispatch', 'order_report', 'order_confirm', 'order_settle', 'escort_dispatch', 'gift_receive'] %}
+          {% set has_dm = [] %}
+          {% for c in configs if c.broadcast_type in dm_types %}
+            {% set _ = has_dm.append(1) %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              <span class="px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-xs rounded-full font-medium">
+                {{ broadcast_types[c.broadcast_type].label if c.broadcast_type in broadcast_types else c.broadcast_type }}
+              </span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[400px]">
+              <span class="block truncate">{{ c.template or '（使用默认模板）' }}</span>
+            </td>
+            <td class="py-3">
+              {% if c.status %}
+              <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium">启用</span>
+              {% else %}
+              <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">停用</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-right">
+              <div class="flex justify-end gap-1">
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
+                  <button type="submit" onclick="return confirm('确认删除此通知配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not has_dm %}
+          <tr><td colspan="4" class="py-6 text-center text-slate-400 text-sm">暂无自定义私信模板，所有通知使用系统默认内容</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# 抽奖模板 #}
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+      <i data-lucide="ticket" width="18" height="18" class="text-purple-500"></i> 抽奖消息模板
+    </h3>
+    <p class="text-xs text-slate-400 mb-4">自定义抽奖公告、开奖结果和中奖通知的卡片内容。第一行可写 <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded"># 自定义标题</code> 或 <code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">标题: 自定义标题</code>。不填模板则使用系统默认内容。</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">模板类型</th>
+            <th class="pb-3 font-medium">自定义内容</th>
+            <th class="pb-3 font-medium">状态</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set lottery_tpl_types = ['lottery_announce', 'lottery_result', 'lottery_winner'] %}
+          {% set has_lottery_tpl = [] %}
+          {% for c in configs if c.broadcast_type in lottery_tpl_types %}
+            {% set _ = has_lottery_tpl.append(1) %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              <span class="px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 text-xs rounded-full font-medium">
+                {{ broadcast_types[c.broadcast_type].label if c.broadcast_type in broadcast_types else c.broadcast_type }}
+              </span>
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[400px]">
+              <span class="block truncate">{{ c.template or '（使用默认模板）' }}</span>
+            </td>
+            <td class="py-3">
+              {% if c.status %}
+              <span class="px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs rounded-full font-medium">启用</span>
+              {% else %}
+              <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">停用</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-right">
+              <div class="flex justify-end gap-1">
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
+                  <button type="submit" onclick="return confirm('确认删除此模板配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not has_lottery_tpl %}
+          <tr><td colspan="4" class="py-6 text-center text-slate-400 text-sm">暂无自定义抽奖模板，所有消息使用系统默认内容</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# 变量说明 #}
+  <div class="glass-card p-5">
+    <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+      <i data-lucide="info" width="16" height="16" class="text-slate-400"></i> 模板变量说明
+    </h4>
+    <p class="text-[11px] text-slate-400 mb-3">支持 @角色身份组语法：<code class="bg-slate-100 dark:bg-slate-700 px-1 rounded">(rol)角色ID(rol)</code>，可在编辑器工具栏「@角色」中一键插入。</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {% for type_key, meta in broadcast_types.items() %}
+      <div class="p-3 rounded-xl bg-white/30 dark:bg-slate-800/30 border border-white/40 dark:border-slate-700/30">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-bold text-slate-600 dark:text-slate-300">{{ meta.label }}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded-full {% if meta.target == 'channel' %}bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300{% elif meta.target == 'dm' %}bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300{% else %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300{% endif %}">
+            {{ '频道' if meta.target == 'channel' else ('私信' if meta.target == 'dm' else '模板') }}
+          </span>
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
+          {% for var, desc in meta.variables.items() %}
+          <div><code class="bg-slate-100 dark:bg-slate-700 px-1 rounded text-purple-600 dark:text-purple-300">{{ '{' + var + '}' if not var.startswith('{') else var }}</code> {{ desc }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# 添加/编辑弹窗 — 含 KMarkdown 编辑器 #}
+<div id="config-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex')}">
+  <div class="glass-card p-8 max-w-6xl w-full mx-4 max-h-[92vh] overflow-y-auto">
+    <h3 id="modal-title" class="text-lg font-bold text-slate-800 dark:text-white mb-4">添加播报配置</h3>
+    <form id="config-form" method="post" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">类型</label>
+          <select name="broadcast_type" id="f_type" onchange="onTypeChange()"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+            <optgroup label="频道播报">
+              {% for key, meta in broadcast_types.items() if meta.target == 'channel' %}
+              <option value="{{ key }}">{{ meta.label }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="私信通知">
+              {% for key, meta in broadcast_types.items() if meta.target == 'dm' %}
+              <option value="{{ key }}">{{ meta.label }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="抽奖消息模板">
+              {% for key, meta in broadcast_types.items() if meta.target == 'template' %}
+              <option value="{{ key }}">{{ meta.label }}</option>
+              {% endfor %}
+            </optgroup>
+          </select>
+        </div>
+
+        <div id="f_threshold_wrap">
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">触发阈值</label>
+          <input type="number" name="threshold" id="f_threshold" value="0" min="0"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+          <p class="text-[11px] text-slate-400 mt-1">充值播报：充值金额 >= 此值时触发；其他类型填 0 即可</p>
+        </div>
+      </div>
+
+      {# 类型提示 #}
+      <div id="f_hint" class="text-xs text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-xl"></div>
+
+      <div id="f_channel_wrap">
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">KOOK 频道ID</label>
+        <input type="text" name="channel_id" id="f_channel"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+          placeholder="必填，消息发送的目标频道">
+        <p class="text-[11px] text-slate-400 mt-1">已支持 @角色：先填写频道ID，再点编辑器工具栏的「@角色」即可选中并插入。</p>
+      </div>
+
+      {# KMarkdown 编辑器 #}
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300">模板内容 (KMarkdown)</label>
+          <button type="button" onclick="fillDefaultTemplate()" class="text-xs text-purple-500 hover:text-purple-600 font-medium">填入默认模板</button>
+        </div>
+
+        {# 工具栏 #}
+        <div class="flex flex-wrap items-center gap-1 mb-1 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-t-xl border border-b-0 border-slate-300 dark:border-slate-600">
+          <button type="button" onclick="insertFormat('**','**')" class="toolbar-btn" title="加粗">
+            <i data-lucide="bold" width="14" height="14"></i>
+          </button>
+          <button type="button" onclick="insertFormat('*','*')" class="toolbar-btn" title="斜体">
+            <i data-lucide="italic" width="14" height="14"></i>
+          </button>
+          <button type="button" onclick="insertFormat('~~','~~')" class="toolbar-btn" title="删除线">
+            <i data-lucide="strikethrough" width="14" height="14"></i>
+          </button>
+          <button type="button" onclick="insertFormat('`','`')" class="toolbar-btn" title="行内代码（紫色高亮）">
+            <i data-lucide="code" width="14" height="14"></i>
+          </button>
+          <div class="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-0.5"></div>
+          <button type="button" onclick="insertText('\n---\n')" class="toolbar-btn" title="分割线">
+            <i data-lucide="minus" width="14" height="14"></i>
+          </button>
+          <div class="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-0.5"></div>
+          <button type="button" onclick="insertText('{@user}')" class="toolbar-btn text-blue-600 dark:text-blue-400" title="@用户">
+            <span class="text-xs font-bold">@用户</span>
+          </button>
+          <button type="button" onclick="insertText('{@all}')" class="toolbar-btn text-blue-600 dark:text-blue-400" title="@全体成员">
+            <span class="text-xs font-bold">@全体</span>
+          </button>
+          <button type="button" onclick="insertText('{@here}')" class="toolbar-btn text-blue-600 dark:text-blue-400" title="@在线成员">
+            <span class="text-xs font-bold">@在线</span>
+          </button>
+          <div class="relative" id="role-tool-wrap">
+            <button type="button" onclick="toggleRoleDropdown()" class="toolbar-btn text-blue-600 dark:text-blue-400" title="@角色身份组">
+              <span class="text-xs font-bold">@角色</span>
+              <i data-lucide="chevron-down" width="12" height="12"></i>
+            </button>
+            <div id="role-dropdown" class="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg py-1 z-10 hidden min-w-[280px] max-h-72 overflow-auto">
+              <div id="role-dropdown-content" class="text-xs text-slate-400 px-3 py-2">点击加载角色列表...</div>
+            </div>
+          </div>
+          <div class="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-0.5"></div>
+          {# 插入变量下拉 #}
+          <div class="relative">
+            <button type="button" onclick="toggleVarDropdown()" class="toolbar-btn text-orange-600 dark:text-orange-400" title="插入变量">
+              <i data-lucide="braces" width="14" height="14"></i>
+              <span class="text-xs font-medium ml-0.5">变量</span>
+              <i data-lucide="chevron-down" width="12" height="12"></i>
+            </button>
+            <div id="var-dropdown" class="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg py-1 z-10 hidden min-w-[180px]">
+              {# Populated by JS #}
+            </div>
+          </div>
+        </div>
+
+        {# 编辑区 + 预览区 纵向布局 #}
+        <div class="border border-slate-300 dark:border-slate-600 rounded-b-xl overflow-hidden">
+          {# 上方编辑区 #}
+          <div class="relative bg-white dark:bg-slate-900">
+            <div class="absolute top-2 left-3 text-[10px] text-slate-400 font-medium pointer-events-none">编辑</div>
+            <textarea name="template" id="f_template" rows="14"
+              class="w-full px-4 pt-7 pb-3 bg-white dark:bg-slate-900 text-sm font-mono border-0 focus:outline-none focus:ring-0 resize-y min-h-[320px] max-h-[72vh]"
+              placeholder="留空则使用系统默认模板" oninput="updatePreview()"></textarea>
+          </div>
+          {# 下方预览区 #}
+          <div class="relative bg-slate-50 dark:bg-slate-800/50 border-t border-slate-300 dark:border-slate-600">
+            <div class="absolute top-2 left-3 text-[10px] text-slate-400 font-medium pointer-events-none">预览</div>
+            <div id="preview-panel" class="pt-7 pb-3 px-3 min-h-[260px] max-h-[45vh] overflow-auto">
+              <div id="kook-card-preview"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# 可用变量提示 #}
+      <div id="f_vars" class="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-xl">
+        <span class="font-medium text-slate-600 dark:text-slate-300">可用变量：</span>
+        <span id="f_vars_list"></span>
+      </div>
+
+      {# 图片 URL #}
+      <div id="f_image_wrap">
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">图片/动图 URL（可选）</label>
+        <input type="text" name="image_url" id="f_image_url"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+          placeholder="https://example.com/image.png" oninput="updateImagePreview()">
+        <div id="image-preview" class="mt-2 hidden">
+          <img id="image-preview-img" class="max-w-[200px] max-h-[120px] rounded-lg border border-slate-200 dark:border-slate-700 object-cover" alt="图片预览">
+        </div>
+      </div>
+
+      <label class="flex items-center gap-2 text-sm" id="f_status_wrap">
+        <input type="checkbox" name="status" id="f_status" class="rounded"> 启用
+      </label>
+      <div class="flex gap-3">
+        <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium">保存</button>
+        <button type="button" onclick="closeModal()" class="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2.5 rounded-xl text-sm font-medium">取消</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background-color 0.15s;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: inherit;
+  }
+  .toolbar-btn:hover {
+    background: rgba(124, 58, 237, 0.1);
+  }
+  .dark .toolbar-btn:hover {
+    background: rgba(124, 58, 237, 0.2);
+  }
+
+  /* KOOK 卡片预览样式 */
+  .kook-card {
+    border-left: 3px solid var(--card-color, #7C3AED);
+    background: white;
+    border-radius: 0 8px 8px 0;
+    overflow: hidden;
+    font-size: 13px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  .dark .kook-card {
+    background: #1e293b;
+  }
+  .kook-card-header {
+    font-weight: 700;
+    font-size: 14px;
+    padding: 10px 14px 6px;
+    color: #1e293b;
+  }
+  .dark .kook-card-header {
+    color: #e2e8f0;
+  }
+  .kook-card-body {
+    padding: 4px 14px 10px;
+    color: #475569;
+    line-height: 1.7;
+    word-break: break-word;
+  }
+  .dark .kook-card-body {
+    color: #94a3b8;
+  }
+  .kook-card-body strong { font-weight: 700; color: #1e293b; }
+  .dark .kook-card-body strong { color: #e2e8f0; }
+  .kook-card-body em { font-style: italic; }
+  .kook-card-body del { text-decoration: line-through; opacity: 0.6; }
+  .kook-card-body code {
+    background: #ede9fe;
+    color: #7c3aed;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+  }
+  .dark .kook-card-body code {
+    background: #3b2f63;
+    color: #c4b5fd;
+  }
+  .kook-card-body hr {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 8px 0;
+  }
+  .dark .kook-card-body hr {
+    border-top-color: #334155;
+  }
+  .kook-card-image {
+    padding: 4px 14px 10px;
+  }
+  .kook-card-image img {
+    max-width: 100%;
+    border-radius: 6px;
+  }
+  .kmd-mention {
+    display: inline-block;
+    background: #dbeafe;
+    color: #2563eb;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .dark .kmd-mention {
+    background: #1e3a5f;
+    color: #60a5fa;
+  }
+  .kmd-variable {
+    display: inline-block;
+    background: #fff7ed;
+    color: #ea580c;
+    padding: 0 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px dashed #fdba74;
+  }
+  .dark .kmd-variable {
+    background: #431407;
+    color: #fb923c;
+    border-color: #9a3412;
+  }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 播报类型元数据（从后端传入）
+const TYPES = {{ broadcast_types|tojson }};
+let ROLE_CACHE = {};
+
+function getRoleApiKey() {
+  const channelId = (document.getElementById('f_channel')?.value || '').trim();
+  return channelId ? ('channel:' + channelId) : 'all';
+}
+
+async function fetchRoleOptions(force = false) {
+  const content = document.getElementById('role-dropdown-content');
+  if (!content) return [];
+
+  const key = getRoleApiKey();
+  if (!force && ROLE_CACHE[key]) {
+    renderRoleDropdown(ROLE_CACHE[key]);
+    return ROLE_CACHE[key].roles || [];
+  }
+
+  content.innerHTML = '<div class="px-3 py-2 text-slate-400">正在拉取 KOOK 角色列表...</div>';
+  const channelId = (document.getElementById('f_channel')?.value || '').trim();
+  const query = channelId ? ('?channel_id=' + encodeURIComponent(channelId)) : '';
+
+  try {
+    const resp = await fetch('{{ url_for("broadcast_admin.kook_roles_api") }}' + query, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      throw new Error(data.error || '拉取角色失败');
+    }
+    ROLE_CACHE[key] = data;
+    renderRoleDropdown(data);
+    return data.roles || [];
+  } catch (e) {
+    content.innerHTML = '<div class="px-3 py-2 text-red-500">角色列表加载失败: ' + escapeHtml(String(e.message || e)) + '</div>';
+    return [];
+  }
+}
+
+function renderRoleDropdown(data) {
+  const content = document.getElementById('role-dropdown-content');
+  if (!content) return;
+
+  const roles = Array.isArray(data.roles) ? data.roles : [];
+  const guildName = data.resolved_guild_name || '';
+  const guildId = data.resolved_guild_id || '';
+  const title = guildName ? (guildName + ' (' + guildId + ')') : '全部服务器角色';
+
+  let html = '';
+  html += '<div class="px-3 py-2 border-b border-slate-100 dark:border-slate-700">';
+  html += '<div class="text-[11px] text-slate-500 dark:text-slate-400 truncate">来源: ' + escapeHtml(title) + '</div>';
+  html += '<button type="button" onclick="fetchRoleOptions(true)" class="mt-1 text-[11px] text-purple-600 dark:text-purple-400 hover:underline">刷新列表</button>';
+  html += '</div>';
+
+  if (!roles.length) {
+    html += '<div class="px-3 py-2 text-slate-400 text-xs">没有可用角色，请检查 Bot 是否在目标服务器且有查看角色权限。</div>';
+    content.innerHTML = html;
+    return;
+  }
+
+  roles.forEach(function(role) {
+    const roleId = String(role.id || '');
+    const roleName = String(role.name || roleId || '未命名角色');
+    const bits = Array.isArray(role.permission_bits) ? role.permission_bits : [];
+    const bitsLabel = bits.length ? ('bit:' + bits.slice(0, 6).join(',') + (bits.length > 6 ? '...' : '')) : 'bit:无';
+    const insertValue = '(rol)' + roleId + '(rol)';
+    html += '<button type="button" onclick="insertRoleMention(\'' + roleId.replace(/'/g, "\\'") + '\');" ';
+    html += 'class="w-full text-left px-3 py-2 text-xs hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors border-b border-slate-50 dark:border-slate-700/60">';
+    html += '<div class="font-medium text-slate-700 dark:text-slate-200 truncate">' + escapeHtml(roleName) + '</div>';
+    html += '<div class="text-[11px] text-slate-400 font-mono truncate">' + escapeHtml(insertValue) + ' · ' + escapeHtml(bitsLabel) + '</div>';
+    html += '</button>';
+  });
+  content.innerHTML = html;
+}
+
+function insertRoleMention(roleId) {
+  if (!roleId) return;
+  insertText('(rol)' + roleId + '(rol)');
+  const roleDropdown = document.getElementById('role-dropdown');
+  if (roleDropdown) roleDropdown.classList.add('hidden');
+}
+
+async function toggleRoleDropdown() {
+  const dropdown = document.getElementById('role-dropdown');
+  if (!dropdown) return;
+  const willOpen = dropdown.classList.contains('hidden');
+  dropdown.classList.toggle('hidden');
+  if (willOpen) {
+    await fetchRoleOptions(false);
+  }
+}
+
+function onTypeChange() {
+  const type = document.getElementById('f_type').value;
+  const meta = TYPES[type];
+  if (!meta) return;
+
+  // 显示/隐藏频道ID（私信/模板类型不需要）
+  const channelWrap = document.getElementById('f_channel_wrap');
+  channelWrap.style.display = meta.target === 'channel' ? '' : 'none';
+
+  // 显示/隐藏阈值（仅充值播报有意义）
+  const thresholdWrap = document.getElementById('f_threshold_wrap');
+  thresholdWrap.style.display = type === 'recharge' ? '' : 'none';
+
+  // 显示/隐藏图片（模板类型不需要）
+  const imageWrap = document.getElementById('f_image_wrap');
+  imageWrap.style.display = meta.target === 'template' ? 'none' : '';
+
+  // @角色工具仅频道播报可用
+  const roleToolWrap = document.getElementById('role-tool-wrap');
+  if (roleToolWrap) roleToolWrap.style.display = meta.target === 'channel' ? '' : 'none';
+  if (meta.target !== 'channel') {
+    const roleDropdown = document.getElementById('role-dropdown');
+    if (roleDropdown) roleDropdown.classList.add('hidden');
+  }
+
+  // 类型提示
+  document.getElementById('f_hint').textContent = meta.hint || '';
+
+  // 可用变量
+  const varsEl = document.getElementById('f_vars_list');
+  const vars = Object.entries(meta.variables || {});
+  varsEl.innerHTML = vars.map(([k, v]) => {
+    const code = k.startsWith('{') ? k : '{' + k + '}';
+    return '<code class="bg-white dark:bg-slate-700 px-1 rounded text-purple-600 dark:text-purple-300">' + code + '</code> ' + v;
+  }).join(' &nbsp; ');
+
+  // 更新变量下拉菜单
+  updateVarDropdown(meta.variables);
+
+  // 刷新预览
+  updatePreview();
+
+  if (meta.target === 'channel') {
+    fetchRoleOptions(false);
+  }
+}
+
+function updateVarDropdown(variables) {
+  const dropdown = document.getElementById('var-dropdown');
+  if (!variables) { dropdown.innerHTML = ''; return; }
+  dropdown.innerHTML = Object.entries(variables).map(([k, v]) => {
+    const code = k.startsWith('{') ? k : '{' + k + '}';
+    return '<button type="button" onclick="insertText(\'' + code.replace(/'/g, "\\'") + '\');toggleVarDropdown()" ' +
+      'class="w-full text-left px-3 py-1.5 text-xs hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors flex items-center gap-2">' +
+      '<code class="text-purple-600 dark:text-purple-300 font-mono">' + code + '</code>' +
+      '<span class="text-slate-400 truncate">' + v + '</span></button>';
+  }).join('');
+}
+
+function toggleVarDropdown() {
+  document.getElementById('var-dropdown').classList.toggle('hidden');
+}
+
+// 点击外部关闭下拉
+document.addEventListener('click', function(e) {
+  const varDropdown = document.getElementById('var-dropdown');
+  if (varDropdown && !e.target.closest('#var-dropdown') && !e.target.closest('[onclick*="toggleVarDropdown"]')) {
+    varDropdown.classList.add('hidden');
+  }
+  const roleDropdown = document.getElementById('role-dropdown');
+  if (roleDropdown && !e.target.closest('#role-dropdown') && !e.target.closest('[onclick*="toggleRoleDropdown"]')) {
+    roleDropdown.classList.add('hidden');
+  }
+});
+
+function fillDefaultTemplate() {
+  const type = document.getElementById('f_type').value;
+  const meta = TYPES[type];
+  if (meta && meta.default_template) {
+    document.getElementById('f_template').value = meta.default_template;
+    updatePreview();
+  }
+}
+
+// ===== 工具栏插入函数 =====
+
+function insertFormat(prefix, suffix) {
+  const ta = document.getElementById('f_template');
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const selected = ta.value.substring(start, end);
+  const text = selected || '文字';
+  ta.value = ta.value.substring(0, start) + prefix + text + suffix + ta.value.substring(end);
+  ta.focus();
+  ta.selectionStart = start + prefix.length;
+  ta.selectionEnd = start + prefix.length + text.length;
+  updatePreview();
+}
+
+function insertText(text) {
+  const ta = document.getElementById('f_template');
+  const start = ta.selectionStart;
+  ta.value = ta.value.substring(0, start) + text + ta.value.substring(ta.selectionEnd);
+  ta.focus();
+  ta.selectionStart = ta.selectionEnd = start + text.length;
+  updatePreview();
+}
+
+// ===== KMarkdown 渲染器 =====
+
+function renderKMarkdown(text) {
+  if (!text) return '<span class="text-slate-300 dark:text-slate-600 text-xs italic">（空内容）</span>';
+
+  let html = text;
+
+  // 转义 HTML
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // 粗体 **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // 斜体 *text*
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  // 删除线 ~~text~~
+  html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  // 行内代码 `text`
+  html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+  // 分割线 ---
+  html = html.replace(/^---$/gm, '<hr>');
+
+  // (met)all(met) → @全体成员
+  html = html.replace(/\(met\)all\(met\)/g, '<span class="kmd-mention">@全体成员</span>');
+  // (met)here(met) → @在线成员
+  html = html.replace(/\(met\)here\(met\)/g, '<span class="kmd-mention">@在线成员</span>');
+  // (met)其他ID(met) → @用户
+  html = html.replace(/\(met\)(.+?)\(met\)/g, '<span class="kmd-mention">@用户</span>');
+  // (rol)角色ID(rol) → @角色
+  html = html.replace(/\(rol\)(.+?)\(rol\)/g, '<span class="kmd-mention">@角色</span>');
+
+  // {变量} → 橙色 badge （包括 {@xxx} 形式）
+  html = html.replace(/\{(@?\w+)\}/g, function(match, name) {
+    return '<span class="kmd-variable">{' + name + '}</span>';
+  });
+
+  // 换行
+  html = html.replace(/\n/g, '<br>');
+
+  return html;
+}
+
+function cleanHeaderText(text) {
+  let h = (text || '').trim();
+  if (!h) return '';
+  h = h.replace(/^(?:标题(?:（[^）]*）|\([^)]*\))?|title)\s*[:：\-—]*\s*/i, '').trim();
+  return h;
+}
+
+function parseTemplateHeader(text) {
+  const raw = String(text || '');
+  if (!raw) return { header: '', body: '' };
+  const lines = raw.split('\n');
+  const first = (lines[0] || '').trim();
+
+  if (first.startsWith('#')) {
+    return {
+      header: cleanHeaderText(first.replace(/^#+/, '').trim()),
+      body: lines.slice(1).join('\n'),
+    };
+  }
+
+  const m = first.match(/^(?:标题(?:（[^）]*）|\([^)]*\))?|title)\s*[:：]\s*(.*)$/i);
+  if (m) {
+    return {
+      header: cleanHeaderText(m[1]),
+      body: lines.slice(1).join('\n'),
+    };
+  }
+
+  return { header: '', body: raw };
+}
+
+function updatePreview() {
+  const text = document.getElementById('f_template').value;
+  const type = document.getElementById('f_type').value;
+  const meta = TYPES[type];
+  const imageUrl = document.getElementById('f_image_url').value.trim();
+
+  const color = meta ? meta.color : '#7C3AED';
+  const displayText = text || (meta ? meta.default_template : '');
+  const parsed = parseTemplateHeader(displayText);
+  const title = parsed.header || (meta ? meta.title : '播报');
+  const body = parsed.body || '';
+
+  let cardHtml = '<div class="kook-card" style="--card-color:' + color + '">';
+  cardHtml += '<div class="kook-card-header">' + escapeHtml(title) + '</div>';
+  cardHtml += '<div class="kook-card-body">' + renderKMarkdown(body) + '</div>';
+
+  if (imageUrl) {
+    cardHtml += '<div class="kook-card-image"><img src="' + escapeHtml(imageUrl) + '" onerror="this.style.display=\'none\'"></div>';
+  }
+
+  cardHtml += '</div>';
+  document.getElementById('kook-card-preview').innerHTML = cardHtml;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ===== 图片预览 =====
+
+function updateImagePreview() {
+  const url = document.getElementById('f_image_url').value.trim();
+  const preview = document.getElementById('image-preview');
+  const img = document.getElementById('image-preview-img');
+  if (url) {
+    img.src = url;
+    img.onerror = function() { preview.classList.add('hidden'); };
+    img.onload = function() { preview.classList.remove('hidden'); };
+    preview.classList.remove('hidden');
+  } else {
+    preview.classList.add('hidden');
+  }
+  updatePreview();
+}
+
+// ===== 弹窗控制 =====
+
+function closeModal() {
+  const m = document.getElementById('config-modal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
+function showAddModal() {
+  document.getElementById('modal-title').textContent = '添加播报配置';
+  document.getElementById('config-form').action = '{{ url_for("broadcast_admin.add") }}';
+  document.getElementById('f_type').value = 'recharge';
+  document.getElementById('f_threshold').value = '0';
+  document.getElementById('f_template').value = '';
+  document.getElementById('f_channel').value = '';
+  document.getElementById('f_image_url').value = '';
+  document.getElementById('image-preview').classList.add('hidden');
+  document.getElementById('f_status').checked = true;
+  document.getElementById('f_status_wrap').classList.add('hidden');
+  onTypeChange();
+  const m = document.getElementById('config-modal');
+  m.classList.remove('hidden'); m.classList.add('flex');
+  // 重新初始化 Lucide 图标（工具栏按钮）
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function showEditModal(id, type, threshold, template, channel, status, imageUrl) {
+  document.getElementById('modal-title').textContent = '编辑播报配置';
+  document.getElementById('config-form').action = '/admin/broadcast/' + id + '/edit';
+  document.getElementById('f_type').value = type;
+  document.getElementById('f_threshold').value = threshold;
+  document.getElementById('f_template').value = template || '';
+  document.getElementById('f_channel').value = channel;
+  document.getElementById('f_image_url').value = imageUrl || '';
+  document.getElementById('f_status').checked = status;
+  document.getElementById('f_status_wrap').classList.remove('hidden');
+  onTypeChange();
+  updateImagePreview();
+  const m = document.getElementById('config-modal');
+  m.classList.remove('hidden'); m.classList.add('flex');
+  // 重新初始化 Lucide 图标（工具栏按钮）
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const channelInput = document.getElementById('f_channel');
+  if (!channelInput) return;
+
+  let timer = null;
+  channelInput.addEventListener('input', function() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function() {
+      fetchRoleOptions(false);
+    }, 300);
+  });
+});
+</script>
+{% endblock %}

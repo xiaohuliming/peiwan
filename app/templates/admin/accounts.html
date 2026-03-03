@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block header_title %}账号管理{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 搜索栏 #}
+  <div class="glass-card p-6">
+    <form method="get" class="flex gap-3 items-end">
+      <div class="flex-1">
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">搜索</label>
+        <input type="text" name="q" value="{{ q }}" placeholder="用户名/昵称/KOOK名称/KOOK ID..."
+          class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">角色</label>
+        <select name="role" class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+          <option value="">全部</option>
+          <option value="god" {% if role_filter == 'god' %}selected{% endif %}>老板</option>
+          <option value="player" {% if role_filter == 'player' %}selected{% endif %}>陪玩</option>
+          <option value="staff" {% if role_filter == 'staff' %}selected{% endif %}>客服</option>
+          <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>管理员</option>
+          <option value="superadmin" {% if role_filter == 'superadmin' %}selected{% endif %}>高级管理</option>
+        </select>
+      </div>
+      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors">搜索</button>
+    </form>
+  </div>
+
+  {# 用户表格 #}
+  <div class="glass-card p-6">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[900px]">
+        <thead>
+          <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+            <th class="pb-3 font-medium">用户</th>
+            <th class="pb-3 font-medium">有效身份汇总</th>
+            <th class="pb-3 font-medium">KOOK</th>
+            <th class="pb-3 font-medium">注册时间</th>
+            <th class="pb-3 font-medium text-right">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users.items %}
+          <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
+            <td class="py-3">
+              <div class="flex items-center gap-3">
+                <img src="{{ user.avatar_url }}" class="w-8 h-8 rounded-full" alt="">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-white">{{ user.nickname or user.username }}</p>
+                  <p class="text-xs text-slate-400">{{ user.username }} · {{ user.user_code }}</p>
+                </div>
+              </div>
+            </td>
+            {# 角色/身份列：纯展示 #}
+            <td class="py-3">
+              <div class="flex flex-wrap items-center gap-1">
+                {% if user.is_god %}
+                <span class="px-2 py-0.5 text-xs rounded-full font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">老板</span>
+                {% endif %}
+                {% if user.is_player %}
+                <span class="px-2 py-0.5 text-xs rounded-full font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">陪玩</span>
+                {% endif %}
+                {% if user.has_role('staff') %}
+                <span class="px-2 py-0.5 text-xs rounded-full font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">客服</span>
+                {% endif %}
+                {% if user.is_superadmin %}
+                <span class="px-2 py-0.5 text-xs rounded-full font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">高级管理权限</span>
+                {% elif user.is_admin %}
+                <span class="px-2 py-0.5 text-xs rounded-full font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">管理员权限</span>
+                {% endif %}
+                {% for tag in user.tag_list if tag not in ['老板', '陪玩', '客服'] %}
+                <span class="px-2 py-0.5 text-[11px] rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ tag }}</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td class="py-3">
+              {% if user.kook_username or user.kook_id %}
+              <div class="flex flex-col">
+                <span class="text-slate-700 dark:text-slate-200 text-xs">{{ user.kook_username or '未获取名称' }}</span>
+                <span class="text-slate-400 dark:text-slate-500 text-[11px] font-mono">ID: {{ user.kook_id or '-' }}</span>
+              </div>
+              {% else %}
+              <span class="text-slate-400 text-xs">-</span>
+              {% endif %}
+            </td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '-' }}</td>
+            <td class="py-3 text-right">
+              <div class="flex flex-col items-end gap-1">
+                {# 第一行: 改角色 + 管理身份 #}
+                <div class="flex items-center gap-1">
+                  {% if user.id != current_user.id %}
+                  <form action="{{ url_for('account_admin.change_role', user_id=user.id) }}" method="post" class="inline flex items-center gap-1">
+                    <select name="role" class="px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs">
+                      <option value="god" {% if user.role == 'god' %}selected{% endif %}>老板</option>
+                      <option value="player" {% if user.role == 'player' %}selected{% endif %}>陪玩</option>
+                      <option value="staff" {% if user.role == 'staff' %}selected{% endif %}>客服</option>
+                      {% if current_user.is_superadmin %}
+                      <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>管理员</option>
+                      <option value="superadmin" {% if user.role == 'superadmin' %}selected{% endif %}>高级管理</option>
+                      {% endif %}
+                    </select>
+                    <button type="submit" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-1" onclick="return confirm('确认修改主角色?')">改角色</button>
+                  </form>
+                  {% endif %}
+                  <button onclick="showIdentity(this)" data-uid="{{ user.id }}" data-name="{{ (user.nickname or user.username)|e }}" data-tags='{{ user.tag_list | tojson }}' class="text-teal-500 hover:text-teal-600 text-xs font-medium px-2 py-1 rounded hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors">管理身份</button>
+                </div>
+                {# 第二行: 其他操作 #}
+                <div class="flex items-center gap-1">
+                  <button onclick="showRename({{ user.id }}, '{{ (user.nickname or '')|e }}')" class="text-blue-500 hover:text-blue-600 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">改昵称</button>
+                  <form action="{{ url_for('account_admin.reset_password', user_id=user.id) }}" method="post" class="inline">
+                    <button type="submit" class="text-orange-500 hover:text-orange-600 text-xs font-medium px-2 py-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors" onclick="return confirm('确认重置密码为123456789?')">重置密码</button>
+                  </form>
+                  {% if current_user.is_admin and user.id != current_user.id and not user.is_superadmin %}
+                  <form action="{{ url_for('account_admin.delete_user', user_id=user.id) }}" method="post" class="inline">
+                    <button type="submit" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" onclick="return confirm('确认删除用户 {{ (user.nickname or user.username)|e }}？\n\n将同时删除该用户的所有关联数据（订单、账单、提现、亲密度等）。\n此操作不可撤销！')">删除</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="py-8 text-center text-slate-500">暂无用户</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# 分页 #}
+    {% if users.pages > 1 %}
+    <div class="mt-6 flex justify-center">
+      <div class="flex gap-2">
+        {% if users.has_prev %}
+        <a href="{{ url_for('account_admin.index', page=users.prev_num, q=q, role=role_filter) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">上一页</a>
+        {% endif %}
+        <span class="px-3 py-1 text-slate-500 text-sm">{{ users.page }} / {{ users.pages }}</span>
+        {% if users.has_next %}
+        <a href="{{ url_for('account_admin.index', page=users.next_num, q=q, role=role_filter) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">下一页</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# 改昵称弹窗 #}
+<div id="rename-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex')}">
+  <div class="glass-card p-8 max-w-md w-full mx-4">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4">修改昵称</h3>
+    <form id="rename-form" method="post" class="space-y-4">
+      <input type="text" name="nickname" id="rename_input" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+      <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium">确认修改</button>
+    </form>
+  </div>
+</div>
+
+{# 管理身份弹窗 #}
+<div id="identity-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this){this.classList.add('hidden');this.classList.remove('flex')}">
+  <div class="glass-card p-8 max-w-md w-full mx-4">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">管理身份</h3>
+    <p class="text-xs text-slate-400 mb-5" id="identity_user_name"></p>
+
+    <form id="identity-form" method="post">
+      {# 预设身份 — checkbox 勾选 #}
+      <div class="mb-5">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-3">身份标签</p>
+        <div class="flex flex-wrap gap-2" id="identity_checkboxes">
+          {# JS 动态生成 #}
+        </div>
+      </div>
+
+      {# 自定义标签 #}
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mb-5">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-2">自定义标签</p>
+        <div class="flex flex-wrap gap-1.5 mb-3 min-h-[24px]" id="identity_custom_tags">
+          {# JS 动态生成 #}
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="custom_tag_input" placeholder="输入自定义标签名" class="flex-1 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white">
+          <button type="button" onclick="addCustomTag()" class="bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl text-sm font-medium transition-colors">添加</button>
+        </div>
+      </div>
+
+      {# 保存按钮 #}
+      <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">保存身份</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showRename(userId, currentName) {
+  document.getElementById('rename-form').action = `/admin/accounts/${userId}/rename`;
+  document.getElementById('rename_input').value = currentName;
+  const m = document.getElementById('rename-modal');
+  m.classList.remove('hidden'); m.classList.add('flex');
+}
+
+/* ---- 管理身份 ---- */
+const PRESET_IDENTITIES = ['老板', '陪玩', '客服'];
+
+function showIdentity(btn) {
+  const userId = btn.dataset.uid;
+  const userName = btn.dataset.name;
+  const currentTags = JSON.parse(btn.dataset.tags || '[]');
+
+  document.getElementById('identity_user_name').textContent = userName;
+  document.getElementById('identity-form').action = `/admin/accounts/${userId}/tags`;
+
+  // 渲染预设身份 checkbox
+  const boxesEl = document.getElementById('identity_checkboxes');
+  boxesEl.innerHTML = '';
+  PRESET_IDENTITIES.forEach(name => {
+    const checked = currentTags.includes(name);
+    const id = 'preset_' + name;
+    const label = document.createElement('label');
+    label.className = 'relative cursor-pointer select-none';
+    label.innerHTML = `
+      <input type="checkbox" name="tags" value="${name}" ${checked ? 'checked' : ''} class="peer sr-only" id="${id}">
+      <div class="px-4 py-2 text-sm rounded-xl font-medium border-2 transition-all
+        peer-checked:border-purple-500 peer-checked:bg-purple-50 peer-checked:text-purple-700
+        dark:peer-checked:border-purple-400 dark:peer-checked:bg-purple-900/20 dark:peer-checked:text-purple-300
+        border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500
+        hover:border-slate-300 dark:hover:border-slate-500">
+        <span class="check-mark hidden peer-checked:inline">&#10003; </span>${name}
+      </div>
+    `;
+    // 让 check-mark 跟随 checkbox 状态
+    const cb = label.querySelector('input');
+    const mark = label.querySelector('.check-mark');
+    if (checked) mark.style.display = 'inline';
+    cb.addEventListener('change', () => { mark.style.display = cb.checked ? 'inline' : 'none'; });
+    boxesEl.appendChild(label);
+  });
+
+  // 渲染已有的自定义标签
+  renderCustomTags(currentTags.filter(t => !PRESET_IDENTITIES.includes(t)));
+
+  document.getElementById('custom_tag_input').value = '';
+  const m = document.getElementById('identity-modal');
+  m.classList.remove('hidden'); m.classList.add('flex');
+}
+
+function renderCustomTags(tags) {
+  const el = document.getElementById('identity_custom_tags');
+  el.innerHTML = '';
+  tags.forEach(tag => {
+    const span = document.createElement('span');
+    span.className = 'inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300';
+    span.innerHTML = `
+      <input type="hidden" name="tags" value="${tag}" form="identity-form">
+      ${tag}
+      <button type="button" onclick="removeCustomTag(this)" class="ml-0.5 text-teal-500 hover:text-red-500 transition-colors text-sm leading-none">&times;</button>
+    `;
+    el.appendChild(span);
+  });
+}
+
+function addCustomTag() {
+  const input = document.getElementById('custom_tag_input');
+  const tag = input.value.trim();
+  if (!tag) return;
+
+  // 检查是否已存在（预设 checkbox 或自定义）
+  const form = document.getElementById('identity-form');
+  const existing = Array.from(form.querySelectorAll('input[name="tags"]')).map(i => i.value);
+  if (existing.includes(tag)) {
+    input.value = '';
+    return;
+  }
+
+  // 追加到自定义标签区
+  const el = document.getElementById('identity_custom_tags');
+  const span = document.createElement('span');
+  span.className = 'inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300';
+  span.innerHTML = `
+    <input type="hidden" name="tags" value="${tag}" form="identity-form">
+    ${tag}
+    <button type="button" onclick="removeCustomTag(this)" class="ml-0.5 text-teal-500 hover:text-red-500 transition-colors text-sm leading-none">&times;</button>
+  `;
+  el.appendChild(span);
+  input.value = '';
+}
+
+function removeCustomTag(btn) {
+  btn.closest('span').remove();
+}
+
+// 回车添加自定义标签
+document.getElementById('custom_tag_input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block header_title %}系统工具{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  {# 机器人调测 #}
+  <div class="glass-card p-6">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+      <i data-lucide="bot" width="20" height="20" class="text-purple-500"></i> 机器人调测
+    </h3>
+    <form action="{{ url_for('system.bot_test') }}" method="post" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">频道ID</label>
+          <input type="text" name="channel_id" required placeholder="KOOK 频道 ID"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">标题</label>
+          <input type="text" name="title" placeholder="卡片标题 (可选)"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+      </div>
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">内容</label>
+        <textarea name="content" rows="4" required placeholder="支持 KMarkdown 格式..."
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+      </div>
+      <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+        <i data-lucide="send" width="16" height="16"></i> 发送测试消息
+      </button>
+    </form>
+  </div>
+
+  {# 亲密度清空 #}
+  <div class="glass-card p-6">
+    <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+      <i data-lucide="heart-off" width="20" height="20" class="text-pink-500"></i> 亲密度清空
+    </h3>
+    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+      当前共 <span class="font-bold text-slate-800 dark:text-white">{{ intimacy_count }}</span> 条亲密度记录。
+      清空指定日期之前的所有亲密度数据，此操作不可撤销。
+    </p>
+    <form action="{{ url_for('system.do_clear_intimacy') }}" method="post" class="flex gap-3 items-end"
+      onsubmit="return confirm('确认清空亲密度数据? 此操作不可撤销!')">
+      <div>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">清空此日期之前的数据</label>
+        <input type="date" name="before_date" required
+          class="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+      </div>
+      <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+        <i data-lucide="trash-2" width="16" height="16"></i> 确认清空
+      </button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

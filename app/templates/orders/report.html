@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block header_title %}申报订单{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+  <div class="glass-card p-8">
+    <div class="flex items-center gap-3 mb-8">
+      <a href="{{ url_for('orders.index') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+        <i data-lucide="arrow-left" width="20" height="20"></i>
+      </a>
+      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">申报时长</h2>
+    </div>
+
+    {# 订单基本信息 #}
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 mb-6 space-y-2 text-sm">
+      <div class="grid grid-cols-2 gap-3">
+        <div><span class="text-slate-400">订单号:</span> <span class="font-mono font-medium text-slate-800 dark:text-white">{{ order.order_no }}</span></div>
+        <div><span class="text-slate-400">老板:</span> <span class="font-medium text-slate-800 dark:text-white">{{ order.boss.nickname }}</span></div>
+        <div><span class="text-slate-400">游戏项目:</span> <span class="text-slate-800 dark:text-white">{{ order.project_display }}</span></div>
+        <div><span class="text-slate-400">档位:</span> <span class="text-slate-800 dark:text-white">
+          {% if order.price_tier == 'casual' %}娱乐档{% elif order.price_tier == 'tech' %}技术档{% elif order.price_tier == 'god' %}大神档{% elif order.price_tier in ['peak', 'pro'] %}巅峰档{% elif order.price_tier == 'devil' %}魔王档{% else %}{{ order.price_tier }}{% endif %}
+        </span></div>
+        <div><span class="text-slate-400">基础单价:</span> <span class="font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.base_price) }}</span></div>
+        <div><span class="text-slate-400">补充单价:</span> <span class="text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.extra_price) }}</span></div>
+        {% if order.addon_desc %}
+        <div class="col-span-2"><span class="text-slate-400">附加项:</span> <span class="text-slate-800 dark:text-white">{{ order.addon_desc }} (¥{{ "%.2f"|format(order.addon_price) }})</span></div>
+        {% endif %}
+        <div><span class="text-slate-400">佣金比例:</span> <span class="text-green-600 font-medium">{{ "%.0f"|format(order.commission_rate) }}%</span></div>
+        <div><span class="text-slate-400">老板折扣:</span> <span class="text-slate-800 dark:text-white">{{ "%.0f"|format(order.boss_discount) }}%</span></div>
+      </div>
+    </div>
+
+    {# 申报表单 #}
+    <form method="post" action="{{ url_for('orders.report', order_id=order.id) }}" class="space-y-5">
+      <div>
+        <div>
+          <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">申报时长（小时）</label>
+          <input type="number" name="duration" id="duration-hours" min="0.5" step="0.5" required
+            placeholder="例如：2 或 2.5"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <p class="text-xs text-slate-400 mt-1">仅支持整数或 .5 小时（如 0.5、1、1.5、2.5），不支持 7.4。</p>
+        </div>
+      </div>
+
+      {# 自动计算预览 #}
+      <div id="calc-preview" class="hidden bg-purple-50 dark:bg-purple-900/20 rounded-xl p-5 space-y-2 text-sm border border-purple-200 dark:border-purple-800/50">
+        <h4 class="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
+          <i data-lucide="calculator" width="16" height="16"></i> 预计收益
+        </h4>
+        <div class="grid grid-cols-2 gap-2">
+          <div><span class="text-purple-500">时长:</span> <span id="calc-duration" class="font-medium text-purple-800 dark:text-purple-200">0</span> 小时</div>
+          <div><span class="text-purple-500">单价:</span> ¥ <span id="calc-unit-price" class="font-medium text-purple-800 dark:text-purple-200">0</span></div>
+          <div><span class="text-purple-500">预计总价:</span> ¥ <span id="calc-total" class="font-bold text-purple-800 dark:text-purple-200">0</span></div>
+          <div><span class="text-purple-500">预计收益:</span> <span id="calc-earning" class="font-bold text-green-600">0</span> 小猪粮</div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <a href="{{ url_for('orders.index') }}" class="px-6 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">取消</a>
+        <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2" onclick="return confirm('确认提交申报?')">
+          <i data-lucide="check-circle" width="16" height="16"></i> 提交申报
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const basePrice = {{ order.base_price | float }};
+const extraPrice = {{ order.extra_price | float }};
+const addonPrice = {{ order.addon_price | float }};
+const commissionRate = {{ order.commission_rate | float }};
+const discount = {{ order.boss_discount | float }} / 100;
+
+function calcPreview() {
+  const durationRaw = document.getElementById('duration-hours').value;
+  const preview = document.getElementById('calc-preview');
+
+  if (!durationRaw) { preview.classList.add('hidden'); return; }
+  const duration = parseFloat(durationRaw);
+
+  if (!Number.isFinite(duration) || duration <= 0) { preview.classList.add('hidden'); return; }
+
+  const unitPrice = basePrice + extraPrice;
+  const subtotal = unitPrice * duration + addonPrice;
+  const total = (subtotal * discount);
+  const earning = subtotal * commissionRate / 100;
+
+  document.getElementById('calc-duration').textContent = duration;
+  document.getElementById('calc-unit-price').textContent = unitPrice.toFixed(2);
+  document.getElementById('calc-total').textContent = total.toFixed(2);
+  document.getElementById('calc-earning').textContent = earning.toFixed(2);
+  preview.classList.remove('hidden');
+}
+
+document.getElementById('duration-hours').addEventListener('input', calcPreview);
+</script>
+{% endblock %}

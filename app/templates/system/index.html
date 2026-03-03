@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block header_title %}系统工具{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    
+    {# Bot 调测 #}
+    <a href="{{ url_for('system.bot_debug') }}" class="glass-card p-6 hover:scale-[1.02] transition-transform group">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500 group-hover:bg-purple-500 group-hover:text-white transition-colors">
+          <i data-lucide="bot" width="24" height="24"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">Bot 调测</h3>
+      </div>
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        调试 KOOK 机器人消息发送功能，发送私信或卡片消息测试。
+      </p>
+    </a>
+
+    {# 亲密度清空 #}
+    <div class="glass-card p-6">
+      <div class="flex items-center gap-4 mb-4">
+        <div class="p-3 rounded-2xl bg-pink-500/10 text-pink-500">
+          <i data-lucide="heart-off" width="24" height="24"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">亲密度清空</h3>
+      </div>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+        当前共有 <span class="font-semibold text-slate-700 dark:text-slate-200">{{ intimacy_count }}</span> 条记录。
+      </p>
+      <form action="{{ url_for('system.clear_intimacy_data') }}" method="post" class="space-y-3" onsubmit="return confirm('确认清空该日期之前的亲密度数据？此操作不可撤销。')">
+        <div>
+          <label class="block text-sm text-slate-600 dark:text-slate-300 mb-1">清空此日期之前</label>
+          <input type="date" name="before_date" required class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pink-500/30">
+        </div>
+        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors">
+          <i data-lucide="trash-2" width="16" height="16"></i>
+          确认清空
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
