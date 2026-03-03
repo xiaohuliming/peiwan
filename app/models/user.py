@@ -92,6 +92,26 @@ class User(UserMixin, db.Model):
         """是否有陪玩身份标签"""
         return self.role == 'player' or '陪玩' in self.tag_list
 
+    @property
+    def anonymous_broadcast_all(self):
+        """是否开启全部匿名播报（充值/消费/礼物/升级）"""
+        return all([
+            bool(self.anonymous_recharge),
+            bool(self.anonymous_consume),
+            bool(self.anonymous_gift_send),
+            bool(self.anonymous_gift_recv),
+            bool(self.anonymous_upgrade),
+        ])
+
+    def set_anonymous_broadcast_all(self, enabled: bool):
+        """一键设置全部匿名播报开关"""
+        state = bool(enabled)
+        self.anonymous_recharge = state
+        self.anonymous_consume = state
+        self.anonymous_gift_send = state
+        self.anonymous_gift_recv = state
+        self.anonymous_upgrade = state
+
     @staticmethod
     def _role_to_identity(role_key):
         return {

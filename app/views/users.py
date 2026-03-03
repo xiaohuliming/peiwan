@@ -384,12 +384,22 @@ def update_info(user_id):
             else:
                 flash('经验值已更新', 'success')
 
-    elif action == 'toggle_anonymous_upgrade':
-        user.anonymous_upgrade = not user.anonymous_upgrade
-        log_operation(current_user.id, 'user_toggle_anon_upgrade', 'user', user.id,
-                      f'{"开启" if user.anonymous_upgrade else "关闭"}升级匿名播报')
+    elif action in ('toggle_anonymous_all', 'toggle_anonymous_upgrade'):
+        if not current_user.is_admin:
+            flash('需要管理员权限', 'error')
+            return redirect(url_for('users.detail', user_id=user_id))
+
+        new_state = not user.anonymous_broadcast_all
+        user.set_anonymous_broadcast_all(new_state)
+        log_operation(
+            current_user.id,
+            'user_toggle_anon_all',
+            'user',
+            user.id,
+            f'{"开启" if new_state else "关闭"}全部匿名播报(充值/消费/送礼/收礼/升级)',
+        )
         db.session.commit()
-        flash(f'升级匿名播报已{"开启" if user.anonymous_upgrade else "关闭"}', 'success')
+        flash(f'全部匿名播报已{"开启" if new_state else "关闭"}', 'success')
 
     elif action == 'update_broadcast_channel':
         new_channel = request.form.get('broadcast_channel', '').strip()
