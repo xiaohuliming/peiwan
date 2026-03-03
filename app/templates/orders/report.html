@@ -3,19 +3,19 @@
 {% block header_title %}申报订单{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-6">
-  <div class="glass-card p-8">
-    <div class="flex items-center gap-3 mb-8">
+<div class="max-w-2xl mx-auto space-y-4 sm:space-y-6 pb-24 sm:pb-0">
+  <div class="glass-card p-4 sm:p-8">
+    <div class="flex items-center gap-3 mb-5 sm:mb-8">
       <a href="{{ url_for('orders.index') }}" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
         <i data-lucide="arrow-left" width="20" height="20"></i>
       </a>
-      <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">申报时长</h2>
+      <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-800 dark:text-white">申报时长</h2>
     </div>
 
     {# 订单基本信息 #}
-    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 mb-6 space-y-2 text-sm">
-      <div class="grid grid-cols-2 gap-3">
-        <div><span class="text-slate-400">订单号:</span> <span class="font-mono font-medium text-slate-800 dark:text-white">{{ order.order_no }}</span></div>
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 sm:p-5 mb-5 sm:mb-6 space-y-2 text-sm">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+        <div><span class="text-slate-400">订单号:</span> <span class="font-mono font-medium text-slate-800 dark:text-white break-all">{{ order.order_no }}</span></div>
         <div><span class="text-slate-400">老板:</span> <span class="font-medium text-slate-800 dark:text-white">{{ order.boss.nickname }}</span></div>
         <div><span class="text-slate-400">游戏项目:</span> <span class="text-slate-800 dark:text-white">{{ order.project_display }}</span></div>
         <div><span class="text-slate-400">档位:</span> <span class="text-slate-800 dark:text-white">
@@ -24,7 +24,7 @@
         <div><span class="text-slate-400">基础单价:</span> <span class="font-bold text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.base_price) }}</span></div>
         <div><span class="text-slate-400">补充单价:</span> <span class="text-slate-800 dark:text-white">¥ {{ "%.2f"|format(order.extra_price) }}</span></div>
         {% if order.addon_desc %}
-        <div class="col-span-2"><span class="text-slate-400">附加项:</span> <span class="text-slate-800 dark:text-white">{{ order.addon_desc }} (¥{{ "%.2f"|format(order.addon_price) }})</span></div>
+        <div class="sm:col-span-2"><span class="text-slate-400">附加项:</span> <span class="text-slate-800 dark:text-white">{{ order.addon_desc }} (¥{{ "%.2f"|format(order.addon_price) }})</span></div>
         {% endif %}
         <div><span class="text-slate-400">佣金比例:</span> <span class="text-green-600 font-medium">{{ "%.0f"|format(order.commission_rate) }}%</span></div>
         <div><span class="text-slate-400">老板折扣:</span> <span class="text-slate-800 dark:text-white">{{ "%.0f"|format(order.boss_discount) }}%</span></div>
@@ -32,13 +32,13 @@
     </div>
 
     {# 申报表单 #}
-    <form method="post" action="{{ url_for('orders.report', order_id=order.id) }}" class="space-y-5">
+    <form id="report-form" method="post" action="{{ url_for('orders.report', order_id=order.id) }}" class="space-y-5">
       <div>
         <div>
           <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">申报时长（小时）</label>
-          <input type="number" name="duration" id="duration-hours" min="0.5" step="0.5" required
+          <input type="number" name="duration" id="duration-hours" min="0.5" step="0.5" inputmode="decimal" required
             placeholder="例如：2 或 2.5"
-            class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            class="w-full px-4 py-3 sm:py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <p class="text-xs text-slate-400 mt-1">仅支持整数或 .5 小时（如 0.5、1、1.5、2.5），不支持 7.4。</p>
         </div>
       </div>
@@ -48,7 +48,7 @@
         <h4 class="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-2">
           <i data-lucide="calculator" width="16" height="16"></i> 预计收益
         </h4>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div><span class="text-purple-500">时长:</span> <span id="calc-duration" class="font-medium text-purple-800 dark:text-purple-200">0</span> 小时</div>
           <div><span class="text-purple-500">单价:</span> ¥ <span id="calc-unit-price" class="font-medium text-purple-800 dark:text-purple-200">0</span></div>
           <div><span class="text-purple-500">预计总价:</span> ¥ <span id="calc-total" class="font-bold text-purple-800 dark:text-purple-200">0</span></div>
@@ -56,13 +56,23 @@
         </div>
       </div>
 
-      <div class="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+      <div class="hidden sm:flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
         <a href="{{ url_for('orders.index') }}" class="px-6 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">取消</a>
-        <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2" onclick="return confirm('确认提交申报?')">
+        <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white px-8 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
           <i data-lucide="check-circle" width="16" height="16"></i> 提交申报
         </button>
       </div>
     </form>
+  </div>
+
+  {# 移动端底部操作栏，确保按钮始终可点击 #}
+  <div class="sm:hidden fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-700">
+    <div class="grid grid-cols-2 gap-2">
+      <a href="{{ url_for('orders.index') }}" class="text-center px-3 py-3 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800">取消</a>
+      <button form="report-form" type="submit" class="px-3 py-3 rounded-xl text-sm font-bold text-white bg-orange-500 active:bg-orange-600">
+        提交申报
+      </button>
+    </div>
   </div>
 </div>
 {% endblock %}
