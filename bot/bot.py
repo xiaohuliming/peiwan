@@ -950,6 +950,43 @@ async def confirm_order_cmd(msg: Message, order_no: str = ''):
         )
 
 
+@bot.command(name='roll')
+async def roll_cmd(msg: Message, total_str: str = '', count_str: str = ''):
+    """
+    随机掷点
+    用法: /roll 总点数 抽几个点
+    例: /roll 6 1
+    """
+    if not total_str or not count_str:
+        await msg.reply('用法: `/roll 总点数 抽几个点`\n例: `/roll 6 1`')
+        return
+
+    try:
+        total = int(str(total_str).strip())
+        count = int(str(count_str).strip())
+    except Exception:
+        await msg.reply('参数格式错误，请输入整数。\n例: `/roll 6 1`')
+        return
+
+    if total <= 0:
+        await msg.reply('总点数必须大于 0')
+        return
+    if count <= 0:
+        await msg.reply('抽取数量必须大于 0')
+        return
+    if count > 100:
+        await msg.reply('抽取数量过大，请输入 1-100')
+        return
+
+    results = [random.randint(1, total) for _ in range(count)]
+    result_text = ''.join([f'【{n}】' for n in results])
+    await msg.reply(
+        f"ROLL({total}, {count}) 结果: {result_text}",
+        use_quote=False,
+        type=MessageTypes.KMD,
+    )
+
+
 @bot.command(name='发布抽奖')
 async def publish_lottery_cmd(msg: Message, winner_count_str: str = ''):
     """
@@ -1046,6 +1083,7 @@ def _build_help_text():
         "`/钱包` - 查看钱包信息\n"
         "`/结单 订单号 时长` - 结单申报(仅支持整数或0.5小时)\n"
         "`/确认 订单号` - 确认订单(老板)\n"
+        "`/roll 总点数 抽几个点` - 掷点/随机点数\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
         "`/结束抽奖` - 结束当前互动抽奖并立即开奖\n"
         "`/提现 [金额]` - 申请提现(无金额会弹网页入口；需微信+支付宝收款码)\n"
