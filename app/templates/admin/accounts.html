@@ -131,7 +131,7 @@
     {# 分页 #}
     {% if users.pages > 1 %}
     <div class="mt-6 flex justify-center">
-      <div class="flex gap-2">
+      <div class="flex flex-wrap items-center justify-center gap-2">
         {% if users.has_prev %}
         <a href="{{ url_for('account_admin.index', page=users.prev_num, q=q, role=role_filter) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">上一页</a>
         {% endif %}
@@ -139,6 +139,14 @@
         {% if users.has_next %}
         <a href="{{ url_for('account_admin.index', page=users.next_num, q=q, role=role_filter) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">下一页</a>
         {% endif %}
+        <form method="get" action="{{ url_for('account_admin.index') }}" class="flex items-center gap-1 ml-2">
+          {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+          {% if role_filter %}<input type="hidden" name="role" value="{{ role_filter }}">{% endif %}
+          <span class="text-xs text-slate-400">跳转到</span>
+          <input type="number" name="page" min="1" max="{{ users.pages }}" value="{{ users.page }}" class="w-16 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white">
+          <span class="text-xs text-slate-400">页</span>
+          <button type="submit" class="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs">跳转</button>
+        </form>
       </div>
     </div>
     {% endif %}

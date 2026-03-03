@@ -82,14 +82,23 @@
   <!-- Pagination -->
   <div class="mt-6 flex justify-center">
     <!-- Simple pagination placeholder -->
-    <div class="flex gap-2">
+    <div class="flex flex-wrap items-center justify-center gap-2">
         {% if players.has_prev %}
-        <a href="{{ url_for('companions.index', page=players.prev_num) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600">上一页</a>
+        <a href="{{ url_for('companions.index', page=players.prev_num, q=request.args.get('q', '')) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600">上一页</a>
         {% endif %}
-        <span class="px-3 py-1 text-slate-500">第 {{ players.page }} 页</span>
+        <span class="px-3 py-1 text-slate-500">第 {{ players.page }} / {{ players.pages }} 页</span>
         {% if players.has_next %}
-        <a href="{{ url_for('companions.index', page=players.next_num) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600">下一页</a>
+        <a href="{{ url_for('companions.index', page=players.next_num, q=request.args.get('q', '')) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded border border-slate-300 dark:border-slate-600">下一页</a>
         {% endif %}
+        <form method="get" action="{{ url_for('companions.index') }}" class="flex items-center gap-1 ml-2">
+          {% if request.args.get('q') %}
+          <input type="hidden" name="q" value="{{ request.args.get('q') }}">
+          {% endif %}
+          <span class="text-xs text-slate-400">跳转到</span>
+          <input type="number" name="page" min="1" max="{{ players.pages }}" value="{{ players.page }}" class="w-16 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white">
+          <span class="text-xs text-slate-400">页</span>
+          <button type="submit" class="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs">跳转</button>
+        </form>
     </div>
   </div>
 </div>

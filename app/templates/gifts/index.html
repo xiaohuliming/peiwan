@@ -163,7 +163,7 @@
     {# 分页 #}
     {% if gift_orders.pages > 1 %}
     <div class="mt-6 flex justify-center">
-      <div class="flex gap-2">
+      <div class="flex flex-wrap items-center justify-center gap-2">
         {% if gift_orders.has_prev %}
         <a href="{{ url_for('gifts.index', page=gift_orders.prev_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">上一页</a>
         {% endif %}
@@ -171,6 +171,15 @@
         {% if gift_orders.has_next %}
         <a href="{{ url_for('gifts.index', page=gift_orders.next_num, **pagination_args) }}" class="px-3 py-1 bg-white dark:bg-slate-800 rounded-lg border border-slate-300 dark:border-slate-600 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">下一页</a>
         {% endif %}
+        <form method="get" action="{{ url_for('gifts.index') }}" class="flex items-center gap-1 ml-2">
+          {% for key, value in pagination_args.items() %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+          {% endfor %}
+          <span class="text-xs text-slate-400">跳转到</span>
+          <input type="number" name="page" min="1" max="{{ gift_orders.pages }}" value="{{ gift_orders.page }}" class="w-16 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white">
+          <span class="text-xs text-slate-400">页</span>
+          <button type="submit" class="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs">跳转</button>
+        </form>
       </div>
     </div>
     {% endif %}
