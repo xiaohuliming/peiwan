@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="same-origin">
   <title>{% block title %}嗯呢呗电竞 - 登录{% endblock %}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='img/favicon-192.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon-192.png') }}">
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -60,8 +63,8 @@
   <!-- 主内容 -->
   <div class="w-full max-w-md p-6">
     <div class="mb-8 text-center">
-      <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-500 to-blue-500 shadow-lg shadow-purple-500/30 flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4">
-        嗯
+      <div class="w-14 h-14 rounded-2xl overflow-hidden border border-white/70 dark:border-slate-700/70 shadow-lg shadow-slate-300/30 dark:shadow-black/20 bg-white mx-auto mb-4">
+        <img src="{{ url_for('static', filename='img/site-logo.png') }}" alt="嗯呢呗电竞 Logo" class="w-full h-full object-cover">
       </div>
       <h1 class="text-2xl font-bold tracking-tight text-slate-800 dark:text-white">嗯呢呗电竞</h1>
       <p class="text-slate-500 dark:text-slate-400 mt-2 text-sm">陪玩店综合管理系统</p>
