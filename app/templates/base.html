@@ -264,9 +264,9 @@
                 </span>
               </div>
 
-              {% if top_notifications and top_notifications.items %}
+              {% if top_notifications and top_notifications['items'] %}
               <div class="max-h-80 overflow-y-auto custom-scrollbar space-y-1 pr-1">
-                {% for item in top_notifications.items %}
+                {% for item in top_notifications['items'] %}
                 <a href="{{ item.url }}" class="flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-white/70 dark:hover:bg-slate-800/60 transition-colors">
                   <span class="w-8 h-8 shrink-0 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 flex items-center justify-center">
                     <i data-lucide="{{ item.icon or 'bell' }}" width="15" height="15"></i>
