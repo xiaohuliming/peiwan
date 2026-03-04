@@ -235,7 +235,7 @@
             <input 
               id="global-search-input"
               type="text" 
-              placeholder="搜索订单或陪玩..." 
+              placeholder="搜索用户（KOOK名称/ID/昵称/用户名）..." 
               class="pl-10 pr-4 py-2.5 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:bg-white/60 dark:focus:bg-slate-800/60 transition-all w-64 placeholder:text-slate-400 shadow-sm text-slate-800 dark:text-slate-200"
             />
           </div>
@@ -376,7 +376,7 @@
     updateHeaderDateTime();
     setInterval(updateHeaderDateTime, 1000);
 
-    // 顶部全局搜索（Enter 提交）
+    // 顶部全局搜索（Enter 提交到用户管理）
     const globalSearchInput = document.getElementById('global-search-input');
     if (globalSearchInput) {
       globalSearchInput.addEventListener('keydown', function (e) {
@@ -384,13 +384,7 @@
         e.preventDefault();
         const q = (globalSearchInput.value || '').trim();
         if (!q) return;
-
-        const isLikelyOrderNo = /^\d{10,}$/.test(q);
-        const canSearchCompanions = {{ 'true' if (current_user.is_authenticated and (current_user.is_staff or current_user.is_god)) else 'false' }};
-        const targetUrl = isLikelyOrderNo || !canSearchCompanions
-          ? "{{ url_for('orders.index') }}?q=" + encodeURIComponent(q)
-          : "{{ url_for('companions.index') }}?q=" + encodeURIComponent(q);
-        window.location.href = targetUrl;
+        window.location.href = "{{ url_for('users.index') }}?q=" + encodeURIComponent(q);
       });
     }
 

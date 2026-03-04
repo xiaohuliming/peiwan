@@ -292,7 +292,7 @@ def sync_kook_usernames():
     error_samples = []
 
     for user in users:
-        ok, changed, error, old_name, new_name = _sync_user_kook_profile(user)
+        ok, changed, error, old_name, new_name = _sync_user_kook_profile(user, force_nickname=True)
         if not ok:
             failed_count += 1
             if len(error_samples) < 3:
@@ -558,7 +558,9 @@ def delete_intimacy(user_id, intimacy_id):
     db.session.commit()
     flash('亲密度已删除', 'success')
     return redirect(url_for('users.detail', user_id=user_id, tab='intimacy'))
-def _sync_user_kook_profile(user):
+
+
+def _sync_user_kook_profile(user, force_nickname=False):
     """按用户已保存的 KOOK ID 拉取并更新 KOOK 名称/头像。"""
     if not user.kook_id:
         return False, False, '该用户未绑定 KOOK ID', '', ''
@@ -570,14 +572,21 @@ def _sync_user_kook_profile(user):
 
     old_name = user.kook_username or ''
     old_avatar = user.avatar or ''
+    old_nickname = user.nickname or ''
 
     user.kook_username = kook_username
     user.kook_bound = True
     if avatar_url:
         user.avatar = avatar_url
 
-    if (not user.nickname) or (old_name and user.nickname == old_name):
+    if force_nickname and kook_username:
+        user.nickname = kook_username
+    elif (not user.nickname) or (old_name and user.nickname == old_name):
         user.nickname = kook_username or user.nickname
 
-    changed = (old_name != (kook_username or '')) or (bool(avatar_url) and old_avatar != avatar_url)
+    changed = (
+        (old_name != (kook_username or ''))
+        or (bool(avatar_url) and old_avatar != avatar_url)
+        or (old_nickname != (user.nickname or ''))
+    )
     return True, changed, None, old_name, (kook_username or '')
