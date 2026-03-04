@@ -8,6 +8,16 @@
 {% if is_admin_view %}
 {# ====== 管理员视图 ====== #}
 
+  {% if current_user.has_role('staff') %}
+  <div class="flex justify-end">
+    <a href="{{ url_for('clock.index', mode='mine') }}"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors">
+      <i data-lucide="user" width="16" height="16"></i>
+      我的打卡
+    </a>
+  </div>
+  {% endif %}
+
   <!-- 概览统计卡片 -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
     <!-- 当前在班 -->
@@ -193,6 +203,16 @@
 {% else %}
 {# ====== 客服/陪玩视图 ====== #}
 
+  {% if current_user.is_admin %}
+  <div class="flex justify-end">
+    <a href="{{ url_for('clock.index', mode='manage') }}"
+       class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/60 dark:bg-slate-800/60 border border-white/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-white/80 dark:hover:bg-slate-700/60 transition-colors">
+      <i data-lucide="shield-check" width="16" height="16"></i>
+      返回打卡管理
+    </a>
+  </div>
+  {% endif %}
+
   <!-- 打卡操作卡片 -->
   <div class="glass-card p-8 relative overflow-hidden">
     <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full blur-3xl -z-10"></div>
@@ -279,13 +299,14 @@
       </h2>
 
       <form method="GET" class="flex items-center gap-2">
+        {% if current_user.is_admin %}<input type="hidden" name="mode" value="mine">{% endif %}
         <input type="date" name="date" value="{{ filter_date }}"
                class="px-4 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
         <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
           筛选
         </button>
         {% if filter_date %}
-        <a href="{{ url_for('clock.index') }}" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+        <a href="{{ url_for('clock.index', mode='mine') if current_user.is_admin else url_for('clock.index') }}" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           清除
         </a>
         {% endif %}
@@ -344,20 +365,21 @@
     {% if history.pages > 1 %}
     <div class="flex flex-wrap items-center justify-center gap-2 mt-6">
       {% if history.has_prev %}
-      <a href="?page={{ history.prev_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}"
+      <a href="?page={{ history.prev_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}{% if current_user.is_admin %}&mode=mine{% endif %}"
          class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
         上一页
       </a>
       {% endif %}
       <span class="px-4 py-2 text-sm text-slate-500">第 {{ history.page }} / {{ history.pages }} 页</span>
       {% if history.has_next %}
-      <a href="?page={{ history.next_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}"
+      <a href="?page={{ history.next_num }}{% if filter_date %}&date={{ filter_date }}{% endif %}{% if current_user.is_admin %}&mode=mine{% endif %}"
          class="px-4 py-2 rounded-xl bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-colors">
         下一页
       </a>
       {% endif %}
       <form method="get" class="flex items-center gap-1 ml-2">
         {% if filter_date %}<input type="hidden" name="date" value="{{ filter_date }}">{% endif %}
+        {% if current_user.is_admin %}<input type="hidden" name="mode" value="mine">{% endif %}
         <span class="text-xs text-slate-400">跳转到</span>
         <input type="number" name="page" min="1" max="{{ history.pages }}" value="{{ history.page }}" class="w-16 px-2 py-1 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs text-slate-800 dark:text-white">
         <span class="text-xs text-slate-400">页</span>

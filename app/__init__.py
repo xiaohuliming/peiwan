@@ -1,4 +1,5 @@
 from flask import Flask, session
+from flask_login import current_user
 from app.config import Config
 from app.extensions import db, migrate, login_manager
 
@@ -127,6 +128,17 @@ def create_app(config_class=Config, start_background_tasks=True):
     app.jinja_env.globals['can_manage_system'] = perm.can_manage_system
     app.jinja_env.globals['fmt_dt'] = fmt_dt
     app.jinja_env.filters['bj'] = fmt_dt
+
+    @app.context_processor
+    def inject_top_notifications():
+        if not current_user.is_authenticated:
+            return {'top_notifications': {'total': 0, 'items': []}}
+        try:
+            from app.services.notification_service import get_top_notifications
+            return {'top_notifications': get_top_notifications(current_user)}
+        except Exception as e:
+            app.logger.warning(f'[Notification] 聚合失败: {e}')
+            return {'top_notifications': {'total': 0, 'items': []}}
 
     # APScheduler 定时任务
     if start_background_tasks and not app.config.get('TESTING'):

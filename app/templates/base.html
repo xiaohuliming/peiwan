@@ -246,9 +246,48 @@
              <i data-lucide="sun" class="hidden dark:block" width="18" height="18"></i>
           </button>
 
-          <button class="w-10 h-10 flex items-center justify-center bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all relative shadow-sm">
-            <i data-lucide="bell" width="18" height="18"></i>
-          </button>
+          <div id="notif-root" class="relative">
+            <button id="notif-toggle" type="button" aria-expanded="false" aria-controls="notif-panel" class="w-10 h-10 flex items-center justify-center bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all relative shadow-sm">
+              <i data-lucide="bell" width="18" height="18"></i>
+              {% if top_notifications and top_notifications.total > 0 %}
+              <span class="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] leading-[18px] text-center font-bold">
+                {{ top_notifications.total if top_notifications.total < 100 else '99+' }}
+              </span>
+              {% endif %}
+            </button>
+
+            <div id="notif-panel" class="hidden absolute right-0 mt-3 w-80 max-w-[88vw] glass-card rounded-2xl border border-white/70 dark:border-slate-700/60 shadow-xl p-3 z-50">
+              <div class="flex items-center justify-between px-2 py-1.5 border-b border-slate-200/70 dark:border-slate-700/70 mb-2">
+                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">消息通知</h3>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                  {{ top_notifications.total if top_notifications else 0 }}
+                </span>
+              </div>
+
+              {% if top_notifications and top_notifications.items %}
+              <div class="max-h-80 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                {% for item in top_notifications.items %}
+                <a href="{{ item.url }}" class="flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-white/70 dark:hover:bg-slate-800/60 transition-colors">
+                  <span class="w-8 h-8 shrink-0 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 flex items-center justify-center">
+                    <i data-lucide="{{ item.icon or 'bell' }}" width="15" height="15"></i>
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="flex items-center justify-between gap-2">
+                      <span class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{{ item.title }}</span>
+                      <span class="text-xs px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-300">{{ item.count }}</span>
+                    </span>
+                    {% if item.desc %}
+                    <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 block">{{ item.desc }}</span>
+                    {% endif %}
+                  </span>
+                </a>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="py-8 text-center text-slate-400 text-sm">暂无未处理通知</div>
+              {% endif %}
+            </div>
+          </div>
 
           {% if current_user.is_authenticated %}
             <div class="hidden md:flex flex-col items-end mr-3">
@@ -352,6 +391,33 @@
           ? "{{ url_for('orders.index') }}?q=" + encodeURIComponent(q)
           : "{{ url_for('companions.index') }}?q=" + encodeURIComponent(q);
         window.location.href = targetUrl;
+      });
+    }
+
+    // 顶部铃铛通知下拉
+    const notifRoot = document.getElementById('notif-root');
+    const notifToggle = document.getElementById('notif-toggle');
+    const notifPanel = document.getElementById('notif-panel');
+    if (notifRoot && notifToggle && notifPanel) {
+      notifToggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const isOpen = !notifPanel.classList.contains('hidden');
+        if (isOpen) {
+          notifPanel.classList.add('hidden');
+          notifToggle.setAttribute('aria-expanded', 'false');
+        } else {
+          notifPanel.classList.remove('hidden');
+          notifToggle.setAttribute('aria-expanded', 'true');
+        }
+      });
+
+      document.addEventListener('click', function (e) {
+        if (notifPanel.classList.contains('hidden')) return;
+        if (!notifRoot.contains(e.target)) {
+          notifPanel.classList.add('hidden');
+          notifToggle.setAttribute('aria-expanded', 'false');
+        }
       });
     }
   </script>

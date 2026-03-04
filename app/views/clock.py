@@ -10,16 +10,13 @@ clock_bp = Blueprint('clock', __name__)
 
 
 def can_clock():
-    """仅客服身份可打卡；管理员仅可查看，不参与打卡。"""
-    return current_user.has_role('staff') and not current_user.is_admin
+    """拥有客服身份（主角色或标签）的账号可打卡。"""
+    return current_user.has_role('staff')
 
 
 def _clock_user_query():
-    """可参与打卡的账号：客服身份，且非管理员账号。"""
-    return User.query.filter(
-        User.role_filter_expr('staff'),
-        ~User.role.in_(['admin', 'superadmin'])
-    )
+    """可参与打卡的账号：拥有客服身份（主角色或标签）。"""
+    return User.query.filter(User.role_filter_expr('staff'))
 
 
 def auto_timeout_check(user=None):
@@ -48,16 +45,24 @@ def auto_timeout_check(user=None):
 @clock_bp.route('/')
 @login_required
 def index():
-    # 权限检查：仅客服可打卡；管理员可查看
+    # 权限检查：客服身份可打卡；管理员可查看管理页
     if not (can_clock() or current_user.is_admin):
         flash('您没有权限访问此页面', 'error')
         return redirect(url_for('dashboard.index'))
 
-    # 管理员视图 — 查看客服打卡数据
+    mode = (request.args.get('mode') or '').strip().lower()
+
+    # 管理员 + 客服身份：可在管理页与个人打卡页切换
+    if current_user.is_admin and can_clock():
+        if mode == 'mine':
+            return _worker_view()
+        return _admin_view()
+
+    # 纯管理员：仅管理视图
     if current_user.is_admin:
         return _admin_view()
 
-    # 客服视图 — 自己的打卡
+    # 客服视图（含带客服标签的其他主角色）— 自己的打卡
     return _worker_view()
 
 
@@ -71,38 +76,34 @@ def _admin_view():
     filter_user = request.args.get('user_id', '', type=str)
     page = request.args.get('page', 1, type=int)
 
-    # 统计：当前在班人数（仅客服）
+    # 统计：当前在班人数（客服身份，含身份标签）
     online_count = db.session.query(func.count(ClockRecord.id)).join(
         User, ClockRecord.user_id == User.id
     ).filter(
         ClockRecord.status == 'clocked_in',
-        User.role_filter_expr('staff'),
-        ~User.role.in_(['admin', 'superadmin'])
+        User.role_filter_expr('staff')
     ).scalar() or 0
 
-    # 统计：今日打卡人数（仅客服）
+    # 统计：今日打卡人数（客服身份，含身份标签）
     today_clocked_count = db.session.query(func.count(func.distinct(ClockRecord.user_id))).join(
         User, ClockRecord.user_id == User.id
     ).filter(
         ClockRecord.clock_in >= today_start,
-        User.role_filter_expr('staff'),
-        ~User.role.in_(['admin', 'superadmin'])
+        User.role_filter_expr('staff')
     ).scalar() or 0
 
-    # 统计：今日总工时（仅客服）
+    # 统计：今日总工时（客服身份，含身份标签）
     today_total = db.session.query(func.sum(ClockRecord.duration_minutes)).join(
         User, ClockRecord.user_id == User.id
     ).filter(
         ClockRecord.clock_in >= today_start,
         ClockRecord.status != 'clocked_in',
-        User.role_filter_expr('staff'),
-        ~User.role.in_(['admin', 'superadmin'])
+        User.role_filter_expr('staff')
     ).scalar() or 0
 
-    # 历史记录查询（仅客服）
+    # 历史记录查询（客服身份，含身份标签）
     history_query = ClockRecord.query.join(User, ClockRecord.user_id == User.id).filter(
-        User.role_filter_expr('staff'),
-        ~User.role.in_(['admin', 'superadmin'])
+        User.role_filter_expr('staff')
     ).order_by(ClockRecord.clock_in.desc())
 
     if filter_date:
@@ -127,8 +128,7 @@ def _admin_view():
     # 当前在班人员列表
     online_records = ClockRecord.query.join(User, ClockRecord.user_id == User.id).filter(
         ClockRecord.status == 'clocked_in',
-        User.role_filter_expr('staff'),
-        ~User.role.in_(['admin', 'superadmin'])
+        User.role_filter_expr('staff')
     ).order_by(ClockRecord.clock_in.asc()).all()
 
     # 可筛选的员工列表
@@ -224,6 +224,8 @@ def clock_in():
     db.session.commit()
 
     flash('上班打卡成功！', 'success')
+    if current_user.is_admin:
+        return redirect(url_for('clock.index', mode='mine'))
     return redirect(url_for('clock.index'))
 
 
@@ -241,6 +243,8 @@ def clock_out():
 
     if not record:
         flash('当前没有进行中的打卡记录', 'error')
+        if current_user.is_admin:
+            return redirect(url_for('clock.index', mode='mine'))
         return redirect(url_for('clock.index'))
 
     now = datetime.now()
@@ -250,4 +254,6 @@ def clock_out():
     db.session.commit()
 
     flash(f'下班打卡成功！本次工时 {record.duration_display}', 'success')
+    if current_user.is_admin:
+        return redirect(url_for('clock.index', mode='mine'))
     return redirect(url_for('clock.index'))
