@@ -23,7 +23,6 @@ users_bp = Blueprint('users', __name__)
 def create():
     """客服/管理员手动新增用户"""
     username = request.form.get('username', '').strip()
-    nickname = request.form.get('nickname', '').strip()
     player_nickname = request.form.get('player_nickname', '').strip()
     role = request.form.get('role', 'god')
     kook_id = request.form.get('kook_id', '').strip()
@@ -53,19 +52,24 @@ def create():
         flash('无权创建该角色的用户', 'error')
         return redirect(url_for('users.index'))
 
+    # 新增用户必须绑定 KOOK ID，并从 KOOK 拉取昵称
+    if not kook_id:
+        flash('新增用户必须填写 KOOK ID，并拉取 KOOK 用户名', 'error')
+        return redirect(url_for('users.index'))
+
     # 检查 KOOK ID 是否已被使用
-    if kook_id and User.query.filter_by(kook_id=kook_id).first():
+    if User.query.filter_by(kook_id=kook_id).first():
         flash('该 KOOK ID 已被其他用户绑定', 'error')
         return redirect(url_for('users.index'))
 
-    # 如果填了 KOOK ID，尝试从 KOOK API 获取用户名和头像
-    kook_username = None
-    kook_avatar = None
-    if kook_id:
-        from app.services.kook_service import fetch_kook_user
-        kook_username, kook_avatar, _ = fetch_kook_user(kook_id)
+    # 必须通过 KOOK API 获取用户名和头像
+    from app.services.kook_service import fetch_kook_user
+    kook_username, kook_avatar, kook_error = fetch_kook_user(kook_id)
+    if kook_error or not kook_username:
+        flash(f'无法通过 KOOK ID 获取用户名: {kook_error or "未返回用户名"}', 'error')
+        return redirect(url_for('users.index'))
 
-    resolved_nickname = nickname or kook_username or username
+    resolved_nickname = kook_username
 
     new_user = User(
         username=username,
