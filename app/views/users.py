@@ -254,7 +254,11 @@ def detail(user_id):
 def sync_kook_username(user_id):
     """按已绑定 KOOK ID 同步最新 KOOK 名称/头像"""
     user = User.query.get_or_404(user_id)
-    ok, changed, error, old_name, new_name = _sync_user_kook_profile(user)
+    ok, changed, error, old_name, new_name = _sync_user_kook_profile(
+        user,
+        force_nickname=True,
+        force_username=True,
+    )
     if not ok:
         flash(f'同步失败: {error}', 'error')
         return redirect(request.referrer or url_for('users.index'))
@@ -276,7 +280,7 @@ def sync_kook_username(user_id):
 @login_required
 @staff_required
 def sync_kook_usernames():
-    """一键批量同步所有已绑定 KOOK ID 的用户名称/头像。"""
+    """一键批量同步所有已绑定 KOOK ID 的用户名称/头像，并覆盖客户昵称+用户名。"""
     users = User.query.filter(
         User.kook_id.isnot(None),
         User.kook_id != ''
@@ -292,7 +296,11 @@ def sync_kook_usernames():
     error_samples = []
 
     for user in users:
-        ok, changed, error, old_name, new_name = _sync_user_kook_profile(user, force_nickname=True)
+        ok, changed, error, old_name, new_name = _sync_user_kook_profile(
+            user,
+            force_nickname=True,
+            force_username=True,
+        )
         if not ok:
             failed_count += 1
             if len(error_samples) < 3:
@@ -560,39 +568,68 @@ def delete_intimacy(user_id, intimacy_id):
     return redirect(url_for('users.detail', user_id=user_id, tab='intimacy'))
 
 
-def _sync_user_kook_profile(user, force_nickname=False):
+def _sync_user_kook_profile(user, force_nickname=False, force_username=False):
     """按用户已保存的 KOOK ID 拉取并更新 KOOK 名称/头像。"""
     if not user.kook_id:
         return False, False, '该用户未绑定 KOOK ID', '', ''
 
-    from app.services.kook_service import fetch_kook_user
-    kook_username, avatar_url, error = fetch_kook_user(user.kook_id)
-    if error:
-        # 批量同步强制昵称场景：接口失败时，用已缓存的 KOOK 名称兜底覆盖客户昵称
-        if force_nickname and user.kook_username:
-            old_nickname = user.nickname or ''
-            user.nickname = user.kook_username
-            changed = old_nickname != user.kook_username
-            return True, changed, None, user.kook_username, user.kook_username
-        return False, False, error, user.kook_username or '', user.kook_username or ''
-
     old_name = user.kook_username or ''
     old_avatar = user.avatar or ''
     old_nickname = user.nickname or ''
+    old_username = user.username or ''
+
+    def _apply_identity_name(identity_name):
+        name = (identity_name or '').strip()
+        if not name:
+            return False, 'KOOK 名称为空'
+
+        if force_username:
+            if len(name) > 50:
+                return False, f'KOOK 名称过长，无法同步用户名（超过50字符）: {name}'
+            conflict = User.query.filter(
+                User.username == name,
+                User.id != user.id,
+            ).first()
+            if conflict:
+                return False, f'用户名冲突，无法同步为 {name}'
+            user.username = name
+
+        if force_nickname:
+            user.nickname = name
+        elif (not user.nickname) or (old_name and user.nickname == old_name):
+            user.nickname = name
+
+        return True, None
+
+    from app.services.kook_service import fetch_kook_user
+    kook_username, avatar_url, error = fetch_kook_user(user.kook_id)
+    if error:
+        # 强制同步场景：接口失败时，用已缓存的 KOOK 名称兜底覆盖客户昵称/用户名
+        if (force_nickname or force_username) and user.kook_username:
+            ok, fallback_err = _apply_identity_name(user.kook_username)
+            if not ok:
+                return False, False, fallback_err, old_name, user.kook_username
+
+            changed = (
+                (old_nickname != (user.nickname or ''))
+                or (old_username != (user.username or ''))
+            )
+            return True, changed, None, old_name, user.kook_username
+        return False, False, error, user.kook_username or '', user.kook_username or ''
 
     user.kook_username = kook_username
     user.kook_bound = True
     if avatar_url:
         user.avatar = avatar_url
 
-    if force_nickname and kook_username:
-        user.nickname = kook_username
-    elif (not user.nickname) or (old_name and user.nickname == old_name):
-        user.nickname = kook_username or user.nickname
+    ok, apply_err = _apply_identity_name(kook_username)
+    if not ok:
+        return False, False, apply_err, old_name, (kook_username or '')
 
     changed = (
         (old_name != (kook_username or ''))
         or (bool(avatar_url) and old_avatar != avatar_url)
         or (old_nickname != (user.nickname or ''))
+        or (old_username != (user.username or ''))
     )
     return True, changed, None, old_name, (kook_username or '')
