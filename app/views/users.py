@@ -568,6 +568,12 @@ def _sync_user_kook_profile(user, force_nickname=False):
     from app.services.kook_service import fetch_kook_user
     kook_username, avatar_url, error = fetch_kook_user(user.kook_id)
     if error:
+        # 批量同步强制昵称场景：接口失败时，用已缓存的 KOOK 名称兜底覆盖客户昵称
+        if force_nickname and user.kook_username:
+            old_nickname = user.nickname or ''
+            user.nickname = user.kook_username
+            changed = old_nickname != user.kook_username
+            return True, changed, None, user.kook_username, user.kook_username
         return False, False, error, user.kook_username or '', user.kook_username or ''
 
     old_name = user.kook_username or ''
