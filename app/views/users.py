@@ -444,9 +444,13 @@ def update_info(user_id):
         nickname = request.form.get('nickname', '').strip()
         player_nickname = request.form.get('player_nickname', '').strip()
         changes = []
+        nickname_change_denied = False
         if nickname and nickname != user.nickname:
-            changes.append(f'昵称: {user.nickname} -> {nickname}')
-            user.nickname = nickname
+            if not current_user.is_admin:
+                nickname_change_denied = True
+            else:
+                changes.append(f'昵称: {user.nickname} -> {nickname}')
+                user.nickname = nickname
         if player_nickname and player_nickname != user.player_nickname:
             changes.append(f'陪玩昵称: {user.player_nickname} -> {player_nickname}')
             user.player_nickname = player_nickname
@@ -455,6 +459,8 @@ def update_info(user_id):
             log_operation(current_user.id, 'user_update_nickname', 'user', user.id, '; '.join(changes))
             db.session.commit()
             flash('昵称已更新', 'success')
+        elif nickname_change_denied:
+            flash('客户昵称仅管理员及以上可修改', 'error')
 
     elif action == 'bind_wechat':
         # 简单模拟绑定/解绑
@@ -575,4 +581,3 @@ def _sync_user_kook_profile(user):
 
     changed = (old_name != (kook_username or '')) or (bool(avatar_url) and old_avatar != avatar_url)
     return True, changed, None, old_name, (kook_username or '')
-

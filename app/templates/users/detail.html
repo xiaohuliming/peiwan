@@ -116,7 +116,11 @@
           <div class="flex-1">
             <label class="text-xs text-slate-400 mb-1 block">客户昵称</label>
             <input type="text" name="nickname" value="{{ user.nickname or '' }}" placeholder="昵称"
-              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+              {% if not current_user.is_admin %}readonly{% endif %}
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 {% if current_user.is_admin %}bg-white dark:bg-slate-800{% else %}bg-slate-100 dark:bg-slate-700/50 cursor-not-allowed{% endif %} text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            {% if not current_user.is_admin %}
+            <p class="mt-1 text-[11px] text-slate-400">仅管理员及以上可修改客户昵称</p>
+            {% endif %}
           </div>
           <div class="flex-1">
             <label class="text-xs text-slate-400 mb-1 block">陪玩昵称</label>
