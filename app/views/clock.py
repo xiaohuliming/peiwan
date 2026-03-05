@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from datetime import datetime, timedelta
 from app.models.clock import ClockRecord
 from app.models.user import User
@@ -38,38 +38,42 @@ def _clock_user_query():
 
 def _repair_legacy_local_clock_records(user=None):
     """
-    修复历史错误时区数据：
-    早期记录可能直接写入了北京时间(naive)，会在展示时被再次 +8 小时。
-    这里将“明显在未来”的打卡时间回拨 8 小时到 UTC 语义。
+    修复历史错误时区数据（幂等）：
+    - 旧版本曾把 clock_in/clock_out 直接按北京时间写入（naive）；
+    - created_at 一直是 UTC。
+    因此可用 (clock_in - created_at) 约等于 +8h 识别旧数据，并回拨 8h。
     """
-    now = _utc_now()
-    future_threshold = now + timedelta(minutes=5)
-    future_max = now + timedelta(days=2)
-
-    query = ClockRecord.query.filter(
-        or_(
-            ClockRecord.clock_in > future_threshold,
-            ClockRecord.clock_out > future_threshold,
-            ClockRecord.created_at > future_threshold,
-        )
-    )
+    query = ClockRecord.query.filter(ClockRecord.clock_in.isnot(None))
     if user:
         query = query.filter(ClockRecord.user_id == user.id)
 
-    dirty_records = query.all()
+    dirty_records = query.order_by(ClockRecord.id.desc()).limit(500).all()
     changed = False
 
     for record in dirty_records:
-        row_changed = False
+        if not record.clock_in:
+            continue
 
-        if record.clock_in and future_threshold < record.clock_in <= future_max:
+        row_changed = False
+        diff_in_hours = None
+        if record.created_at:
+            diff_in_hours = (record.clock_in - record.created_at).total_seconds() / 3600.0
+
+        # 旧数据：clock_in 比 created_at 大约 8 小时
+        is_legacy_local = diff_in_hours is not None and 6.0 <= diff_in_hours <= 10.0
+
+        if is_legacy_local:
+            # 若已出现 out < in，说明 out 可能已被回拨过，仅回拨 in
+            if record.clock_out and record.clock_out < record.clock_in:
+                record.clock_in = record.clock_in - BJ_OFFSET
+            else:
+                record.clock_in = record.clock_in - BJ_OFFSET
+                if record.clock_out:
+                    record.clock_out = record.clock_out - BJ_OFFSET
+            row_changed = True
+        elif record.clock_out and record.clock_out < record.clock_in:
+            # 兜底修复：处理“上班晚于下班”的异常脏数据（常见于误回拨一半）
             record.clock_in = record.clock_in - BJ_OFFSET
-            row_changed = True
-        if record.clock_out and future_threshold < record.clock_out <= future_max:
-            record.clock_out = record.clock_out - BJ_OFFSET
-            row_changed = True
-        if record.created_at and future_threshold < record.created_at <= future_max:
-            record.created_at = record.created_at - BJ_OFFSET
             row_changed = True
 
         # 已下班记录修正后重算时长，避免出现负值
