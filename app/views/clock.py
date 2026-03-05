@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from datetime import datetime, timedelta
 from app.models.clock import ClockRecord
 from app.models.user import User
@@ -36,8 +36,58 @@ def _clock_user_query():
     return User.query.filter(User.role_filter_expr('staff'))
 
 
+def _repair_legacy_local_clock_records(user=None):
+    """
+    修复历史错误时区数据：
+    早期记录可能直接写入了北京时间(naive)，会在展示时被再次 +8 小时。
+    这里将“明显在未来”的打卡时间回拨 8 小时到 UTC 语义。
+    """
+    now = _utc_now()
+    future_threshold = now + timedelta(minutes=5)
+    future_max = now + timedelta(days=2)
+
+    query = ClockRecord.query.filter(
+        or_(
+            ClockRecord.clock_in > future_threshold,
+            ClockRecord.clock_out > future_threshold,
+            ClockRecord.created_at > future_threshold,
+        )
+    )
+    if user:
+        query = query.filter(ClockRecord.user_id == user.id)
+
+    dirty_records = query.all()
+    changed = False
+
+    for record in dirty_records:
+        row_changed = False
+
+        if record.clock_in and future_threshold < record.clock_in <= future_max:
+            record.clock_in = record.clock_in - BJ_OFFSET
+            row_changed = True
+        if record.clock_out and future_threshold < record.clock_out <= future_max:
+            record.clock_out = record.clock_out - BJ_OFFSET
+            row_changed = True
+        if record.created_at and future_threshold < record.created_at <= future_max:
+            record.created_at = record.created_at - BJ_OFFSET
+            row_changed = True
+
+        # 已下班记录修正后重算时长，避免出现负值
+        if row_changed and record.status != 'clocked_in' and record.clock_out and record.clock_in:
+            minutes = int((record.clock_out - record.clock_in).total_seconds() / 60)
+            record.duration_minutes = max(0, minutes)
+
+        if row_changed:
+            changed = True
+
+    if changed:
+        db.session.commit()
+
+
 def auto_timeout_check(user=None):
     """检查并自动超时超过4小时的打卡记录。user=None 时检查所有人"""
+    _repair_legacy_local_clock_records(user)
+
     now = _utc_now()
     timeout_threshold = now - timedelta(hours=4)
 
