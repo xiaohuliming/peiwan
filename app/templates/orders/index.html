@@ -184,7 +184,7 @@
             <td class="py-3 text-right">
               <div class="flex justify-end gap-1">
                 <button onclick="showDetail({{ order.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">详情</button>
-                {% if order.status == 'pending_report' %}
+                {% if order.status in ('pending_report', 'pending_confirm') %}
                 <a href="{{ url_for('orders.report', order_id=order.id) }}" class="text-orange-500 hover:text-orange-600 text-xs font-medium px-2 py-1 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors">代报单</a>
                 {% endif %}
                 {% if order.status == 'pending_confirm' %}
@@ -413,8 +413,8 @@
             </td>
             <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ fmt_dt(order.created_at, '%m-%d %H:%M') }}</td>
             <td class="py-3 text-right">
-              {% if as_player and order.status == 'pending_report' %}
-              <a href="{{ url_for('orders.report', order_id=order.id) }}" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors">申报</a>
+              {% if as_player and order.status in ('pending_report', 'pending_confirm') %}
+              <a href="{{ url_for('orders.report', order_id=order.id) }}" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors">{% if order.status == 'pending_confirm' %}修改申报{% else %}申报{% endif %}</a>
               {% endif %}
               {% if as_boss and order.status == 'pending_confirm' %}
               <form action="{{ url_for('orders.confirm', order_id=order.id) }}" method="post" class="inline">
@@ -500,8 +500,8 @@
             </td>
             <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ fmt_dt(order.created_at, '%m-%d %H:%M') }}</td>
             <td class="py-3 text-right">
-              {% if order.status == 'pending_report' %}
-              <a href="{{ url_for('orders.report', order_id=order.id) }}" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors">申报</a>
+              {% if order.status in ('pending_report', 'pending_confirm') %}
+              <a href="{{ url_for('orders.report', order_id=order.id) }}" class="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded-lg text-xs font-medium transition-colors">{% if order.status == 'pending_confirm' %}修改申报{% else %}申报{% endif %}</a>
               {% endif %}
               <button onclick="showDetail({{ order.id }})" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1">详情</button>
             </td>

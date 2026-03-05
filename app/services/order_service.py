@@ -272,9 +272,9 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
 def report_order(order, duration_hours, operator_id=None):
     """
     陪玩申报时长(小时), 计算总价
-    状态: pending_report → pending_confirm
+    状态: pending_report/pending_confirm → pending_confirm
     """
-    if order.status != 'pending_report':
+    if order.status not in ('pending_report', 'pending_confirm'):
         return False, '订单状态不正确'
 
     try:

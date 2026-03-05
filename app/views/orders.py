@@ -254,11 +254,12 @@ def _handle_report(order):
         flash('仅陪玩本人或客服及以上可申报该订单', 'error')
         return redirect(url_for('orders.index'))
 
-    if order.status != 'pending_report':
-        flash('该订单不在待申报状态', 'error')
+    if order.status not in ('pending_report', 'pending_confirm'):
+        flash('该订单当前不可申报（仅待申报/待确认可修改）', 'error')
         return redirect(url_for('orders.index'))
 
     if request.method == 'POST':
+        was_pending_confirm = (order.status == 'pending_confirm')
         duration_raw = (request.form.get('duration') or '').strip()
         if not duration_raw:
             flash('请填写申报时长', 'error')
@@ -275,6 +276,8 @@ def _handle_report(order):
         kook_service.push_order_report(order, site_url=site_url)
         if current_user.is_staff and order.player_id != current_user.id:
             flash('代报单成功，等待老板确认支付', 'success')
+        elif was_pending_confirm:
+            flash('申报已更新，等待老板确认支付', 'success')
         else:
             flash('申报成功，等待老板确认支付', 'success')
         return redirect(url_for('orders.index'))
