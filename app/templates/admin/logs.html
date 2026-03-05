@@ -19,7 +19,7 @@
       </div>
       <div>
         <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">操作人</label>
-        <input type="text" name="operator_name" value="{{ operator_name }}" placeholder="昵称..."
+        <input type="text" name="operator_name" value="{{ operator_name }}" placeholder="陪玩昵称/KOOK昵称/客户昵称/用户名..."
           class="px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 w-40">
       </div>
       <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors">筛选</button>
@@ -44,7 +44,7 @@
           {% for log in logs.items %}
           <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
             <td class="py-3 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">{{ fmt_dt(log.created_at, '%m-%d %H:%M:%S') if log.created_at else '-' }}</td>
-            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ log.operator.nickname if log.operator else '-' }}</td>
+            <td class="py-3 font-medium text-slate-800 dark:text-white">{{ (log.operator.player_nickname or log.operator.kook_username or log.operator.nickname or log.operator.username) if log.operator else '-' }}</td>
             <td class="py-3">
               <span class="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs rounded-full font-mono">{{ log.action_type }}</span>
             </td>

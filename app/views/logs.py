@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request
 from flask_login import login_required
+from sqlalchemy import or_
 
 from app.models.operation_log import OperationLog
 from app.models.user import User
@@ -21,7 +22,12 @@ def index():
         query = query.filter(OperationLog.action_type == action_type)
     if operator_name:
         query = query.join(User, OperationLog.operator_id == User.id).filter(
-            User.nickname.contains(operator_name)
+            or_(
+                User.player_nickname.contains(operator_name),
+                User.kook_username.contains(operator_name),
+                User.nickname.contains(operator_name),
+                User.username.contains(operator_name),
+            )
         )
 
     logs = query.order_by(OperationLog.created_at.desc()).paginate(page=page, per_page=30)

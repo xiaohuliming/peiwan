@@ -7,6 +7,23 @@ from app.models.user import User
 from app.extensions import db
 
 clock_bp = Blueprint('clock', __name__)
+BJ_OFFSET = timedelta(hours=8)
+
+
+def _utc_now():
+    """统一使用 UTC 存储和计算时间。"""
+    return datetime.utcnow()
+
+
+def _beijing_day_range_utc(date_str=None):
+    """返回北京时间某日对应的 UTC 起止区间 [start, end)。"""
+    if date_str:
+        day = datetime.strptime(date_str, '%Y-%m-%d').date()
+    else:
+        day = (_utc_now() + BJ_OFFSET).date()
+    start_utc = datetime(day.year, day.month, day.day) - BJ_OFFSET
+    end_utc = start_utc + timedelta(days=1)
+    return start_utc, end_utc
 
 
 def can_clock():
@@ -21,7 +38,7 @@ def _clock_user_query():
 
 def auto_timeout_check(user=None):
     """检查并自动超时超过4小时的打卡记录。user=None 时检查所有人"""
-    now = datetime.now()
+    now = _utc_now()
     timeout_threshold = now - timedelta(hours=4)
 
     query = ClockRecord.query.filter(
@@ -71,7 +88,7 @@ def _admin_view():
     # 自动超时：检查所有人
     auto_timeout_check()
 
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start, _ = _beijing_day_range_utc()
     filter_date = request.args.get('date', '')
     filter_user = request.args.get('user_id', '', type=str)
     page = request.args.get('page', 1, type=int)
@@ -108,8 +125,7 @@ def _admin_view():
 
     if filter_date:
         try:
-            date_obj = datetime.strptime(filter_date, '%Y-%m-%d')
-            date_end = date_obj + timedelta(days=1)
+            date_obj, date_end = _beijing_day_range_utc(filter_date)
             history_query = history_query.filter(
                 ClockRecord.clock_in >= date_obj,
                 ClockRecord.clock_in < date_end
@@ -158,7 +174,7 @@ def _worker_view():
     ).first()
 
     # 今日统计
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start, _ = _beijing_day_range_utc()
     today_records = ClockRecord.query.filter(
         ClockRecord.user_id == current_user.id,
         ClockRecord.clock_in >= today_start
@@ -167,7 +183,7 @@ def _worker_view():
     today_clock_count = len(today_records)
     today_total_minutes = sum(r.duration_minutes for r in today_records if r.status != 'clocked_in')
     if active_clock:
-        elapsed = (datetime.now() - active_clock.clock_in).total_seconds() / 60
+        elapsed = (_utc_now() - active_clock.clock_in).total_seconds() / 60
         today_total_minutes += int(elapsed)
 
     # 历史记录（支持日期筛选）
@@ -178,8 +194,7 @@ def _worker_view():
 
     if filter_date:
         try:
-            date_obj = datetime.strptime(filter_date, '%Y-%m-%d')
-            date_end = date_obj + timedelta(days=1)
+            date_obj, date_end = _beijing_day_range_utc(filter_date)
             history_query = history_query.filter(
                 ClockRecord.clock_in >= date_obj,
                 ClockRecord.clock_in < date_end
@@ -217,7 +232,7 @@ def clock_in():
 
     record = ClockRecord(
         user_id=current_user.id,
-        clock_in=datetime.now(),
+        clock_in=_utc_now(),
         status='clocked_in'
     )
     db.session.add(record)
@@ -247,7 +262,7 @@ def clock_out():
             return redirect(url_for('clock.index', mode='mine'))
         return redirect(url_for('clock.index'))
 
-    now = datetime.now()
+    now = _utc_now()
     record.clock_out = now
     record.duration_minutes = int((now - record.clock_in).total_seconds() / 60)
     record.status = 'clocked_out'
