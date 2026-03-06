@@ -83,6 +83,8 @@ def create():
         status=True,
         register_type='manual',
     )
+    # 新用户默认拥有老板+陪玩身份标签（主角色不变）
+    new_user.tag_list = ['老板', '陪玩']
     new_user.set_password(password)
 
     db.session.add(new_user)
@@ -428,6 +430,34 @@ def update_info(user_id):
                 flash(f'经验值已更新，并自动升级到 {new_level.name}', 'success')
             else:
                 flash('经验值已更新', 'success')
+
+    elif action == 'update_boss_discount':
+        if not current_user.is_admin:
+            flash('需要管理员权限', 'error')
+            return redirect(url_for('users.detail', user_id=user_id))
+
+        raw_discount = (request.form.get('boss_discount') or '').strip()
+        try:
+            new_discount = Decimal(raw_discount)
+        except Exception:
+            flash('折扣格式无效，请输入 1-100 的数字', 'error')
+            return redirect(url_for('users.detail', user_id=user_id, tab='info'))
+
+        if new_discount <= 0 or new_discount > 100:
+            flash('折扣范围需在 1-100（100=无折扣，90=9折）', 'error')
+            return redirect(url_for('users.detail', user_id=user_id, tab='info'))
+
+        old_discount = Decimal(str(user.vip_discount or 100))
+        user.vip_discount = new_discount.quantize(Decimal('0.01'))
+        log_operation(
+            current_user.id,
+            'user_update_boss_discount',
+            'user',
+            user.id,
+            f'老板折扣: {old_discount}% -> {user.vip_discount}%',
+        )
+        db.session.commit()
+        flash('老板折扣已更新（后续新建/申报订单按该折扣计算）', 'success')
 
     elif action in ('toggle_anonymous_all', 'toggle_anonymous_upgrade'):
         new_state = not user.anonymous_broadcast_all

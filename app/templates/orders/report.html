@@ -27,7 +27,7 @@
         <div class="sm:col-span-2"><span class="text-slate-400">附加项:</span> <span class="text-slate-800 dark:text-white">{{ order.addon_desc }} (¥{{ "%.2f"|format(order.addon_price) }})</span></div>
         {% endif %}
         <div><span class="text-slate-400">佣金比例:</span> <span class="text-green-600 font-medium">{{ "%.0f"|format(order.commission_rate) }}%</span></div>
-        <div><span class="text-slate-400">老板折扣:</span> <span class="text-slate-800 dark:text-white">{{ "%.0f"|format(order.boss_discount) }}%</span></div>
+        <div><span class="text-slate-400">老板折扣:</span> <span class="text-slate-800 dark:text-white">{{ "%.0f"|format((order.boss.vip_discount if order.boss else order.boss_discount) or 100) }}%</span></div>
       </div>
     </div>
 
@@ -87,7 +87,7 @@ const basePrice = {{ order.base_price | float }};
 const extraPrice = {{ order.extra_price | float }};
 const addonPrice = {{ order.addon_price | float }};
 const commissionRate = {{ order.commission_rate | float }};
-const discount = {{ order.boss_discount | float }} / 100;
+const discount = {{ ((order.boss.vip_discount if order.boss else order.boss_discount) or 100) | float }} / 100;
 
 function calcPreview() {
   const durationRaw = document.getElementById('duration-hours').value;

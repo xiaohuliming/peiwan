@@ -157,6 +157,15 @@
           </form>
 
           <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2">
+            <input type="hidden" name="action" value="update_boss_discount">
+            <div class="flex flex-col">
+              <label class="text-xs text-slate-400 mb-1">老板折扣（100=无折扣，90=9折）</label>
+              <input type="number" name="boss_discount" value="{{ user.vip_discount }}" min="1" max="100" step="0.01" class="w-40 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <button type="submit" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white px-4 py-2 rounded-xl text-xs font-medium">设置老板折扣</button>
+          </form>
+
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2">
             <input type="hidden" name="action" value="update_broadcast_channel">
             <input type="text" name="broadcast_channel" value="{{ user.broadcast_channel or '' }}" placeholder="频道ID" class="w-40 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-medium">设置播报频道</button>

@@ -14,6 +14,19 @@ from flask_login import current_user
 NO_VIP_DISCOUNT = Decimal('100')
 
 
+def _get_boss_discount_percent(boss):
+    """获取老板折扣百分比（100=无折扣，90=9折）。"""
+    try:
+        discount = Decimal(str(getattr(boss, 'vip_discount', NO_VIP_DISCOUNT) or NO_VIP_DISCOUNT))
+    except Exception:
+        discount = NO_VIP_DISCOUNT
+    if discount <= 0:
+        return NO_VIP_DISCOUNT
+    if discount > Decimal('100'):
+        return Decimal('100')
+    return discount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
 def _calc_order_amounts_with_discount_subsidy(subtotal, commission_rate, discount_percent):
     """
     计算订单金额（老板折扣由店铺承担）：
@@ -23,8 +36,7 @@ def _calc_order_amounts_with_discount_subsidy(subtotal, commission_rate, discoun
     """
     subtotal_dec = Decimal(str(subtotal))
     commission_dec = Decimal(str(commission_rate))
-    # 已关闭 VIP 折扣：统一按 100% 实付
-    discount_dec = NO_VIP_DISCOUNT / Decimal('100')
+    discount_dec = Decimal(str(discount_percent or NO_VIP_DISCOUNT)) / Decimal('100')
 
     total_price = (subtotal_dec * discount_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     player_earning = (subtotal_dec * commission_dec / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
@@ -176,10 +188,15 @@ def create_normal_order(boss, player, project_item, price_tier, staff,
     extra_price_dec = Decimal(str(extra_price))
     addon_price_dec = Decimal(str(addon_price))
     commission_rate = project_item.commission_rate
+    boss_discount = _get_boss_discount_percent(boss)
 
     # 创建前余额校验：按 1 小时/局的最低可扣金额预校验
-    min_required = (base_price + extra_price_dec + addon_price_dec)
-    min_required = min_required.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    min_subtotal = (base_price + extra_price_dec + addon_price_dec).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    min_required, _, _ = _calc_order_amounts_with_discount_subsidy(
+        subtotal=min_subtotal,
+        commission_rate=commission_rate,
+        discount_percent=boss_discount,
+    )
     total_available = boss.m_coin + boss.m_coin_gift
     if total_available < min_required:
         return None, f'老板余额不足，至少需要 {min_required} 嗯呢币 才可派单'
@@ -195,7 +212,7 @@ def create_normal_order(boss, player, project_item, price_tier, staff,
         extra_price=extra_price_dec,
         addon_desc=addon_desc,
         addon_price=addon_price_dec,
-        boss_discount=NO_VIP_DISCOUNT,
+        boss_discount=boss_discount,
         commission_rate=commission_rate,
         order_type='normal',
         status='pending_report',
@@ -216,13 +233,14 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     """
     base_price = project_item.get_price_by_tier(price_tier)
     commission_rate = project_item.commission_rate
+    boss_discount = _get_boss_discount_percent(boss)
     unit_price = Decimal(str(base_price)) + Decimal(str(extra_price))
     duration_dec = Decimal(str(duration))
     subtotal = unit_price * duration_dec + Decimal(str(addon_price))
     total_price, player_earning, shop_earning = _calc_order_amounts_with_discount_subsidy(
         subtotal=subtotal,
         commission_rate=commission_rate,
-        discount_percent=NO_VIP_DISCOUNT,
+        discount_percent=boss_discount,
     )
 
     # 验证余额
@@ -241,7 +259,7 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
         extra_price=Decimal(str(extra_price)),
         addon_desc=addon_desc,
         addon_price=Decimal(str(addon_price)),
-        boss_discount=NO_VIP_DISCOUNT,
+        boss_discount=boss_discount,
         commission_rate=commission_rate,
         total_price=total_price,
         player_earning=player_earning,
@@ -289,10 +307,11 @@ def report_order(order, duration_hours, operator_id=None):
 
     unit_price = Decimal(str(order.base_price)) + Decimal(str(order.extra_price))
     subtotal = unit_price * duration + Decimal(str(order.addon_price))
+    boss_discount = _get_boss_discount_percent(order.boss)
     total_price, player_earning, shop_earning = _calc_order_amounts_with_discount_subsidy(
         subtotal=subtotal,
         commission_rate=order.commission_rate,
-        discount_percent=NO_VIP_DISCOUNT,
+        discount_percent=boss_discount,
     )
 
     order.duration = duration
@@ -303,7 +322,7 @@ def report_order(order, duration_hours, operator_id=None):
     order.fill_time = now
     order.report_time = now
     order.status = 'pending_confirm'
-    order.boss_discount = NO_VIP_DISCOUNT
+    order.boss_discount = boss_discount
     order.auto_confirm_at = now + timedelta(hours=24)
 
     log_operation(operator_id or _get_operator_id(), 'order_report', 'order', order.id,

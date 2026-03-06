@@ -101,6 +101,8 @@ def register():
             status=True,
             register_type='manual'
         )
+        # 注册新用户默认添加老板+陪玩身份标签（主角色仍按所选 role）
+        new_user.tag_list = ['老板', '陪玩']
         new_user.set_password(password)
 
         db.session.add(new_user)

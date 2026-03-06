@@ -1,8 +1,6 @@
 """
 VIP自动升级服务
 """
-from decimal import Decimal
-
 from app.extensions import db
 from app.models.user import User
 from app.models.vip import VipLevel, UpgradeRecord
@@ -40,9 +38,6 @@ def check_and_upgrade(user, levels=None):
     if not levels:
         return False, None
 
-    # 已关闭 VIP 折扣：所有用户折扣固定 100%
-    user.vip_discount = Decimal('100.00')
-
     # 找到用户应该对应的最高等级（按经验门槛，不依赖 sort_order 配置顺序）
     target_level = _pick_target_level(levels, user.experience)
 
@@ -61,7 +56,6 @@ def check_and_upgrade(user, levels=None):
     # 执行升级
     old_level = user.vip_level
     user.vip_level = target_level.name
-    user.vip_discount = Decimal('100.00')
 
     # 记录升级
     record = UpgradeRecord(
