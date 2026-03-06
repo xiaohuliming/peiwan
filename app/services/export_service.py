@@ -2,9 +2,6 @@
 数据导出服务 (基于 openpyxl)
 """
 import io
-import csv
-import json
-import zipfile
 from decimal import Decimal
 from datetime import datetime, date, time
 from sqlalchemy import inspect, MetaData, Table, select
@@ -50,6 +47,7 @@ def _to_export_str(value):
     if isinstance(value, Decimal):
         return format(value, 'f')
     if isinstance(value, (dict, list, tuple, set)):
+        import json
         return json.dumps(value, ensure_ascii=False)
     return str(value)
 
@@ -200,46 +198,73 @@ def export_clock_records(query=None):
     return output
 
 
-def export_all_tables_zip():
+def _safe_sheet_name(raw_name, used_names):
+    """生成合法且唯一的 Excel sheet 名。"""
+    if not raw_name:
+        raw_name = 'sheet'
+    invalid = set('[]:*?/\\')
+    base = ''.join('_' if ch in invalid else ch for ch in str(raw_name))
+    base = (base or 'sheet')[:31]
+
+    name = base
+    idx = 1
+    while name in used_names:
+        suffix = f'_{idx}'
+        name = f'{base[:31-len(suffix)]}{suffix}'
+        idx += 1
+    used_names.add(name)
+    return name
+
+
+def export_all_tables_workbook():
     """
-    全量导出数据库所有表：
-    - 每张表导出为一个 CSV 文件
-    - 打包为 ZIP 返回
+    全量导出数据库所有表到一个 Excel 文件：
+    - 每张表一个 Sheet
+    - 首个 Sheet 为导出说明
     """
+    if not HAS_OPENPYXL:
+        return None
+
     inspector = inspect(db.engine)
     table_names = sorted(inspector.get_table_names())
-    zip_buffer = io.BytesIO()
+    wb = Workbook()
+    info_ws = wb.active
+    info_ws.title = '导出说明'
+    _style_header(info_ws, ['导出时间(UTC)', '表数量'])
+    info_ws.cell(row=2, column=1, value=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'))
+    info_ws.cell(row=2, column=2, value=len(table_names))
+    info_ws.cell(row=4, column=1, value='表名')
+    info_ws.cell(row=4, column=2, value='Sheet名')
+    info_ws.cell(row=4, column=3, value='行数')
+    info_ws.cell(row=4, column=4, value='列数')
 
-    with db.engine.connect() as conn, zipfile.ZipFile(zip_buffer, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
-        manifest = {
-            'generated_at': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
-            'table_count': len(table_names),
-            'tables': [],
-        }
+    used_sheet_names = {info_ws.title}
+    info_row = 5
 
+    with db.engine.connect() as conn:
         for table_name in table_names:
             metadata = MetaData()
             table = Table(table_name, metadata, autoload_with=db.engine)
             columns = [col.name for col in table.columns]
 
-            csv_io = io.StringIO()
-            writer = csv.writer(csv_io)
-            writer.writerow(columns)
+            sheet_name = _safe_sheet_name(table_name, used_sheet_names)
+            ws = wb.create_sheet(title=sheet_name)
+            _style_header(ws, columns or ['_empty'])
 
             row_count = 0
             result = conn.execute(select(table)).mappings()
-            for row in result:
-                writer.writerow([_to_export_str(row.get(col)) for col in columns])
+            for r_idx, row in enumerate(result, start=2):
+                for c_idx, col in enumerate(columns, start=1):
+                    ws.cell(row=r_idx, column=c_idx, value=_to_export_str(row.get(col)))
                 row_count += 1
 
-            zf.writestr(f'{table_name}.csv', csv_io.getvalue().encode('utf-8-sig'))
-            manifest['tables'].append({
-                'table': table_name,
-                'rows': row_count,
-                'columns': columns,
-            })
+            info_ws.cell(row=info_row, column=1, value=table_name)
+            info_ws.cell(row=info_row, column=2, value=sheet_name)
+            info_ws.cell(row=info_row, column=3, value=row_count)
+            info_ws.cell(row=info_row, column=4, value=len(columns))
+            info_row += 1
 
-        zf.writestr('_manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2).encode('utf-8'))
-
-    zip_buffer.seek(0)
-    return zip_buffer
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
