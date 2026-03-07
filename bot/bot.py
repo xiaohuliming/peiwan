@@ -192,9 +192,45 @@ _WITHDRAW_UPLOAD_TTL_SECONDS = 10 * 60
 
 
 def _interactive_scope_key(msg: Message) -> str:
-    """抽奖作用域：服务器级（同一服务器内发言均自动参与）。"""
+    """抽奖作用域：优先服务器级；拿不到服务器ID时回退到频道级。"""
     gid = _extract_msg_guild_id(msg)
-    return f'guild:{gid}' if gid else ''
+    if gid:
+        return f'guild:{gid}'
+    cid = _extract_msg_channel_id(msg)
+    if cid:
+        return f'channel:{cid}'
+    return ''
+
+
+def _locate_interactive_lottery(msg: Message, allow_single_fallback: bool = False):
+    """
+    定位当前上下文对应的进行中互动抽奖。
+    返回: (scope_key, state)；找不到返回 ('', None)
+    """
+    scope_key = _interactive_scope_key(msg)
+    if scope_key:
+        state = _interactive_lotteries.get(scope_key)
+        if state:
+            return scope_key, state
+
+    guild_id = str(_extract_msg_guild_id(msg) or '')
+    channel_id = str(_extract_msg_channel_id(msg) or '')
+
+    if guild_id:
+        for key, state in _interactive_lotteries.items():
+            if str(state.get('guild_id') or '') == guild_id:
+                return key, state
+
+    if channel_id:
+        for key, state in _interactive_lotteries.items():
+            if str(state.get('channel_id') or '') == channel_id:
+                return key, state
+
+    if allow_single_fallback and len(_interactive_lotteries) == 1:
+        key, state = next(iter(_interactive_lotteries.items()))
+        return key, state
+
+    return '', None
 
 
 def _is_command_message(msg: Message) -> bool:
@@ -1107,20 +1143,21 @@ async def publish_lottery_cmd(msg: Message, winner_count_str: str = ''):
         await msg.reply('未获取到频道/服务器信息，请在服务器文字频道中使用该命令')
         return
 
-    # 同一作用域仅允许一个进行中的互动抽奖
-    if scope_key in _interactive_lotteries:
+    # 同一平台上下文仅允许一个进行中的互动抽奖（含兼容回溯匹配）
+    _, existing_state = _locate_interactive_lottery(msg, allow_single_fallback=True)
+    if existing_state:
         await msg.reply('当前平台已有进行中的互动抽奖，请先使用 `/结束抽奖` 结束后再发布新的。')
         return
 
     lottery_no = f"{int(time.time() * 1000)}"
-    starter_id = str(getattr(msg.author, 'id', '') or '')
     state = {
         'lottery_no': lottery_no,
         'winner_count': winner_count,
         'channel_id': channel_id,
         'guild_id': _extract_msg_guild_id(msg),
         'channel': getattr(getattr(msg, 'ctx', None), 'channel', None),
-        'participants': {starter_id} if starter_id else set(),
+        # 不默认加入发起人；抽奖期间有实际发言才计入参与
+        'participants': set(),
         'created_at': time.time(),
     }
     _interactive_lotteries[scope_key] = state
@@ -1148,8 +1185,7 @@ async def end_lottery_cmd(msg: Message):
         await msg.reply('未获取到频道 ID，请在服务器文字频道中使用该命令')
         return
 
-    scope_key = _interactive_scope_key(msg)
-    state = _interactive_lotteries.get(scope_key)
+    scope_key, state = _locate_interactive_lottery(msg, allow_single_fallback=True)
     if not state:
         await msg.reply('当前平台没有进行中的互动抽奖')
         return
@@ -1212,7 +1248,7 @@ async def cancel_withdraw_cmd(msg: Message):
 
 @bot.on_message()
 async def on_public_message(msg: Message):
-    """互动抽奖参与收集：活动期间在同一平台发过消息即自动参与。"""
+    """互动抽奖参与收集：仅活动所在频道发言才自动参与。"""
     try:
         if _is_bot_author(msg):
             return
@@ -1225,11 +1261,14 @@ async def on_public_message(msg: Message):
         if _is_command_message(msg):
             return
 
-        scope_key = _interactive_scope_key(msg)
-        if not scope_key:
-            return
-        state = _interactive_lotteries.get(scope_key)
+        _, state = _locate_interactive_lottery(msg, allow_single_fallback=False)
         if not state:
+            return
+
+        # 仅统计抽奖发起频道内的发言，避免跨频道误参与
+        msg_channel_id = str(_extract_msg_channel_id(msg) or '')
+        lottery_channel_id = str(state.get('channel_id') or '')
+        if not msg_channel_id or msg_channel_id != lottery_channel_id:
             return
 
         uid = str(getattr(msg, 'author_id', '') or getattr(getattr(msg, 'author', None), 'id', '') or '')
