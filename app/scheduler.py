@@ -11,42 +11,9 @@ def init_scheduler(app):
     """初始化并启动调度器"""
 
     def auto_confirm_orders():
-        """24小时自动确认订单"""
+        """自动确认任务已停用：陪玩订单需老板手动确认"""
         with app.app_context():
-            from datetime import datetime, timedelta
-            from app.extensions import db
-            from app.models.order import Order
-            from app.services.order_service import confirm_order
-
-            orders = Order.query.filter(
-                Order.status == 'pending_confirm',
-                Order.freeze_status == 'normal',
-            ).all()
-
-            now = datetime.utcnow()
-            count = 0
-            patched = 0
-            for order in orders:
-                # 历史数据兜底：如果没有 auto_confirm_at，按申报时间/创建时间 +24h 补算
-                if not order.auto_confirm_at:
-                    base_time = order.report_time or order.fill_time or order.created_at
-                    if base_time:
-                        order.auto_confirm_at = base_time + timedelta(hours=24)
-                        patched += 1
-
-                if not order.auto_confirm_at or order.auto_confirm_at > now:
-                    continue
-
-                ok, err = confirm_order(order)
-                if ok:
-                    count += 1
-                else:
-                    app.logger.warning(
-                        f'[Scheduler] 自动确认失败 order={order.order_no}: {err}'
-                    )
-            if count > 0 or patched > 0:
-                db.session.commit()
-                app.logger.info(f'[Scheduler] 自动确认 {count} 笔订单, 修复截止时间 {patched} 笔')
+            return
 
     def auto_clock_timeout():
         """4小时打卡超时检测"""

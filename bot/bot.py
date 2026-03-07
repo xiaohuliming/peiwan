@@ -146,36 +146,36 @@ def get_or_create_user_by_kook(author):
     return user
 
 
-def _transfer_coin_to_bean(user: User, amount: Decimal):
-    """将可用嗯呢币(m_coin)按 1:1 转为可提现小猪粮（赠金不可转）。"""
+def _transfer_bean_to_coin(user: User, amount: Decimal):
+    """将小猪金(小猪粮, m_bean)按 1:1 转为嗯呢币(m_coin)。"""
     amount = Decimal(str(amount or 0))
     if amount <= 0:
         return False, '转换金额必须大于 0'
 
-    coin_available = Decimal(str(user.m_coin or 0))
-    if coin_available < amount:
-        return False, f'嗯呢币余额不足（赠金不可转），当前可转: {coin_available}'
+    bean_available = Decimal(str(user.m_bean or 0))
+    if bean_available < amount:
+        return False, f'小猪金余额不足，当前可转: {bean_available}'
 
-    user.m_coin -= amount
+    user.m_bean -= amount
 
-    user.m_bean += amount
+    user.m_coin += amount
 
-    blog = BalanceLog(
+    clog = CommissionLog(
         user_id=user.id,
         change_type='exchange_out',
         amount=-amount,
-        balance_after=user.m_coin + user.m_coin_gift,
-        reason='KOOK /转换 转出到小猪粮',
+        balance_after=user.m_bean,
+        reason='KOOK /转换 小猪金转出',
     )
-    clog = CommissionLog(
+    blog = BalanceLog(
         user_id=user.id,
         change_type='exchange_in',
         amount=amount,
-        balance_after=user.m_bean,
-        reason='KOOK /转换 从嗯呢币转入',
+        balance_after=user.m_coin + user.m_coin_gift,
+        reason='KOOK /转换 转入嗯呢币',
     )
-    db.session.add(blog)
     db.session.add(clog)
+    db.session.add(blog)
     return True, None
 
 
@@ -869,7 +869,7 @@ async def withdraw(msg: Message, amount_str: str = ''):
 @bot.command(name='转换')
 async def convert_coin_cmd(msg: Message, amount_str: str = ''):
     """
-    嗯呢币转小猪粮（1:1）
+    小猪金转嗯呢币（1:1）
     用法: /转换 金额
     """
     with app.app_context():
@@ -878,8 +878,8 @@ async def convert_coin_cmd(msg: Message, amount_str: str = ''):
         if not amount_str:
             await msg.reply(
                 f"请输入转换金额: `/转换 金额`\n"
-                f"当前可转嗯呢币: **{user.m_coin}**（赠金不可转）\n"
-                f"当前可提现小猪粮: **{user.m_bean}**"
+                f"当前小猪金(小猪粮): **{user.m_bean}**\n"
+                f"当前嗯呢币余额: **{user.m_coin}**"
             )
             return
 
@@ -890,7 +890,7 @@ async def convert_coin_cmd(msg: Message, amount_str: str = ''):
             return
 
         try:
-            success, error = _transfer_coin_to_bean(user, amount)
+            success, error = _transfer_bean_to_coin(user, amount)
             if not success:
                 await msg.reply(f'转换失败: {error}')
                 return
@@ -899,8 +899,8 @@ async def convert_coin_cmd(msg: Message, amount_str: str = ''):
             await msg.reply(
                 f"**转换成功**\n"
                 f"转换金额: **{amount}**\n"
-                f"剩余可转嗯呢币: **{user.m_coin}**\n"
-                f"当前可提现小猪粮: **{user.m_bean}**"
+                f"剩余小猪金(小猪粮): **{user.m_bean}**\n"
+                f"当前嗯呢币余额: **{user.m_coin}**"
             )
         except Exception as e:
             db.session.rollback()
@@ -936,7 +936,7 @@ async def report_order_cmd(msg: Message, order_no: str = '', duration_str: str =
                 await msg.reply('你只能申报自己的订单')
                 return
 
-            if order.status not in ('pending_report', 'pending_confirm'):
+            if order.status not in ('pending_report', 'pending_confirm', 'pending_pay'):
                 await msg.reply(f'该订单当前状态为 **{order.status_label}**，仅待申报/待确认可修改申报')
                 return
 
@@ -1168,7 +1168,7 @@ def _build_help_text():
         "---\n"
         "`/bind` - 查看当前自动识别的账号\n"
         "`/钱包` - 查看钱包信息\n"
-        "`/转换 金额` - 将可用嗯呢币按1:1转换为可提现小猪粮（赠金不可转）\n"
+        "`/转换 金额` - 将小猪金(小猪粮)按1:1转换为嗯呢币\n"
         "`/结单 订单号 时长` - 结单申报(仅支持整数或0.5小时)\n"
         "`/确认 订单号` - 确认订单(老板)\n"
         "`/roll 总点数 抽几个点` - 掷点/随机点数\n"

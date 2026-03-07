@@ -204,12 +204,6 @@
                   </form>
                   {% endif %}
                 {% endif %}
-                {# 结算: 客服+, 仅护航/代练待结算订单 #}
-                {% if can_freeze_order(current_user) and order.status == 'pending_pay' and order.order_type in ('escort', 'training') %}
-                <form action="{{ url_for('orders.order_action', order_id=order.id, action='settle') }}" method="post" class="inline">
-                  <button type="submit" class="text-green-500 hover:text-green-600 text-xs font-medium px-2 py-1 rounded hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors" onclick="return confirm('确认结算? 将解冻佣金并发放给陪玩')">结算</button>
-                </form>
-                {% endif %}
                 {# 退款: 管理员+ #}
                 {% if can_refund_order(current_user) and order.status in ('pending_pay', 'paid') %}
                 <form action="{{ url_for('orders.order_action', order_id=order.id, action='refund') }}" method="post" class="inline">

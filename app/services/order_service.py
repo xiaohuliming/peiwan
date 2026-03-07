@@ -209,6 +209,37 @@ def deduct_player_earning(player, amount, order):
     db.session.add(log)
 
 
+def deduct_player_earning_frozen_first(player, amount, order):
+    """退款扣回陪玩收益: 优先扣冻结小猪粮, 不足再扣可用小猪粮"""
+    amount = Decimal(str(amount))
+    if amount <= 0:
+        return Decimal('0'), Decimal('0')
+
+    remaining = amount
+    frozen_deduct = min(player.m_bean_frozen, remaining)
+    player.m_bean_frozen -= frozen_deduct
+    remaining -= frozen_deduct
+
+    bean_deduct = min(player.m_bean, remaining)
+    player.m_bean -= bean_deduct
+    remaining -= bean_deduct
+
+    total_deduct = frozen_deduct + bean_deduct
+    log = CommissionLog(
+        user_id=player.id,
+        change_type='refund_deduct',
+        amount=-total_deduct,
+        balance_after=player.m_bean,
+        order_id=order.id,
+        reason=(
+            f'订单 {order.order_no} 退款扣回'
+            f' (冻结:{frozen_deduct}, 可用:{bean_deduct}, 未扣回:{remaining})'
+        )
+    )
+    db.session.add(log)
+    return total_deduct, remaining
+
+
 def create_normal_order(boss, player, project_item, price_tier, staff,
                         extra_price=0, addon_desc=None, addon_price=0, remark=None):
     """
@@ -262,10 +293,10 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     """
     创建护航/代练订单 (即时扣款+冻结佣金)
     """
-    base_price = project_item.get_price_by_tier(price_tier)
+    base_price = Decimal(str(project_item.get_price_by_tier(price_tier) or 0))
     commission_rate = project_item.commission_rate
     boss_discount = _get_boss_discount_percent(boss)
-    unit_price = Decimal(str(base_price)) + Decimal(str(extra_price))
+    unit_price = base_price + Decimal(str(extra_price))
     duration_dec = Decimal(str(duration))
     subtotal = unit_price * duration_dec + Decimal(str(addon_price))
     total_price, player_earning, shop_earning = _calc_order_amounts_with_discount_subsidy(
@@ -305,10 +336,10 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     )
     db.session.add(order)
     db.session.flush()
-    
+
     log_operation(_get_operator_id(), 'order_create_escort', 'order', order.id,
                   f'创建护航/代练订单 {order.order_no}, 总价: {total_price}')
-    
+
     # 即时扣款
     if not deduct_boss_balance(boss, total_price, order.order_no):
         db.session.rollback()
@@ -318,17 +349,22 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     player.m_bean_frozen += player_earning
 
     # 客服提成在结算(settle)时发放，创建时不发
-
     return order, None
 
 
 def report_order(order, duration_hours, operator_id=None):
     """
     陪玩申报时长(小时), 计算总价
-    状态: pending_report/pending_confirm → pending_confirm
+    - 常规单: pending_report/pending_confirm → pending_confirm
+    - 护航/代练: pending_pay 申报后直接自动结算并冻结
     """
-    if order.status not in ('pending_report', 'pending_confirm'):
-        return False, '订单状态不正确'
+    is_escort = order.order_type in ('escort', 'training')
+    if is_escort:
+        if order.status != 'pending_pay':
+            return False, '订单状态不正确'
+    else:
+        if order.status not in ('pending_report', 'pending_confirm'):
+            return False, '订单状态不正确'
 
     try:
         duration = Decimal(str(duration_hours or 0))
@@ -356,9 +392,37 @@ def report_order(order, duration_hours, operator_id=None):
     now = datetime.utcnow()
     order.fill_time = now
     order.report_time = now
-    order.status = 'pending_confirm'
     order.boss_discount = boss_discount
-    order.auto_confirm_at = now + timedelta(hours=24)
+
+    if is_escort:
+        # 护航/代练: 创建时已扣款冻结，报单时仅按最终时长补差并立即结算
+        old_total = Decimal(str(order.total_price or 0))
+        old_earning = Decimal(str(order.player_earning or 0))
+
+        delta_total = total_price - old_total
+        if delta_total > 0:
+            if not deduct_boss_balance(order.boss, delta_total, order.order_no):
+                return False, '老板余额不足，无法按申报时长结算'
+        elif delta_total < 0:
+            refund_boss_balance(order.boss, -delta_total, order.order_no)
+
+        delta_earning = player_earning - old_earning
+        if delta_earning > 0:
+            order.player.m_bean_frozen += delta_earning
+        elif delta_earning < 0:
+            deduct = -delta_earning
+            if order.player.m_bean_frozen >= deduct:
+                order.player.m_bean_frozen -= deduct
+            else:
+                order.player.m_bean_frozen = Decimal('0')
+
+        ok, err = settle_escort_order(order)
+        if not ok:
+            return False, err
+    else:
+        order.status = 'pending_confirm'
+        # 陪玩单必须由老板确认后才结算，不自动确认
+        order.auto_confirm_at = None
 
     log_operation(operator_id or _get_operator_id(), 'order_report', 'order', order.id,
                   f'陪玩申报订单 {order.order_no}, 时长: {duration}h, 总价: {total_price}')
@@ -382,12 +446,12 @@ def confirm_order(order, operator_id=None):
     if not deduct_boss_balance(boss, order.total_price, order.order_no):
         return False, '老板余额不足，无法确认订单'
 
-    # 常规陪玩单：确认后佣金直接发放，不冻结
+    # 常规陪玩单：确认后自动结算并冻结，等待客服手动解冻发放
     player = order.player
-    award_player_earning(player, order.player_earning, order)
+    player.m_bean_frozen += Decimal(str(order.player_earning or 0))
 
     order.status = 'paid'
-    order.freeze_status = 'normal'
+    order.freeze_status = 'frozen'
     order.confirm_time = datetime.utcnow()
     order.pay_time = datetime.utcnow()
 
@@ -397,7 +461,7 @@ def confirm_order(order, operator_id=None):
                                f'陪玩订单 {order.order_no} 提成')
 
     log_operation(operator_id or _get_operator_id(), 'order_confirm', 'order', order.id,
-                  f'订单 {order.order_no} 已确认, 佣金 {order.player_earning} 已发放')
+                  f'订单 {order.order_no} 已确认并自动结算, 佣金 {order.player_earning} 已冻结待解冻')
 
     return True, None
 
@@ -446,16 +510,9 @@ def refund_order(order):
     # 退老板
     refund_boss_balance(boss, order.total_price, order.order_no)
 
-    # 如果已经发了佣金, 扣回
-    if order.status == 'paid':
-        deduct_player_earning(player, order.player_earning, order)
-
-    # 护航/代练: 解冻冻结的佣金
-    if order.order_type in ('escort', 'training') and order.status == 'pending_pay':
-        if player.m_bean_frozen >= order.player_earning:
-            player.m_bean_frozen -= order.player_earning
-        else:
-            player.m_bean_frozen = Decimal('0')
+    # 扣回陪玩收益（优先冻结，再可用）
+    if order.status in ('pending_pay', 'paid'):
+        deduct_player_earning_frozen_first(player, order.player_earning, order)
 
     order.status = 'refunded'
     order.refund_time = datetime.utcnow()

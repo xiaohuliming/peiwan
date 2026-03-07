@@ -74,12 +74,12 @@
           class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
       </div>
 
-      {# 护航/代练时长 #}
+      {# 护航/代肝时长 #}
       <div id="duration-section" class="hidden">
-        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">时长/数量</label>
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">时长（小时）</label>
         <input type="number" name="duration" step="0.5" value="1" min="0.5"
           class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
-        <p class="text-xs text-slate-400 mt-1">护航/代练订单需要预设时长，将即时扣款</p>
+        <p class="text-xs text-slate-400 mt-1">护航/代肝创建即扣款并冻结，报单后自动结算并保持冻结，等待客服手动解冻。</p>
       </div>
 
       {# 用户搜索 #}
@@ -182,7 +182,7 @@ function updateItemInfo() {
   document.getElementById('info-type').textContent = typeMap[selectedItem.project_type] || selectedItem.project_type;
   document.getElementById('info-commission').textContent = selectedItem.commission_rate + '%';
 
-  // 护航/代练显示时长
+  // 仅护航/代肝显示时长输入
   const ds = document.getElementById('duration-section');
   if (selectedItem.project_type === 'escort' || selectedItem.project_type === 'training') {
     ds.classList.remove('hidden');
