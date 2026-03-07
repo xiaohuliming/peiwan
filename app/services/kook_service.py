@@ -742,6 +742,60 @@ BROADCAST_TYPES = {
         ),
         'hint': '老板产生消费（订单/礼物/客服手动扣款）时私信老板',
     },
+    'order_refund_boss': {
+        'label': '订单退款通知 → 老板',
+        'group': '私信通知',
+        'target': 'dm',
+        'color': '#EF4444',
+        'title': '订单已退款',
+        'variables': {
+            '{boss}': '老板昵称',
+            '{player}': '陪玩昵称',
+            '{order_no}': '订单号',
+            '{game}': '游戏项目',
+            '{amount}': '退款金额',
+            '{balance}': '退款后老板余额（嗯呢币）',
+            '{operator}': '处理人',
+        },
+        'default_template': (
+            '**订单退款成功**\n---\n'
+            '订单号: `{order_no}`\n'
+            '游戏项目: `{game}`\n'
+            '陪玩: `{player}`\n'
+            '退款金额: `{amount}` 嗯呢币\n'
+            '当前余额: `{balance}` 嗯呢币\n'
+            '处理人: `{operator}`'
+        ),
+        'hint': '订单退款成功后私信老板',
+    },
+    'order_refund_player': {
+        'label': '订单退款通知 → 陪玩',
+        'group': '私信通知',
+        'target': 'dm',
+        'color': '#EF4444',
+        'title': '订单退款通知',
+        'variables': {
+            '{boss}': '老板昵称',
+            '{player}': '陪玩昵称',
+            '{order_no}': '订单号',
+            '{game}': '游戏项目',
+            '{amount}': '订单金额（退款额）',
+            '{deduct}': '扣回收益',
+            '{balance}': '当前可用小猪粮余额',
+            '{operator}': '处理人',
+        },
+        'default_template': (
+            '**订单已退款，收益已扣回**\n---\n'
+            '订单号: `{order_no}`\n'
+            '游戏项目: `{game}`\n'
+            '老板: `{boss}`\n'
+            '订单金额: `{amount}` 嗯呢币\n'
+            '扣回收益: `{deduct}` 小猪粮\n'
+            '当前可用小猪粮: `{balance}`\n'
+            '处理人: `{operator}`'
+        ),
+        'hint': '订单退款成功后私信陪玩',
+    },
     'order_dispatch': {
         'label': '派单通知 → 陪玩',
         'group': '私信通知',
@@ -1192,7 +1246,6 @@ def push_escort_dispatch(order):
     if not player.kook_id or not player.kook_bound:
         return
 
-    site_url = _get_site_url()
     boss_name = order.boss.nickname or order.boss.username
     order_type_map = {'escort': '护航', 'training': '代练'}
     type_name = order_type_map.get(order.order_type, '订单')
@@ -1210,7 +1263,7 @@ def push_escort_dispatch(order):
     content = _render_tpl(_get_custom_template('escort_dispatch') or meta['default_template'], variables)
 
     card = _build_card(f'新{type_name}订单', content, meta['color'])
-    _async_send(_send_direct_msg, player.kook_id, card, '前往后台', f'{site_url}/orders' if site_url else None)
+    _async_send(_send_direct_msg, player.kook_id, card)
 
 
 def push_gift_to_player(gift_order):
@@ -1447,6 +1500,44 @@ def push_boss_consume_notice(user, amount, reason='', operator=''):
     content = _render_tpl(_get_custom_template('boss_consume') or meta['default_template'], variables)
     card = _build_card(meta['title'], content, meta['color'])
     _async_send(_send_direct_msg, user.kook_id, card)
+
+
+def push_order_refund_notice(order, operator=''):
+    """订单退款后私信通知老板和陪玩（支持播报管理自定义模板）"""
+    boss = order.boss
+    player = order.player
+    if not boss and not player:
+        return
+    boss_enabled = _is_broadcast_enabled('order_refund_boss')
+    player_enabled = _is_broadcast_enabled('order_refund_player')
+
+    boss_name = _fallback_display_name(boss)
+    player_name = _fallback_display_name(player, prefer_player_name=True)
+    common_vars = {
+        'boss': boss_name or '-',
+        'player': player_name or '-',
+        'order_no': str(order.order_no or '-'),
+        'game': str(order.project_display or '-'),
+        'amount': str(order.total_price or 0),
+        'deduct': str(order.player_earning or 0),
+        'operator': operator or '系统',
+    }
+
+    if boss_enabled and boss and boss.kook_id and boss.kook_bound:
+        variables = dict(common_vars)
+        variables['balance'] = str((boss.m_coin or 0) + (boss.m_coin_gift or 0))
+        meta = BROADCAST_TYPES['order_refund_boss']
+        content = _render_tpl(_get_custom_template('order_refund_boss') or meta['default_template'], variables)
+        card = _build_card(meta['title'], content, meta['color'])
+        _async_send(_send_direct_msg, boss.kook_id, card)
+
+    if player_enabled and player and player.kook_id and player.kook_bound:
+        variables = dict(common_vars)
+        variables['balance'] = str(player.m_bean or 0)
+        meta = BROADCAST_TYPES['order_refund_player']
+        content = _render_tpl(_get_custom_template('order_refund_player') or meta['default_template'], variables)
+        card = _build_card(meta['title'], content, meta['color'])
+        _async_send(_send_direct_msg, player.kook_id, card)
 
 
 def push_gift_refund_notice(gift_order):

@@ -349,9 +349,12 @@ def order_action(order_id, action):
         if not current_user.is_admin:
             flash('退款操作需要管理员及以上权限', 'error')
             return redirect(url_for('orders.index'))
+        notify_operator = current_user.staff_display_name
         success, error = order_service.refund_order(order)
         if success:
             db.session.commit()
+            # KOOK 推送: 订单退款后私信老板和陪玩
+            kook_service.push_order_refund_notice(order, operator=notify_operator)
             flash('退款成功', 'success')
         else:
             flash(error, 'error')
