@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 import random
 import string
@@ -291,7 +291,8 @@ def create_normal_order(boss, player, project_item, price_tier, staff,
 def create_escort_order(boss, player, project_item, price_tier, staff,
                         duration, extra_price=0, addon_desc=None, addon_price=0, remark=None):
     """
-    创建护航/代练订单 (即时扣款+冻结佣金)
+    创建护航/代练订单:
+    即时扣款 + 直接结算 + 自动冻结（无需报单）
     """
     base_price = Decimal(str(project_item.get_price_by_tier(price_tier) or 0))
     commission_rate = project_item.commission_rate
@@ -330,8 +331,10 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
         order_type=project_item.project_type,
         duration=duration_dec,
         status='pending_pay',
+        fill_time=now,
+        report_time=now,
         pay_time=now,
-        auto_confirm_at=now + timedelta(hours=24),
+        auto_confirm_at=None,
         remark=remark,
     )
     db.session.add(order)
@@ -348,23 +351,24 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     # 冻结陪玩佣金
     player.m_bean_frozen += player_earning
 
-    # 客服提成在结算(settle)时发放，创建时不发
+    # 护航/代练创建后直接结算并冻结（不经过报单）
+    ok, err = settle_escort_order(order)
+    if not ok:
+        db.session.rollback()
+        return None, err
+
     return order, None
 
 
 def report_order(order, duration_hours, operator_id=None):
     """
     陪玩申报时长(小时), 计算总价
-    - 常规单: pending_report/pending_confirm → pending_confirm
-    - 护航/代练: pending_pay 申报后直接自动结算并冻结
+    - 仅常规单: pending_report/pending_confirm → pending_confirm
     """
-    is_escort = order.order_type in ('escort', 'training')
-    if is_escort:
-        if order.status != 'pending_pay':
-            return False, '订单状态不正确'
-    else:
-        if order.status not in ('pending_report', 'pending_confirm'):
-            return False, '订单状态不正确'
+    if order.order_type in ('escort', 'training'):
+        return False, '护航/代练订单无需报单，创建后已自动结算并冻结'
+    if order.status not in ('pending_report', 'pending_confirm'):
+        return False, '订单状态不正确'
 
     try:
         duration = Decimal(str(duration_hours or 0))
@@ -387,50 +391,16 @@ def report_order(order, duration_hours, operator_id=None):
 
     now = datetime.utcnow()
 
-    if is_escort:
-        # 护航/代练: 创建时已扣款冻结，报单时仅按最终时长补差并立即结算
-        old_total = Decimal(str(order.total_price or 0))
-        old_earning = Decimal(str(order.player_earning or 0))
-
-        delta_total = total_price - old_total
-        if delta_total > 0:
-            if not deduct_boss_balance(order.boss, delta_total, order.order_no):
-                return False, '老板余额不足，无法按申报时长结算'
-        elif delta_total < 0:
-            refund_boss_balance(order.boss, -delta_total, order.order_no)
-
-        delta_earning = player_earning - old_earning
-        if delta_earning > 0:
-            order.player.m_bean_frozen += delta_earning
-        elif delta_earning < 0:
-            deduct = -delta_earning
-            if order.player.m_bean_frozen >= deduct:
-                order.player.m_bean_frozen -= deduct
-            else:
-                order.player.m_bean_frozen = Decimal('0')
-
-        order.duration = duration
-        order.total_price = total_price
-        order.player_earning = player_earning
-        order.shop_earning = shop_earning
-        order.fill_time = now
-        order.report_time = now
-        order.boss_discount = boss_discount
-
-        ok, err = settle_escort_order(order)
-        if not ok:
-            return False, err
-    else:
-        order.duration = duration
-        order.total_price = total_price
-        order.player_earning = player_earning
-        order.shop_earning = shop_earning
-        order.fill_time = now
-        order.report_time = now
-        order.boss_discount = boss_discount
-        order.status = 'pending_confirm'
-        # 陪玩单必须由老板确认后才结算，不自动确认
-        order.auto_confirm_at = None
+    order.duration = duration
+    order.total_price = total_price
+    order.player_earning = player_earning
+    order.shop_earning = shop_earning
+    order.fill_time = now
+    order.report_time = now
+    order.boss_discount = boss_discount
+    order.status = 'pending_confirm'
+    # 陪玩单必须由老板确认后才结算，不自动确认
+    order.auto_confirm_at = None
 
     log_operation(operator_id or _get_operator_id(), 'order_report', 'order', order.id,
                   f'陪玩申报订单 {order.order_no}, 时长: {duration}h, 总价: {total_price}')

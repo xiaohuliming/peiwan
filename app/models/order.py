@@ -87,9 +87,6 @@ class Order(db.Model):
             'paid': '已结算',
             'refunded': '已退款',
         }
-        # 护航/代练当前业务中 pending_pay 表示“待陪玩申报”，避免与结算流程混淆
-        if self.status == 'pending_pay' and self.order_type in ('escort', 'training'):
-            return '待申报'
         return labels.get(self.status, self.status)
 
     @property

@@ -73,9 +73,8 @@ def init_scheduler(app):
     )
 
     def auto_settle_escort_orders():
-        """24小时自动结算护航/代练订单"""
+        """兜底自动结算历史 pending_pay 护航/代练订单"""
         with app.app_context():
-            from datetime import datetime, timedelta
             from app.extensions import db
             from app.models.order import Order
             from app.services.order_service import settle_escort_order
@@ -86,20 +85,8 @@ def init_scheduler(app):
                 Order.freeze_status == 'normal',
             ).all()
 
-            now = datetime.utcnow()
             count = 0
-            patched = 0
             for order in orders:
-                # 历史数据兜底：如果没有 auto_confirm_at，按创建时间 +24h 补算
-                if not order.auto_confirm_at:
-                    base_time = order.pay_time or order.created_at
-                    if base_time:
-                        order.auto_confirm_at = base_time + timedelta(hours=24)
-                        patched += 1
-
-                if not order.auto_confirm_at or order.auto_confirm_at > now:
-                    continue
-
                 ok, err = settle_escort_order(order)
                 if ok:
                     count += 1
@@ -107,9 +94,9 @@ def init_scheduler(app):
                     app.logger.warning(
                         f'[Scheduler] 护航/代练自动结算失败 order={order.order_no}: {err}'
                     )
-            if count > 0 or patched > 0:
+            if count > 0:
                 db.session.commit()
-                app.logger.info(f'[Scheduler] 自动结算护航/代练 {count} 笔, 修复截止时间 {patched} 笔')
+                app.logger.info(f'[Scheduler] 自动结算护航/代练 {count} 笔')
 
     def auto_draw_lotteries():
         """自动开奖到期抽奖"""
@@ -129,7 +116,7 @@ def init_scheduler(app):
         auto_settle_escort_orders,
         trigger=IntervalTrigger(minutes=5),
         id='auto_settle_escort_orders',
-        name='24h自动结算护航/代练订单',
+        name='兜底自动结算护航/代练订单',
         replace_existing=True
     )
 

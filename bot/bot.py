@@ -959,10 +959,6 @@ async def report_order_cmd(msg: Message, order_no: str = '', duration_str: str =
                 await msg.reply('请输入订单号和时长: `/结单 订单号 时长`\n例: `/结单 202501011234561234 1.5`')
                 return
 
-            if not duration_str:
-                await msg.reply('请输入游戏时长(小时): `/结单 订单号 时长`\n例: `/结单 202501011234561234 1.5`\n仅支持整数或0.5（如 0.5、1、1.5）')
-                return
-
             order = Order.query.filter_by(order_no=order_no).first()
             if not order:
                 await msg.reply(f'未找到订单: `{order_no}`')
@@ -972,7 +968,15 @@ async def report_order_cmd(msg: Message, order_no: str = '', duration_str: str =
                 await msg.reply('你只能申报自己的订单')
                 return
 
-            if order.status not in ('pending_report', 'pending_confirm', 'pending_pay'):
+            if order.order_type in ('escort', 'training'):
+                await msg.reply('护航/代练订单无需结单申报，创建后已自动结算并冻结。')
+                return
+
+            if not duration_str:
+                await msg.reply('请输入游戏时长(小时): `/结单 订单号 时长`\n例: `/结单 202501011234561234 1.5`\n仅支持整数或0.5（如 0.5、1、1.5）')
+                return
+
+            if order.status not in ('pending_report', 'pending_confirm'):
                 await msg.reply(f'该订单当前状态为 **{order.status_label}**，仅待申报/待确认可修改申报')
                 return
 
@@ -996,36 +1000,20 @@ async def report_order_cmd(msg: Message, order_no: str = '', duration_str: str =
 
             db.session.commit()
 
-            if order.order_type in ('escort', 'training'):
-                # 护航/代练：申报即自动结算并冻结，不走老板确认
-                from app.services.kook_service import push_order_settle
-                push_order_settle(order)
+            # 常规陪玩：仍需老板确认
+            from app.services.kook_service import push_order_report
+            push_order_report(order)
 
-                await msg.reply(
-                    f"**结单申报成功**\n"
-                    f"订单号: `{order.order_no}`\n"
-                    f"游戏项目: **{order.project_display}**\n"
-                    f"游戏时长: **{order.duration}** 小时\n"
-                    f"订单金额: **{order.total_price}** 嗯呢币\n"
-                    f"你的收益: **{order.player_earning}** 小猪粮\n"
-                    f"---\n"
-                    f"该订单已自动结算并冻结，等待客服手动解冻。"
-                )
-            else:
-                # 常规陪玩：仍需老板确认
-                from app.services.kook_service import push_order_report
-                push_order_report(order)
-
-                await msg.reply(
-                    f"**结单申报成功**\n"
-                    f"订单号: `{order.order_no}`\n"
-                    f"游戏项目: **{order.project_display}**\n"
-                    f"游戏时长: **{order.duration}** 小时\n"
-                    f"订单金额: **{order.total_price}** 嗯呢币\n"
-                    f"你的收益: **{order.player_earning}** 小猪粮\n"
-                    f"---\n"
-                    f"等待老板确认，24小时后将自动确认"
-                )
+            await msg.reply(
+                f"**结单申报成功**\n"
+                f"订单号: `{order.order_no}`\n"
+                f"游戏项目: **{order.project_display}**\n"
+                f"游戏时长: **{order.duration}** 小时\n"
+                f"订单金额: **{order.total_price}** 嗯呢币\n"
+                f"你的收益: **{order.player_earning}** 小猪粮\n"
+                f"---\n"
+                f"等待老板确认，24小时后将自动确认"
+            )
     except Exception as e:
         logger.exception('执行 /结单 命令异常')
         await msg.reply(f'结单失败: {e}')

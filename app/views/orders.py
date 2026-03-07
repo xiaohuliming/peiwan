@@ -184,7 +184,7 @@ def dispatch():
             db.session.commit()
             # KOOK 推送: 护航/代练派单通知（不再推送老板建单私信）
             kook_service.push_escort_dispatch(order)
-            flash(f'护航/代肝订单已创建并即时扣款冻结: {order.order_no}', 'success')
+            flash(f'护航/代肝订单已创建并自动结算冻结: {order.order_no}', 'success')
         else:
             order, error = order_service.create_normal_order(
                 boss=boss, player=player, project_item=project_item,
@@ -249,12 +249,16 @@ def confirm_by_no(order_no):
 
 def _handle_report(order):
     """申报处理逻辑：陪玩本人或客服及以上可操作"""
+    if order.order_type in ('escort', 'training'):
+        flash('护航/代肝订单无需报单，创建后已自动结算并冻结', 'info')
+        return redirect(url_for('orders.index'))
+
     can_report = (order.player_id == current_user.id) or current_user.is_staff
     if not can_report:
         flash('仅陪玩本人或客服及以上可申报该订单', 'error')
         return redirect(url_for('orders.index'))
 
-    if order.status not in ('pending_report', 'pending_confirm', 'pending_pay'):
+    if order.status not in ('pending_report', 'pending_confirm'):
         flash('该订单当前不可申报', 'error')
         return redirect(url_for('orders.index'))
 
@@ -271,20 +275,15 @@ def _handle_report(order):
             return redirect(url_for('orders.report_by_no', order_no=order.order_no))
 
         db.session.commit()
-        if order.order_type in ('escort', 'training'):
-            # 护航/代肝申报后直接结算并冻结
-            kook_service.push_order_settle(order)
-            flash('申报成功，订单已自动结算并冻结', 'success')
+        # KOOK 推送: 申报通知给老板
+        site_url = current_app.config.get('SITE_URL', '')
+        kook_service.push_order_report(order, site_url=site_url)
+        if current_user.is_staff and order.player_id != current_user.id:
+            flash('代报单成功，等待老板确认支付', 'success')
+        elif was_pending_confirm:
+            flash('申报已更新，等待老板确认支付', 'success')
         else:
-            # KOOK 推送: 申报通知给老板
-            site_url = current_app.config.get('SITE_URL', '')
-            kook_service.push_order_report(order, site_url=site_url)
-            if current_user.is_staff and order.player_id != current_user.id:
-                flash('代报单成功，等待老板确认支付', 'success')
-            elif was_pending_confirm:
-                flash('申报已更新，等待老板确认支付', 'success')
-            else:
-                flash('申报成功，等待老板确认支付', 'success')
+            flash('申报成功，等待老板确认支付', 'success')
         return redirect(url_for('orders.index'))
 
     return render_template('orders/report.html', order=order)
@@ -344,7 +343,7 @@ def order_action(order_id, action):
             flash(error, 'error')
 
     elif action == 'settle':
-        flash('护航/代肝订单无需手动结算：陪玩报单后自动结算并冻结', 'info')
+        flash('护航/代肝订单无需手动结算：创建后已自动结算并冻结', 'info')
 
     elif action == 'refund':
         if not current_user.is_admin:
