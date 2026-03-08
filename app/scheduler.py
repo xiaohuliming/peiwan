@@ -22,23 +22,19 @@ def init_scheduler(app):
 
             now = datetime.utcnow()
             overdue = now - timedelta(hours=24)
+            order_type_expr = db.func.lower(db.func.coalesce(Order.order_type, 'normal'))
             deadline_expr = db.func.coalesce(
                 Order.report_time,
                 Order.fill_time,
-                Order.updated_at,
                 Order.created_at,
             )
 
             orders = Order.query.filter(
                 Order.status == 'pending_confirm',
-                db.or_(
-                    Order.order_type == 'normal',
-                    Order.order_type.is_(None),
-                    Order.order_type == '',
-                ),
+                order_type_expr.notin_(['escort', 'training']),
                 db.or_(
                     Order.auto_confirm_at <= now,
-                    db.and_(Order.auto_confirm_at.is_(None), deadline_expr <= overdue),
+                    deadline_expr <= overdue,
                 )
             ).all()
 
