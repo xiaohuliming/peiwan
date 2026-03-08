@@ -152,11 +152,26 @@ def delete(tag_id):
     tag = IdentityTag.query.get_or_404(tag_id)
     name = tag.name
 
-    # 删除规则定义时，保留用户历史标签文本，不自动删除用户标签
+    # 删除规则时，同步移除用户 tags 中的同名标签
+    affected_users = 0
+    users = User.query.filter(User.tags.ilike(f'%"{name}"%')).all()
+    for user in users:
+        old_tags = user.tag_list
+        new_tags = [t for t in old_tags if t != name]
+        if len(new_tags) != len(old_tags):
+            user.tag_list = new_tags
+            affected_users += 1
+
     db.session.delete(tag)
     db.session.commit()
 
-    log_operation(current_user.id, 'identity_tag_delete', 'identity_tag', tag_id, f'删除身份标签规则: {name}')
+    log_operation(
+        current_user.id,
+        'identity_tag_delete',
+        'identity_tag',
+        tag_id,
+        f'删除身份标签规则: {name}, 同步移除用户标签 {affected_users} 人',
+    )
     db.session.commit()
-    flash('身份标签规则已删除（用户历史标签不会自动移除）', 'success')
+    flash(f'身份标签规则已删除，并已从 {affected_users} 个用户移除该标签', 'success')
     return redirect(url_for('identity_tag_admin.index'))
