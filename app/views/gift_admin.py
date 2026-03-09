@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime
 from flask import Blueprint, render_template, request, flash, redirect, url_for, current_app, jsonify
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -20,7 +21,7 @@ def allowed_image(filename):
 
 def _ensure_gift_sort_order_column():
     """
-    兼容旧库：若 gifts.sort_order 缺失则自动补齐并初始化排序。
+    兼容旧库：若 gifts.sort_order / deleted_at 缺失则自动补齐并初始化排序。
     避免在新增礼物时直接 500。
     """
     try:
@@ -28,25 +29,26 @@ def _ensure_gift_sort_order_column():
     except Exception as e:
         return False, f'读取 gifts 表结构失败: {e}'
 
-    if 'sort_order' in cols:
-        return True, None
+    need_sort_order = 'sort_order' not in cols
+    need_deleted_at = 'deleted_at' not in cols
 
-    try:
-        db.session.execute(text('ALTER TABLE gifts ADD COLUMN sort_order INT NOT NULL DEFAULT 0'))
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        return False, f'补齐 gifts.sort_order 字段失败: {e}'
+    if need_deleted_at:
+        try:
+            db.session.execute(text('ALTER TABLE gifts ADD COLUMN deleted_at DATETIME NULL'))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return False, f'补齐 gifts.deleted_at 字段失败: {e}'
 
-    try:
-        gifts = Gift.query.order_by(Gift.id.asc()).all()
-        for idx, gift in enumerate(gifts, start=1):
-            gift.sort_order = idx
-        db.session.commit()
-        return True, None
-    except Exception as e:
-        db.session.rollback()
-        return False, f'初始化礼物排序失败: {e}'
+    if need_sort_order:
+        try:
+            db.session.execute(text('ALTER TABLE gifts ADD COLUMN sort_order INT NOT NULL DEFAULT 0'))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return False, f'补齐 gifts.sort_order 字段失败: {e}'
+
+    return True, None
 
 
 @gift_admin_bp.route('/')
@@ -60,7 +62,7 @@ def index():
         return render_template('admin/gifts.html', gifts=[])
 
     _normalize_gift_sort_orders()
-    gifts = Gift.query.order_by(Gift.sort_order.asc(), Gift.id.asc()).all()
+    gifts = Gift.query.filter(Gift.deleted_at.is_(None)).order_by(Gift.sort_order.asc(), Gift.id.asc()).all()
     return render_template('admin/gifts.html', gifts=gifts)
 
 
@@ -97,7 +99,10 @@ def add():
 
         # 新增礼物默认置顶：新礼物排序=1，其余礼物整体后移一位
         try:
-            Gift.query.update({Gift.sort_order: Gift.sort_order + 1}, synchronize_session=False)
+            Gift.query.filter(Gift.deleted_at.is_(None)).update(
+                {Gift.sort_order: Gift.sort_order + 1},
+                synchronize_session=False,
+            )
 
             gift = Gift(
                 name=name, price=price, gift_type=gift_type,
@@ -127,7 +132,10 @@ def edit(gift_id):
         flash(err, 'error')
         return redirect(url_for('gift_admin.index'))
 
-    gift = Gift.query.get_or_404(gift_id)
+    gift = Gift.query.filter(
+        Gift.id == gift_id,
+        Gift.deleted_at.is_(None),
+    ).first_or_404()
 
     if request.method == 'POST':
         gift.name = request.form.get('name', '').strip()
@@ -161,7 +169,10 @@ def edit(gift_id):
 @admin_required
 def edit_broadcast(gift_id):
     """编辑礼物播报模板"""
-    gift = Gift.query.get_or_404(gift_id)
+    gift = Gift.query.filter(
+        Gift.id == gift_id,
+        Gift.deleted_at.is_(None),
+    ).first_or_404()
     gift.broadcast_template = request.form.get('broadcast_template', '')
     db.session.commit()
     flash(f'"{gift.name}" 播报模板已更新', 'success')
@@ -183,7 +194,7 @@ def move(gift_id, direction):
         return redirect(url_for('gift_admin.index'))
 
     _normalize_gift_sort_orders()
-    gifts = Gift.query.order_by(Gift.sort_order.asc(), Gift.id.asc()).all()
+    gifts = Gift.query.filter(Gift.deleted_at.is_(None)).order_by(Gift.sort_order.asc(), Gift.id.asc()).all()
     current_idx = next((i for i, g in enumerate(gifts) if g.id == gift_id), None)
     if current_idx is None:
         flash('礼物不存在', 'error')
@@ -234,7 +245,10 @@ def reorder():
     if not clean_ids:
         return jsonify({'ok': False, 'error': '排序数据无效'}), 400
 
-    gifts = Gift.query.filter(Gift.id.in_(clean_ids)).all()
+    gifts = Gift.query.filter(
+        Gift.deleted_at.is_(None),
+        Gift.id.in_(clean_ids),
+    ).all()
     gift_map = {g.id: g for g in gifts}
     if len(gift_map) != len(clean_ids):
         return jsonify({'ok': False, 'error': '存在无效礼物ID，请刷新页面后重试'}), 400
@@ -250,25 +264,31 @@ def reorder():
 @login_required
 @admin_required
 def delete(gift_id):
-    """删除礼物配置"""
-    gift = Gift.query.get_or_404(gift_id)
-
-    # 已有关联赠礼记录时禁止删除，避免历史数据断裂
-    used_count = GiftOrder.query.filter_by(gift_id=gift.id).count()
-    if used_count > 0:
-        flash(f'礼物“{gift.name}”已有 {used_count} 条赠送记录，不能删除；请改为关闭状态', 'error')
+    """删除礼物配置（软删除：保留历史赠礼记录）"""
+    ok, err = _ensure_gift_sort_order_column()
+    if not ok:
+        flash(err, 'error')
         return redirect(url_for('gift_admin.index'))
 
-    name = gift.name
-    db.session.delete(gift)
+    gift = Gift.query.filter(
+        Gift.id == gift_id,
+        Gift.deleted_at.is_(None),
+    ).first_or_404()
+
+    used_count = GiftOrder.query.filter_by(gift_id=gift.id).count()
+    gift.status = False
+    gift.deleted_at = gift.deleted_at or datetime.utcnow()
     db.session.commit()
-    flash(f'礼物“{name}”已删除', 'success')
+    if used_count > 0:
+        flash(f'礼物“{gift.name}”已删除（保留 {used_count} 条赠送记录）', 'success')
+    else:
+        flash(f'礼物“{gift.name}”已删除', 'success')
     return redirect(url_for('gift_admin.index'))
 
 
 def _normalize_gift_sort_orders():
     """保证礼物 sort_order 连续且唯一"""
-    gifts = Gift.query.order_by(Gift.sort_order.asc(), Gift.id.asc()).all()
+    gifts = Gift.query.filter(Gift.deleted_at.is_(None)).order_by(Gift.sort_order.asc(), Gift.id.asc()).all()
     changed = False
     for idx, gift in enumerate(gifts, start=1):
         if gift.sort_order != idx:

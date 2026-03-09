@@ -37,46 +37,63 @@ def check_and_upgrade(user, levels=None):
     检查用户经验值, 判断是否需要升级
     返回: (upgraded: bool, new_level: VipLevel or None)
     """
+    changed, target_level, direction = sync_vip_level_by_experience(
+        user,
+        levels=levels,
+        allow_downgrade=False,
+    )
+    if changed and direction == 'upgrade':
+        return True, target_level
+    return False, None
+
+
+def sync_vip_level_by_experience(user, levels=None, allow_downgrade=True):
+    """
+    按经验值同步用户 VIP 等级（可升可降）。
+    返回: (changed: bool, target_level: VipLevel or None, direction: 'upgrade'|'downgrade'|'same')
+    """
     levels = levels or get_vip_levels()
     if not levels:
-        return False, None
+        return False, None, 'same'
 
     # 找到用户应该对应的最高等级（按经验门槛，不依赖 sort_order 配置顺序）
     target_level = _pick_target_level(levels, user.experience)
 
-    # 如果已经是当前等级, 不需要升级
+    # 如果已经是当前等级, 不需要变更
     if user.vip_level == target_level.name:
-        return False, None
+        return False, None, 'same'
 
-    # 检查是否是升级（不做降级）
+    # 计算方向
     level_by_name = {lv.name: lv for lv in levels}
     current_level = level_by_name.get(user.vip_level)
     current_rank = _level_rank(current_level) if current_level else (0, -1)
     target_rank = _level_rank(target_level)
-    if target_rank <= current_rank:
-        return False, None
+    direction = 'upgrade' if target_rank > current_rank else 'downgrade'
+    if direction == 'downgrade' and not allow_downgrade:
+        return False, None, 'same'
 
-    # 执行升级
+    # 执行等级同步
     old_level = user.vip_level
     user.vip_level = target_level.name
 
-    # 记录升级
-    record = UpgradeRecord(
-        user_id=user.id,
-        from_level=old_level,
-        to_level=target_level.name,
-        benefit_status='pending',
-    )
-    db.session.add(record)
+    # 升级才写升级记录并发升级播报；降级不走升级奖励流程
+    if direction == 'upgrade':
+        record = UpgradeRecord(
+            user_id=user.id,
+            from_level=old_level,
+            to_level=target_level.name,
+            benefit_status='pending',
+        )
+        db.session.add(record)
 
-    # KOOK 升级播报
-    try:
-        from app.services.kook_service import push_upgrade_broadcast
-        push_upgrade_broadcast(user, old_level, target_level.name)
-    except Exception:
-        pass  # 推送失败不影响升级流程
+        # KOOK 升级播报
+        try:
+            from app.services.kook_service import push_upgrade_broadcast
+            push_upgrade_broadcast(user, old_level, target_level.name)
+        except Exception:
+            pass  # 推送失败不影响升级流程
 
-    return True, target_level
+    return True, target_level, direction
 
 
 def _get_active_consume_exp_rule(user):

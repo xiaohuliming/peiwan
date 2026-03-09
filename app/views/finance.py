@@ -12,6 +12,47 @@ from werkzeug.utils import secure_filename
 
 finance_bp = Blueprint('finance', __name__)
 
+
+def _safe_redirect_path(raw_path: str, fallback: str):
+    """仅允许站内路径，防止开放重定向。"""
+    text = (raw_path or '').strip()
+    if not text.startswith('/'):
+        return fallback
+    if text.startswith('//'):
+        return fallback
+    return text
+
+
+def _append_query_param(url: str, key: str, value: str):
+    if not key:
+        return url
+    joiner = '&' if '?' in url else '?'
+    return f'{url}{joiner}{key}={value}'
+
+
+def _redirect_after_withdraw_audit(row_id=None):
+    fallback = url_for('finance.withdraw_list')
+    base_path = _safe_redirect_path(request.form.get('return_page', ''), fallback)
+
+    scroll_raw = (request.form.get('scroll_y') or '').strip()
+    try:
+        scroll_y = max(0, int(float(scroll_raw)))
+    except Exception:
+        scroll_y = 0
+
+    target = base_path
+    if scroll_y > 0:
+        target = _append_query_param(target, '_scroll_y', str(scroll_y))
+
+    try:
+        row_int = int(row_id or request.form.get('row_id') or 0)
+    except Exception:
+        row_int = 0
+    if row_int > 0:
+        target = f'{target}#wr-{row_int}'
+
+    return redirect(target)
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif'}
 
@@ -270,7 +311,7 @@ def audit_withdraw(request_id):
     wr = WithdrawRequest.query.get_or_404(request_id)
     if wr.status != 'pending':
         flash('该申请已处理', 'error')
-        return redirect(url_for('finance.withdraw_list'))
+        return _redirect_after_withdraw_audit(row_id=wr.id)
         
     action = request.form.get('action') # approve, reject
     remark = request.form.get('remark')
@@ -325,7 +366,7 @@ def audit_withdraw(request_id):
         db.session.rollback()
         flash(f'操作失败: {str(e)}', 'error')
 
-    return redirect(url_for('finance.withdraw_list'))
+    return _redirect_after_withdraw_audit(row_id=wr.id)
 
 
 @finance_bp.route('/balance_logs')

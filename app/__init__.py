@@ -1,5 +1,6 @@
 from flask import Flask, session
 from flask_login import current_user
+from sqlalchemy import inspect, text
 from app.config import Config
 from app.extensions import db, migrate, login_manager
 
@@ -50,6 +51,7 @@ def create_app(config_class=Config, start_background_tasks=True):
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
+    _ensure_gift_schema_compat(app)
 
     # Register blueprints
     from app.views.dashboard import dashboard_bp
@@ -156,6 +158,34 @@ def create_app(config_class=Config, start_background_tasks=True):
         _start_kook_bot(app)
 
     return app
+
+
+def _ensure_gift_schema_compat(app):
+    """兼容旧库 gifts 表字段（sort_order/deleted_at）。"""
+    with app.app_context():
+        try:
+            inspector = inspect(db.engine)
+            tables = set(inspector.get_table_names())
+            if 'gifts' not in tables:
+                return
+
+            cols = {c.get('name') for c in inspector.get_columns('gifts')}
+            altered = False
+
+            if 'deleted_at' not in cols:
+                db.session.execute(text('ALTER TABLE gifts ADD COLUMN deleted_at DATETIME NULL'))
+                altered = True
+
+            if 'sort_order' not in cols:
+                db.session.execute(text('ALTER TABLE gifts ADD COLUMN sort_order INT NOT NULL DEFAULT 0'))
+                altered = True
+
+            if altered:
+                db.session.commit()
+                app.logger.info('[Schema] gifts 兼容字段已补齐: %s', ','.join(sorted({'deleted_at', 'sort_order'} - cols)))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning(f'[Schema] gifts 兼容字段补齐失败: {e}')
 
 
 def _start_kook_bot(app):

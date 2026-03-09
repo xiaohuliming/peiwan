@@ -373,15 +373,26 @@ def update_info(user_id):
             return redirect(url_for('users.detail', user_id=user_id))
         exp = request.form.get('experience', type=int)
         if exp is not None:
-            from app.services.vip_service import check_and_upgrade
+            if exp < 0:
+                flash('经验值不能小于 0', 'error')
+                return redirect(url_for('users.detail', user_id=user_id))
+
+            from app.services.vip_service import sync_vip_level_by_experience
             old_exp = user.experience
+            old_level = user.vip_level
             user.experience = exp
-            upgraded, new_level = check_and_upgrade(user)
+            changed, new_level, direction = sync_vip_level_by_experience(
+                user,
+                allow_downgrade=True,
+            )
             log_operation(current_user.id, 'user_exp_change', 'user', user.id,
                           f'修改经验值 {old_exp} -> {exp}')
             db.session.commit()
-            if upgraded and new_level:
-                flash(f'经验值已更新，并自动升级到 {new_level.name}', 'success')
+            if changed and new_level:
+                if direction == 'downgrade':
+                    flash(f'经验值已更新，VIP 等级已由 {old_level} 调整为 {new_level.name}', 'success')
+                else:
+                    flash(f'经验值已更新，并自动升级到 {new_level.name}', 'success')
             else:
                 flash('经验值已更新', 'success')
 

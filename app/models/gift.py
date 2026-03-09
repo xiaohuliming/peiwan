@@ -14,11 +14,16 @@ class Gift(db.Model):
     gift_type = db.Column(db.String(20), default='standard')  # standard/crown (标准/冠名)
     broadcast_template = db.Column(db.Text)  # 播报模板, 支持变量替换
     sort_order = db.Column(db.Integer, default=0, nullable=False, index=True)  # 列表排序(越小越靠前)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)  # 软删除时间(非空=已删除)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     orders = db.relationship('GiftOrder', backref='gift', lazy='dynamic')
+
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None
 
     def __repr__(self):
         return f'<Gift {self.name}>'
