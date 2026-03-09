@@ -71,6 +71,14 @@
       <button class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium tracking-wide shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 active:scale-[0.98] transition-all duration-200" type="submit">
         立即注册
       </button>
+
+      <a id="wechat-register-btn"
+         href="{{ url_for('auth.wechat_oauth_start', mode='register', role='god') }}"
+         class="w-full py-2.5 rounded-xl font-medium text-center border border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/20 transition-colors flex items-center justify-center gap-2">
+        <i data-lucide="message-circle" width="16" height="16"></i>
+        微信注册（扫码）
+      </a>
+      <p class="text-[11px] text-slate-400 text-center -mt-2">会按上方选择的身份创建账号（老板/陪玩）</p>
     </div>
   </form>
 </div>
@@ -79,4 +87,20 @@
   已有账号?
   <a href="{{ url_for('auth.login') }}" class="text-purple-600 hover:text-purple-500 dark:text-purple-400 font-medium transition-colors">返回登录</a>
 </p>
+
+<script>
+  (function () {
+    const btn = document.getElementById('wechat-register-btn');
+    if (!btn) return;
+    const base = '{{ url_for("auth.wechat_oauth_start") }}';
+    const roleInputs = document.querySelectorAll('input[name="role"]');
+    function syncWechatRole() {
+      const checked = document.querySelector('input[name="role"]:checked');
+      const role = checked ? checked.value : 'god';
+      btn.href = `${base}?mode=register&role=${encodeURIComponent(role)}`;
+    }
+    roleInputs.forEach((el) => el.addEventListener('change', syncWechatRole));
+    syncWechatRole();
+  })();
+</script>
 {% endblock %}

@@ -34,6 +34,12 @@
       <button class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-xl font-medium tracking-wide shadow-lg shadow-purple-500/20 hover:shadow-purple-500/30 active:scale-[0.98] transition-all duration-200" type="submit">
         登 录
       </button>
+
+      <a href="{{ url_for('auth.wechat_oauth_start', mode='login', next=request.args.get('next', '')) }}"
+         class="w-full py-2.5 rounded-xl font-medium text-center border border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-900/20 transition-colors flex items-center justify-center gap-2">
+        <i data-lucide="message-circle" width="16" height="16"></i>
+        微信登录
+      </a>
     </div>
   </form>
 </div>

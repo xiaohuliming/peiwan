@@ -441,6 +441,18 @@ def _get_saved_withdraw_payment_info(user_id: int):
 
 def _create_withdraw_request(user, amount: Decimal, payment_account: str, payment_image: str):
     """创建提现单并冻结余额。"""
+    recent_wr = _get_recent_withdrawal_within_3_days(user.id)
+    if recent_wr:
+        next_time = (recent_wr.created_at + timedelta(days=3)).strftime('%Y-%m-%d %H:%M')
+        raise ValueError(f'限制：3天内仅可提交1次提现申请。你可在 {next_time} 后再次申请。')
+
+    pending_wr = WithdrawRequest.query.filter_by(user_id=user.id, status='pending').first()
+    if pending_wr:
+        raise ValueError(f'你有一笔待审核的提现 ({pending_wr.amount} 小猪粮)，请等待处理。')
+
+    if user.m_bean < amount:
+        raise ValueError(f'余额不足，当前可提现: **{user.m_bean}** 小猪粮。')
+
     user.m_bean -= amount
     user.m_bean_frozen += amount
 
@@ -585,9 +597,6 @@ async def _try_complete_withdraw_with_payment_image(msg: Message) -> bool:
             return True
 
         try:
-            user.m_bean -= amount
-            user.m_bean_frozen += amount
-
             saved_info = _get_saved_withdraw_payment_info(user.id) or {}
             payment_account = str(saved_info.get('payment_account') or '').strip() or '机器人提现(双码)'
             wr = _create_withdraw_request(
@@ -597,6 +606,11 @@ async def _try_complete_withdraw_with_payment_image(msg: Message) -> bool:
                 payment_image=f'{wechat_image_path}|{alipay_image_path}',
             )
             db.session.commit()
+            try:
+                from app.services.kook_service import push_withdraw_submit_notice
+                push_withdraw_submit_notice(wr)
+            except Exception as e:
+                logger.warning(f'提现提交私信通知失败: {e}')
             _withdraw_pending_uploads.pop(kook_id, None)
 
             await msg.reply(
@@ -607,6 +621,11 @@ async def _try_complete_withdraw_with_payment_image(msg: Message) -> bool:
                 f"---\n"
                 f"请等待管理员审核"
             )
+            return True
+        except ValueError as e:
+            db.session.rollback()
+            _withdraw_pending_uploads.pop(kook_id, None)
+            await msg.reply(str(e))
             return True
         except Exception as e:
             logger.error(f"Error withdraw after dual image upload: {e}")
@@ -859,6 +878,11 @@ async def withdraw(msg: Message, amount_str: str = ''):
                     payment_image=f"{saved_info['wechat_image']}|{saved_info['alipay_image']}",
                 )
                 db.session.commit()
+                try:
+                    from app.services.kook_service import push_withdraw_submit_notice
+                    push_withdraw_submit_notice(wr)
+                except Exception as e:
+                    logger.warning(f'提现提交私信通知失败: {e}')
                 await msg.reply(
                     f"**提现申请已提交**\n"
                     f"提现金额: **{amount}** 小猪粮\n"
@@ -869,6 +893,10 @@ async def withdraw(msg: Message, amount_str: str = ''):
                     f"如需修改收款码，请点击下方按钮进入网页面板修改。"
                 )
                 await _reply_withdraw_prompt(msg, "需要修改收款码时，请前往网页提现面板重新上传。")
+                return
+            except ValueError as e:
+                db.session.rollback()
+                await msg.reply(str(e))
                 return
             except Exception as e:
                 logger.error(f'复用收款码提现失败: {e}')

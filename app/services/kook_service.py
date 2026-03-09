@@ -946,6 +946,89 @@ BROADCAST_TYPES = {
         ),
         'hint': '收到礼物后私信收礼人',
     },
+    'withdraw_submit': {
+        'label': '提现提交通知',
+        'group': '私信通知',
+        'target': 'dm',
+        'color': '#3B82F6',
+        'title': '提现申请已提交',
+        'variables': {
+            '{user}': '申请人昵称（优先陪玩昵称）',
+            '{request_id}': '提现单号',
+            '{amount}': '提现金额',
+            '{balance}': '当前可用小猪粮',
+            '{frozen}': '当前冻结小猪粮',
+            '{status}': '当前状态',
+        },
+        'default_template': (
+            '**提现申请已提交**\n---\n'
+            '申请人: `{user}`\n'
+            '提现单号: `#{request_id}`\n'
+            '提现金额: `{amount}` 小猪粮\n'
+            '当前状态: `{status}`\n'
+            '可用小猪粮: `{balance}`\n'
+            '冻结小猪粮: `{frozen}`'
+        ),
+        'hint': '提交提现后私信申请人',
+    },
+    'withdraw_approved': {
+        'label': '提现通过通知',
+        'group': '私信通知',
+        'target': 'dm',
+        'color': '#10B981',
+        'title': '提现已通过',
+        'variables': {
+            '{user}': '申请人昵称（优先陪玩昵称）',
+            '{request_id}': '提现单号',
+            '{amount}': '提现金额',
+            '{operator}': '审核人',
+            '{remark}': '审核备注',
+            '{balance}': '当前可用小猪粮',
+            '{frozen}': '当前冻结小猪粮',
+            '{status}': '当前状态',
+        },
+        'default_template': (
+            '**提现审核通过，已打款**\n---\n'
+            '申请人: `{user}`\n'
+            '提现单号: `#{request_id}`\n'
+            '提现金额: `{amount}` 小猪粮\n'
+            '状态: `{status}`\n'
+            '审核人: `{operator}`\n'
+            '备注: `{remark}`\n'
+            '可用小猪粮: `{balance}`\n'
+            '冻结小猪粮: `{frozen}`'
+        ),
+        'hint': '提现审核通过后私信申请人',
+    },
+    'withdraw_rejected': {
+        'label': '提现拒绝通知',
+        'group': '私信通知',
+        'target': 'dm',
+        'color': '#EF4444',
+        'title': '提现已拒绝',
+        'variables': {
+            '{user}': '申请人昵称（优先陪玩昵称）',
+            '{request_id}': '提现单号',
+            '{amount}': '提现金额',
+            '{operator}': '审核人',
+            '{remark}': '拒绝原因/备注',
+            '{balance}': '当前可用小猪粮',
+            '{frozen}': '当前冻结小猪粮',
+            '{status}': '当前状态',
+        },
+        'default_template': (
+            '**提现申请未通过**\n---\n'
+            '申请人: `{user}`\n'
+            '提现单号: `#{request_id}`\n'
+            '申请金额: `{amount}` 小猪粮\n'
+            '状态: `{status}`\n'
+            '审核人: `{operator}`\n'
+            '原因: `{remark}`\n'
+            '可用小猪粮: `{balance}`\n'
+            '冻结小猪粮: `{frozen}`'
+        ),
+        'hint': '提现审核拒绝后私信申请人（金额已退回）',
+    },
     'birthday_dm': {
         'label': '生日祝福私信',
         'group': '私信通知',
@@ -1498,6 +1581,79 @@ def push_boss_consume_notice(user, amount, reason='', operator=''):
 
     meta = BROADCAST_TYPES['boss_consume']
     content = _render_tpl(_get_custom_template('boss_consume') or meta['default_template'], variables)
+    card = _build_card(meta['title'], content, meta['color'])
+    _async_send(_send_direct_msg, user.kook_id, card)
+
+
+def _withdraw_notice_common_vars(withdraw_request, status_text, operator='', remark=''):
+    user = withdraw_request.user
+    display_name = _fallback_display_name(user, prefer_player_name=True)
+    return {
+        'user': display_name or '-',
+        'request_id': str(withdraw_request.id or '-'),
+        'amount': str(withdraw_request.amount or 0),
+        'status': status_text,
+        'operator': operator or '系统',
+        'remark': remark or '-',
+        'balance': str(getattr(user, 'm_bean', 0) or 0),
+        'frozen': str(getattr(user, 'm_bean_frozen', 0) or 0),
+    }
+
+
+def push_withdraw_submit_notice(withdraw_request):
+    """提现提交后私信申请人（支持播报管理模板）"""
+    if not _is_broadcast_enabled('withdraw_submit'):
+        return
+
+    user = getattr(withdraw_request, 'user', None)
+    if not user or not user.kook_id or not user.kook_bound:
+        return
+
+    variables = _withdraw_notice_common_vars(withdraw_request, status_text='待审核')
+    meta = BROADCAST_TYPES['withdraw_submit']
+    content = _render_tpl(_get_custom_template('withdraw_submit') or meta['default_template'], variables)
+    card = _build_card(meta['title'], content, meta['color'])
+    _async_send(_send_direct_msg, user.kook_id, card)
+
+
+def push_withdraw_approved_notice(withdraw_request, operator='', remark=''):
+    """提现审核通过后私信申请人（支持播报管理模板）"""
+    if not _is_broadcast_enabled('withdraw_approved'):
+        return
+
+    user = getattr(withdraw_request, 'user', None)
+    if not user or not user.kook_id or not user.kook_bound:
+        return
+
+    variables = _withdraw_notice_common_vars(
+        withdraw_request,
+        status_text='已打款',
+        operator=operator,
+        remark=remark,
+    )
+    meta = BROADCAST_TYPES['withdraw_approved']
+    content = _render_tpl(_get_custom_template('withdraw_approved') or meta['default_template'], variables)
+    card = _build_card(meta['title'], content, meta['color'])
+    _async_send(_send_direct_msg, user.kook_id, card)
+
+
+def push_withdraw_rejected_notice(withdraw_request, operator='', remark=''):
+    """提现审核拒绝后私信申请人（支持播报管理模板）"""
+    if not _is_broadcast_enabled('withdraw_rejected'):
+        return
+
+    user = getattr(withdraw_request, 'user', None)
+    if not user or not user.kook_id or not user.kook_bound:
+        return
+
+    variables = _withdraw_notice_common_vars(
+        withdraw_request,
+        status_text='已拒绝',
+        operator=operator,
+        remark=remark,
+    )
+    meta = BROADCAST_TYPES['withdraw_rejected']
+    content = _render_tpl(_get_custom_template('withdraw_rejected') or meta['default_template'], variables)
     card = _build_card(meta['title'], content, meta['color'])
     _async_send(_send_direct_msg, user.kook_id, card)
 

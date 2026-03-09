@@ -32,6 +32,7 @@
                 </div>
             </div>
             <p class="text-xs text-slate-500 mt-2">当前可提现余额: {{ "%.2f"|format(current_user.m_bean) }}</p>
+            <p class="text-xs text-amber-600/90 dark:text-amber-300/90 mt-1">限制：3天内仅可提交 1 次提现（被拒绝/失败不计入）。</p>
         </div>
 
         {% if saved_payment and saved_payment.has_both_codes %}

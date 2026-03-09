@@ -527,7 +527,7 @@ def report_order(order, duration_hours, operator_id=None):
 def confirm_order(order, operator_id=None):
     """
     老板确认 / 24h自动确认
-    陪玩单在申报时已冻结，确认时才入账为真实消费
+    陪玩单在申报时已冻结老板金额，确认后陪玩收益直接到账
     """
     if order.status != 'pending_confirm':
         return False, '订单状态不正确'
@@ -585,12 +585,14 @@ def confirm_order(order, operator_id=None):
     except Exception:
         pass
 
-    # 常规陪玩单：确认后自动结算并冻结，等待客服手动解冻发放
+    # 常规陪玩单：确认后直接给陪玩入账（不冻结）
     player = order.player
-    player.m_bean_frozen += Decimal(str(order.player_earning or 0))
+    player_earning = _quantize_money(order.player_earning)
+    if player_earning > 0:
+        award_player_earning(player, player_earning, order)
 
     order.status = 'paid'
-    order.freeze_status = 'frozen'
+    order.freeze_status = 'normal'
     order.confirm_time = datetime.utcnow()
     order.pay_time = datetime.utcnow()
     order.auto_confirm_at = None
@@ -601,7 +603,7 @@ def confirm_order(order, operator_id=None):
                                f'陪玩订单 {order.order_no} 提成')
 
     log_operation(operator_id or _get_operator_id(), 'order_confirm', 'order', order.id,
-                  f'订单 {order.order_no} 已确认并自动结算, 佣金 {order.player_earning} 已冻结待解冻')
+                  f'订单 {order.order_no} 已确认并自动结算, 佣金 {order.player_earning} 已到账')
 
     return True, None
 
@@ -666,6 +668,8 @@ def refund_order(order):
 
 def freeze_order(order):
     """冻结订单"""
+    if str(order.order_type or 'normal').lower() not in ('escort', 'training'):
+        return False, '陪玩订单无需冻结'
     if order.freeze_status == 'frozen':
         return False, '订单已冻结'
     order.freeze_status = 'frozen'

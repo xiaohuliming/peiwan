@@ -48,6 +48,17 @@ class Config:
     PUBLIC_SITE_URL = os.environ.get('PUBLIC_SITE_URL', 'http://8.153.103.197')
     SITE_URL = os.environ.get('SITE_URL', PUBLIC_SITE_URL)
 
+    # WeChat OAuth (网页扫码登录/注册)
+    WECHAT_APP_ID = os.environ.get('WECHAT_APP_ID', '')
+    WECHAT_APP_SECRET = os.environ.get('WECHAT_APP_SECRET', '')
+    WECHAT_OAUTH_SCOPE = os.environ.get('WECHAT_OAUTH_SCOPE', 'snsapi_login')
+    # 建议在微信开放平台配置后显式写死此回调，避免反向代理域名差异
+    WECHAT_OAUTH_REDIRECT_URI = os.environ.get('WECHAT_OAUTH_REDIRECT_URI', '')
+    WECHAT_OAUTH_AUTHORIZE_URL = os.environ.get(
+        'WECHAT_OAUTH_AUTHORIZE_URL',
+        'https://open.weixin.qq.com/connect/qrconnect'
+    )
+
     # SSL CA 证书配置（给 requests/aiohttp/khl 统一复用）
     SSL_CERT_FILE = os.environ.get('SSL_CERT_FILE')
     REQUESTS_CA_BUNDLE = os.environ.get('REQUESTS_CA_BUNDLE')

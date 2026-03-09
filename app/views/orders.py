@@ -306,7 +306,7 @@ def confirm(order_id):
         db.session.commit()
         # KOOK 推送: 确认通知给陪玩
         kook_service.push_order_confirm(order)
-        flash('订单已确认，佣金已冻结待解冻', 'success')
+        flash('订单已确认，佣金已到账', 'success')
 
     return redirect(request.referrer or url_for('orders.index'))
 

@@ -58,8 +58,18 @@
                     <img src="{{ wr.user.avatar_url }}" alt="Avatar" class="w-full h-full object-cover" />
                 </div>
                 <div>
-                    <div class="font-medium text-slate-800 dark:text-white">{{ wr.user.nickname or wr.user.username }}</div>
-                    <div class="text-xs text-slate-400">ID: {{ wr.user.user_code }}</div>
+                    {% set applicant_name = wr.user.player_nickname or wr.user.kook_username or wr.user.nickname or wr.user.username %}
+                    <div class="font-medium text-slate-800 dark:text-white">{{ applicant_name }}</div>
+                    <div class="text-xs text-slate-400">
+                        {% if wr.user.player_nickname %}
+                        陪玩ID优先
+                        {% elif wr.user.kook_username %}
+                        KOOK
+                        {% else %}
+                        账号
+                        {% endif %}
+                        · {{ wr.user.user_code }}
+                    </div>
                 </div>
               </div>
             </td>
