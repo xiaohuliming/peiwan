@@ -4,7 +4,7 @@ KOOK 抽奖服务
 import logging
 import random
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import re
 
@@ -12,7 +12,7 @@ import requests
 from flask import current_app
 
 from app.extensions import db
-from app.models.lottery import Lottery, LotteryWinner
+from app.models.lottery import Lottery, LotteryParticipant, LotteryWinner
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -417,8 +417,129 @@ def build_result_card(lottery, winners):
 
 # ─── 业务逻辑 ────────────────────────────────────────────────
 
+def create_interactive_lottery(channel_id, created_by, winner_count):
+    """创建并直接发布一个互动抽奖。"""
+    now = datetime.now()
+    lottery = Lottery(
+        title=f'互动抽奖 {now.strftime("%m-%d %H:%M:%S")}',
+        description='由 KOOK 指令 /发布抽奖 发起；参与方式：在开奖前于当前频道发送普通消息即可参与。',
+        prize='互动抽奖奖品',
+        winner_count=winner_count,
+        channel_id=str(channel_id),
+        emoji='',
+        draw_time=now + timedelta(minutes=30),
+        created_by=created_by,
+        lottery_mode='interactive',
+        status='published',
+    )
+    db.session.add(lottery)
+    db.session.commit()
+    return lottery
+
+
+def get_active_interactive_lotteries(channel_id, include_expired=False):
+    query = Lottery.query.filter(
+        Lottery.lottery_mode == 'interactive',
+        Lottery.status == 'published',
+        Lottery.channel_id == str(channel_id),
+    )
+    if not include_expired:
+        query = query.filter(Lottery.draw_time > datetime.now())
+    return query.order_by(Lottery.created_at.asc()).all()
+
+
+def record_interactive_participation(channel_id, kook_id, kook_username=None, user_id=None):
+    """将一条频道消息记入该频道全部进行中的互动抽奖。"""
+    lotteries = get_active_interactive_lotteries(channel_id, include_expired=False)
+    if not lotteries:
+        return 0
+
+    lottery_ids = [lottery.id for lottery in lotteries]
+    existing_rows = (
+        LotteryParticipant.query
+        .filter(
+            LotteryParticipant.lottery_id.in_(lottery_ids),
+            LotteryParticipant.kook_id == str(kook_id),
+        )
+        .all()
+    )
+    existing_by_lottery = {row.lottery_id: row for row in existing_rows}
+
+    now = datetime.utcnow()
+    changed = False
+    for lottery in lotteries:
+        row = existing_by_lottery.get(lottery.id)
+        if row:
+            row.last_message_at = now
+            if user_id and row.user_id != user_id:
+                row.user_id = user_id
+            if kook_username and row.kook_username != kook_username:
+                row.kook_username = kook_username
+            changed = True
+            continue
+
+        db.session.add(LotteryParticipant(
+            lottery_id=lottery.id,
+            user_id=user_id,
+            kook_id=str(kook_id),
+            kook_username=kook_username or None,
+            joined_at=now,
+            last_message_at=now,
+        ))
+        changed = True
+
+    if changed:
+        db.session.commit()
+    return len(lotteries)
+
+
+def _resolve_eligible_kook_ids(lottery, candidate_kook_ids):
+    candidate_kook_ids = [str(kid) for kid in candidate_kook_ids if kid]
+    if not candidate_kook_ids:
+        return [], {}
+
+    # 匹配系统用户
+    kook_to_user = {}
+    users = User.query.filter(User.kook_id.in_(candidate_kook_ids)).all()
+    for u in users:
+        kook_to_user[str(u.kook_id)] = u
+
+    # 过滤资格
+    eligible_roles = lottery.get_eligible_roles()
+    min_vip = lottery.min_vip_level
+    VipLevel = None
+    min_level = None
+    if min_vip:
+        from app.models.vip import VipLevel as _VipLevel
+        VipLevel = _VipLevel
+        min_level = VipLevel.query.filter_by(name=min_vip).first()
+        if not min_level:
+            logger.warning(f'[Lottery] #{lottery.id} 最低VIP配置无效: {min_vip}')
+            return None, {}
+
+    def is_eligible(kook_id):
+        user = kook_to_user.get(kook_id)
+        if not user:
+            if eligible_roles or min_vip:
+                return False
+            return True
+        if eligible_roles and not any(user.has_role(role_key) for role_key in eligible_roles):
+            return False
+        if min_level:
+            if not user.vip_level:
+                return False
+            user_level = VipLevel.query.filter_by(name=user.vip_level).first()
+            if not user_level or user_level.sort_order < min_level.sort_order:
+                return False
+        return True
+
+    eligible_kook_ids = [kid for kid in candidate_kook_ids if is_eligible(kid)]
+    return eligible_kook_ids, kook_to_user
+
 def publish_lottery(lottery):
     """发布抽奖到 KOOK 频道"""
+    if lottery.is_interactive:
+        return False, '互动抽奖由机器人指令直接发起，无需后台发布'
     if lottery.status != 'pending':
         return False, '只有待发布状态的抽奖可以发布'
 
@@ -452,53 +573,21 @@ def draw_lottery(lottery):
             return False, '抽奖不存在'
         if lottery.status != 'published':
             return False, '只有已发布状态的抽奖可以开奖'
-        if not lottery.kook_msg_id:
-            return False, '缺少 KOOK 消息 ID'
+        if lottery.is_interactive:
+            participant_kook_ids = [
+                row.kook_id
+                for row in LotteryParticipant.query.filter_by(lottery_id=lottery.id).all()
+            ]
+            logger.info(f'[Lottery] #{lottery.id} 互动参与用户数: {len(participant_kook_ids)}')
+        else:
+            if not lottery.kook_msg_id:
+                return False, '缺少 KOOK 消息 ID'
+            participant_kook_ids = _get_all_reaction_users(lottery.kook_msg_id)
+            logger.info(f'[Lottery] #{lottery.id} 反应用户数: {len(participant_kook_ids)}')
 
-        # 1. 获取所有反应用户（任意表情均算参与）
-        reaction_kook_ids = _get_all_reaction_users(lottery.kook_msg_id)
-        logger.info(f'[Lottery] #{lottery.id} 反应用户数: {len(reaction_kook_ids)}')
-
-        # 2. 匹配系统用户
-        kook_to_user = {}
-        if reaction_kook_ids:
-            users = User.query.filter(User.kook_id.in_(reaction_kook_ids)).all()
-            for u in users:
-                kook_to_user[u.kook_id] = u
-
-        # 3. 过滤资格
-        eligible_roles = lottery.get_eligible_roles()
-        min_vip = lottery.min_vip_level
-        VipLevel = None
-        min_level = None
-        if min_vip:
-            from app.models.vip import VipLevel as _VipLevel
-            VipLevel = _VipLevel
-            min_level = VipLevel.query.filter_by(name=min_vip).first()
-            if not min_level:
-                logger.warning(f'[Lottery] #{lottery.id} 最低VIP配置无效: {min_vip}')
-                return False, f'抽奖配置错误：最低 VIP 等级 `{min_vip}` 不存在'
-
-        def is_eligible(kook_id):
-            user = kook_to_user.get(kook_id)
-            if not user:
-                # 未绑定系统用户 — 如果有角色/VIP 限制则不合格
-                if eligible_roles or min_vip:
-                    return False
-                return True
-            if eligible_roles and not any(user.has_role(role_key) for role_key in eligible_roles):
-                return False
-            if min_level:
-                if not user.vip_level:
-                    return False
-                user_level = VipLevel.query.filter_by(name=user.vip_level).first()
-                if not user_level:
-                    return False
-                if user_level.sort_order < min_level.sort_order:
-                    return False
-            return True
-
-        eligible_kook_ids = [kid for kid in reaction_kook_ids if is_eligible(kid)]
+        eligible_kook_ids, kook_to_user = _resolve_eligible_kook_ids(lottery, participant_kook_ids)
+        if eligible_kook_ids is None:
+            return False, f'抽奖配置错误：最低 VIP 等级 `{lottery.min_vip_level}` 不存在'
         logger.info(f'[Lottery] #{lottery.id} 合格用户数: {len(eligible_kook_ids)}')
 
         # 4. 内定用户优先
@@ -616,7 +705,7 @@ def check_and_draw_due_lotteries():
 
 def update_lottery_participant_count(lottery):
     """更新单个抽奖卡片的参与人数"""
-    if lottery.status != 'published' or not lottery.kook_msg_id:
+    if lottery.is_interactive or lottery.status != 'published' or not lottery.kook_msg_id:
         return
     users = _get_all_reaction_users(lottery.kook_msg_id)
     count = len(users)

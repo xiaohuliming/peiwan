@@ -894,10 +894,12 @@ def export_all_tables_workbook(include_sections=None):
     for l in lotteries:
         lottery_rows.append([
             l.id,
+            l.mode_label,
             l.title,
             l.description or '',
             l.prize,
             l.winner_count,
+            l.participants.count() if l.is_interactive else '',
             l.status_label,
             l.channel_id,
             l.kook_msg_id or '',
@@ -915,7 +917,7 @@ def export_all_tables_workbook(include_sections=None):
         used_sheet_names,
         '抽奖活动',
         [
-            'ID', '标题', '简介', '奖品', '中奖人数', '状态', '频道ID',
+            'ID', '类型', '标题', '简介', '奖品', '中奖人数', '参与人数', '状态', '频道ID',
             '消息ID', '表情', '可参与角色', '最低VIP', '创建人ID', '创建人',
             '开奖时间(北京)', '创建时间(北京)', '更新时间(北京)',
         ],

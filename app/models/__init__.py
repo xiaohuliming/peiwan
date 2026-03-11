@@ -8,5 +8,5 @@ from .intimacy import Intimacy
 from .operation_log import OperationLog
 from .broadcast import BroadcastConfig
 from .vip import VipLevel, UpgradeRecord
-from .lottery import Lottery, LotteryWinner
+from .lottery import Lottery, LotteryParticipant, LotteryWinner
 from .identity_tag import IdentityTag

@@ -18,9 +18,11 @@
         <thead>
           <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
             <th class="pb-3 font-medium">ID</th>
+            <th class="pb-3 font-medium">类型</th>
             <th class="pb-3 font-medium">标题</th>
             <th class="pb-3 font-medium">奖品</th>
             <th class="pb-3 font-medium">名额</th>
+            <th class="pb-3 font-medium">参与人数</th>
             <th class="pb-3 font-medium">频道</th>
             <th class="pb-3 font-medium">开奖时间</th>
             <th class="pb-3 font-medium">状态</th>
@@ -32,9 +34,11 @@
           {% for l in lotteries %}
           <tr class="border-b border-white/20 dark:border-slate-700/50 hover:bg-white/20 dark:hover:bg-slate-700/30 transition-colors text-sm">
             <td class="py-3 text-slate-400 font-mono text-xs">#{{ l.id }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300 text-xs">{{ l.mode_label }}</td>
             <td class="py-3 font-medium text-slate-800 dark:text-white">{{ l.title }}</td>
             <td class="py-3 text-slate-600 dark:text-slate-300">{{ l.prize }}</td>
             <td class="py-3 text-slate-600 dark:text-slate-300">{{ l.winner_count }}</td>
+            <td class="py-3 text-slate-600 dark:text-slate-300">{{ participant_counts.get(l.id, 0) if l.is_interactive else '-' }}</td>
             <td class="py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{{ l.channel_id }}</td>
             <td class="py-3 text-slate-500 dark:text-slate-400 text-xs">{{ l.draw_time.strftime('%Y-%m-%d %H:%M') }}</td>
             <td class="py-3">
@@ -54,7 +58,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="9" class="py-6 text-center text-slate-400 text-sm">暂无抽奖活动</td></tr>
+          <tr><td colspan="11" class="py-6 text-center text-slate-400 text-sm">暂无抽奖活动</td></tr>
           {% endfor %}
         </tbody>
       </table>

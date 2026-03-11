@@ -180,57 +180,9 @@ def _transfer_bean_to_coin(user: User, amount: Decimal):
 
 
 # ─── 互动抽奖（命令版）──────────────────────────────────────────────
-# 需求：
-# 1) /发布抽奖 任何人可用
-# 2) 机器人发送普通文本消息（非卡片）
-# 3) 抽奖发布后到结束前，在同一服务器发过消息的用户自动参与
-# 4) 支持 /结束抽奖 提前结束，或 30 分钟自动结束
-_interactive_lotteries = {}   # scope_key -> lottery_state
-_interactive_tasks = {}       # scope_key -> asyncio.Task
+_interactive_tasks = {}       # lottery_id -> asyncio.Task
 _withdraw_pending_uploads = {}  # kook_user_id -> {"amount":"100.00","step":"wechat|alipay","wechat_image":"","created_at":ts}
 _WITHDRAW_UPLOAD_TTL_SECONDS = 10 * 60
-
-
-def _interactive_scope_key(msg: Message) -> str:
-    """抽奖作用域：优先服务器级；拿不到服务器ID时回退到频道级。"""
-    gid = _extract_msg_guild_id(msg)
-    if gid:
-        return f'guild:{gid}'
-    cid = _extract_msg_channel_id(msg)
-    if cid:
-        return f'channel:{cid}'
-    return ''
-
-
-def _locate_interactive_lottery(msg: Message, allow_single_fallback: bool = False):
-    """
-    定位当前上下文对应的进行中互动抽奖。
-    返回: (scope_key, state)；找不到返回 ('', None)
-    """
-    scope_key = _interactive_scope_key(msg)
-    if scope_key:
-        state = _interactive_lotteries.get(scope_key)
-        if state:
-            return scope_key, state
-
-    guild_id = str(_extract_msg_guild_id(msg) or '')
-    channel_id = str(_extract_msg_channel_id(msg) or '')
-
-    if guild_id:
-        for key, state in _interactive_lotteries.items():
-            if str(state.get('guild_id') or '') == guild_id:
-                return key, state
-
-    if channel_id:
-        for key, state in _interactive_lotteries.items():
-            if str(state.get('channel_id') or '') == channel_id:
-                return key, state
-
-    if allow_single_fallback and len(_interactive_lotteries) == 1:
-        key, state = next(iter(_interactive_lotteries.items()))
-        return key, state
-
-    return '', None
 
 
 def _is_command_message(msg: Message) -> bool:
@@ -634,59 +586,26 @@ async def _try_complete_withdraw_with_payment_image(msg: Message) -> bool:
             return True
 
 
-async def _finish_interactive_lottery(scope_key: str, auto: bool = False):
-    """结束互动抽奖并发送开奖消息。"""
-    state = _interactive_lotteries.get(scope_key)
-    if not state:
-        return
-
-    participants = [uid for uid in state.get('participants', set()) if uid]
-    winner_count = int(state.get('winner_count', 1))
-    pick_count = min(winner_count, len(participants))
-    winners = random.sample(participants, pick_count) if pick_count > 0 else []
-
-    if auto:
-        prefix = '「自动开奖」抽奖已持续30分钟，自动结束！'
-    else:
-        prefix = '「互动抽奖」抽奖已手动结束！'
-
-    if winners:
-        mentions = '\n'.join(f'(met){uid}(met)' for uid in winners)
-        extra_tip = f'\n（参与人数不足，实际中奖{len(winners)}位）' if len(winners) < winner_count else ''
-        text = (
-            f'{prefix}\n'
-            f'恭喜一下{winner_count}位用户中奖：\n'
-            f'{mentions}{extra_tip}'
-        )
-    else:
-        text = f'{prefix}\n本次无人参与，未产生中奖用户。'
-
-    channel = state.get('channel')
+async def _auto_draw_interactive_lottery(lottery_id: int, delay_seconds: float):
+    """到期开奖时间后尝试自动开奖（Bot 独立运行时兜底）。"""
     try:
-        if channel:
-            await channel.send(text, type=MessageTypes.KMD)
-    except Exception as e:
-        logger.error(f'发送互动抽奖结果失败: {e}')
-
-    # 清理状态
-    _interactive_lotteries.pop(scope_key, None)
-    task = _interactive_tasks.pop(scope_key, None)
-    if task and not task.done() and task is not asyncio.current_task():
-        task.cancel()
-
-
-async def _auto_end_interactive_lottery(scope_key: str, lottery_no: str):
-    """30 分钟后自动结束（若期间未被手动结束）。"""
-    try:
-        await asyncio.sleep(30 * 60)
-        state = _interactive_lotteries.get(scope_key)
-        if not state or state.get('lottery_no') != lottery_no:
-            return
-        await _finish_interactive_lottery(scope_key, auto=True)
+        await asyncio.sleep(max(0, delay_seconds))
+        with app.app_context():
+            from app.services.lottery_service import draw_lottery
+            lottery = Lottery.query.get(lottery_id)
+            if not lottery or not lottery.is_interactive or lottery.status != 'published':
+                return
+            ok, msg = draw_lottery(lottery)
+            if ok:
+                logger.info(f'互动抽奖自动开奖成功 #{lottery_id}: {msg}')
+            else:
+                logger.warning(f'互动抽奖自动开奖失败 #{lottery_id}: {msg}')
     except asyncio.CancelledError:
         return
     except Exception as e:
-        logger.error(f'互动抽奖自动结束任务异常: {e}')
+        logger.error(f'互动抽奖自动开奖任务异常: {e}')
+    finally:
+        _interactive_tasks.pop(lottery_id, None)
 
 
 @bot.command(name='ping')
@@ -1170,64 +1089,113 @@ async def publish_lottery_cmd(msg: Message, winner_count_str: str = ''):
         await msg.reply('未获取到频道 ID，请在服务器文字频道中使用该命令')
         return
 
-    scope_key = _interactive_scope_key(msg)
-    if not scope_key:
-        await msg.reply('未获取到频道/服务器信息，请在服务器文字频道中使用该命令')
-        return
+    with app.app_context():
+        from app.services.lottery_service import create_interactive_lottery
+        from app.services.log_service import log_operation
 
-    # 同一平台上下文仅允许一个进行中的互动抽奖（含兼容回溯匹配）
-    _, existing_state = _locate_interactive_lottery(msg, allow_single_fallback=True)
-    if existing_state:
-        await msg.reply('当前平台已有进行中的互动抽奖，请先使用 `/结束抽奖` 结束后再发布新的。')
-        return
+        user = get_or_create_user_by_kook(msg.author)
+        lottery = create_interactive_lottery(
+            channel_id=channel_id,
+            created_by=user.id,
+            winner_count=winner_count,
+        )
+        log_operation(
+            user.id,
+            'lottery_create',
+            'lottery',
+            lottery.id,
+            f'KOOK 指令创建互动抽奖: {lottery.title}',
+        )
+        log_operation(
+            user.id,
+            'lottery_publish',
+            'lottery',
+            lottery.id,
+            f'KOOK 指令发布互动抽奖: {lottery.title}',
+        )
+        db.session.commit()
+        lottery_id = lottery.id
+        delay_seconds = max(0, (lottery.draw_time - datetime.now()).total_seconds())
 
-    lottery_no = f"{int(time.time() * 1000)}"
-    state = {
-        'lottery_no': lottery_no,
-        'winner_count': winner_count,
-        'channel_id': channel_id,
-        'guild_id': _extract_msg_guild_id(msg),
-        'channel': getattr(getattr(msg, 'ctx', None), 'channel', None),
-        # 不默认加入发起人；抽奖期间有实际发言才计入参与
-        'participants': set(),
-        'created_at': time.time(),
-    }
-    _interactive_lotteries[scope_key] = state
-
-    # 创建 30 分钟自动结束任务
-    _interactive_tasks[scope_key] = asyncio.create_task(_auto_end_interactive_lottery(scope_key, lottery_no))
+    old_task = _interactive_tasks.pop(lottery_id, None)
+    if old_task and not old_task.done():
+        old_task.cancel()
+    _interactive_tasks[lottery_id] = asyncio.create_task(
+        _auto_draw_interactive_lottery(lottery_id, delay_seconds)
+    )
 
     await msg.reply(
-        f"「互动抽奖」互动抽奖已经发起啦，本次中奖人数为：{winner_count}人，\n"
-        f"在本频道使用`/结束抽奖`命令来结束本次抽奖。\n"
-        f"或者在30分钟后自动结束。",
+        f"「互动抽奖」互动抽奖已经发起啦，本次中奖人数为：{winner_count}人。\n"
+        f"抽奖ID：`#{lottery_id}`\n"
+        f"参与方式：在本频道发送普通消息即可参与。\n"
+        f"结束命令：`/结束抽奖 {lottery_id}`\n"
+        f"如果不手动结束，将在30分钟后自动开奖。",
         use_quote=False,
         type=MessageTypes.KMD,
     )
 
 
 @bot.command(name='结束抽奖')
-async def end_lottery_cmd(msg: Message):
+async def end_lottery_cmd(msg: Message, lottery_id_str: str = ''):
     """
     提前结束当前频道抽奖并立即开奖
-    用法: /结束抽奖
+    用法: /结束抽奖 [抽奖ID]
     """
     channel_id = _extract_msg_channel_id(msg)
     if not channel_id:
         await msg.reply('未获取到频道 ID，请在服务器文字频道中使用该命令')
         return
 
-    scope_key, state = _locate_interactive_lottery(msg, allow_single_fallback=True)
-    if not state:
-        await msg.reply('当前平台没有进行中的互动抽奖')
-        return
+    with app.app_context():
+        from app.services.lottery_service import draw_lottery, get_active_interactive_lotteries
+        from app.services.log_service import log_operation
 
-    # 要求在发布抽奖的同一频道结束（避免跨频道误结束）
-    if str(state.get('channel_id') or '') != str(channel_id):
-        await msg.reply('请在发起抽奖的那个频道使用 `/结束抽奖`。')
-        return
+        actor = get_or_create_user_by_kook(msg.author)
+        active_lotteries = get_active_interactive_lotteries(channel_id, include_expired=True)
+        if not active_lotteries:
+            await msg.reply('当前频道没有进行中的互动抽奖')
+            return
 
-    await _finish_interactive_lottery(scope_key, auto=False)
+        lottery = None
+        if lottery_id_str:
+            try:
+                lottery_id = int(str(lottery_id_str).strip().lstrip('#'))
+            except Exception:
+                await msg.reply('抽奖 ID 格式不正确，请使用 `/结束抽奖 抽奖ID`')
+                return
+            lottery = next((item for item in active_lotteries if item.id == lottery_id), None)
+            if not lottery:
+                await msg.reply(f'当前频道未找到进行中的互动抽奖 `#{lottery_id}`')
+                return
+        else:
+            if len(active_lotteries) > 1:
+                ids_text = '、'.join(f'#{item.id}' for item in active_lotteries[:10])
+                await msg.reply(
+                    f'当前频道有多个进行中的互动抽奖：{ids_text}\n'
+                    f'请使用 `/结束抽奖 抽奖ID` 指定要结束的活动。'
+                )
+                return
+            lottery = active_lotteries[0]
+
+        ok, result_msg = draw_lottery(lottery)
+        if not ok:
+            await msg.reply(result_msg)
+            return
+
+        log_operation(
+            actor.id,
+            'lottery_draw',
+            'lottery',
+            lottery.id,
+            f'KOOK 指令提前结束互动抽奖: {lottery.title}',
+        )
+        db.session.commit()
+        lottery_id = lottery.id
+
+    task = _interactive_tasks.pop(lottery_id, None)
+    if task and not task.done():
+        task.cancel()
+    await msg.reply(f'互动抽奖 `#{lottery_id}` 已结束，{result_msg}')
 
 
 def _build_help_text():
@@ -1241,7 +1209,7 @@ def _build_help_text():
         "`/确认 订单号` - 确认订单(老板)\n"
         "`/roll 总点数 抽几个点` - 掷点/随机点数\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
-        "`/结束抽奖` - 结束当前互动抽奖并立即开奖\n"
+        "`/结束抽奖 [抽奖ID]` - 结束互动抽奖并立即开奖\n"
         "`/提现 [金额]` - 申请提现(无金额会弹网页入口；需微信+支付宝收款码)\n"
         "`/取消提现` - 取消待上传收款码的提现\n"
         "`/帮助` 或 `/help` - 查看此帮助\n"
@@ -1293,20 +1261,30 @@ async def on_public_message(msg: Message):
         if _is_command_message(msg):
             return
 
-        _, state = _locate_interactive_lottery(msg, allow_single_fallback=False)
-        if not state:
-            return
-
         # 仅统计抽奖发起频道内的发言，避免跨频道误参与
         msg_channel_id = str(_extract_msg_channel_id(msg) or '')
-        lottery_channel_id = str(state.get('channel_id') or '')
-        if not msg_channel_id or msg_channel_id != lottery_channel_id:
+        if not msg_channel_id:
             return
 
         uid = str(getattr(msg, 'author_id', '') or getattr(getattr(msg, 'author', None), 'id', '') or '')
         if not uid:
             return
-        state['participants'].add(uid)
+        kook_username = _kook_user_tag(getattr(msg, 'author', None))
+
+        with app.app_context():
+            bound_user = (
+                User.query
+                .filter_by(kook_id=uid)
+                .order_by(User.kook_bound.desc(), User.id.asc())
+                .first()
+            )
+            from app.services.lottery_service import record_interactive_participation
+            record_interactive_participation(
+                channel_id=msg_channel_id,
+                kook_id=uid,
+                kook_username=kook_username,
+                user_id=bound_user.id if bound_user else None,
+            )
     except Exception as e:
         logger.error(f'互动抽奖参与收集异常: {e}')
 

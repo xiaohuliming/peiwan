@@ -3,9 +3,11 @@ from datetime import datetime
 
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from flask_login import login_required, current_user
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
-from app.models.lottery import Lottery, LotteryWinner
+from app.models.lottery import Lottery, LotteryParticipant, LotteryWinner
 from app.models.user import User
 from app.utils.permissions import staff_required
 from app.services.log_service import log_operation
@@ -19,7 +21,19 @@ lottery_admin_bp = Blueprint('lottery_admin', __name__, template_folder='../temp
 @staff_required
 def index():
     lotteries = Lottery.query.order_by(Lottery.created_at.desc()).all()
-    return render_template('admin/lottery.html', lotteries=lotteries)
+    participant_counts = dict(
+        db.session.query(
+            LotteryParticipant.lottery_id,
+            func.count(LotteryParticipant.id),
+        )
+        .group_by(LotteryParticipant.lottery_id)
+        .all()
+    )
+    return render_template(
+        'admin/lottery.html',
+        lotteries=lotteries,
+        participant_counts=participant_counts,
+    )
 
 
 @lottery_admin_bp.route('/create', methods=['GET', 'POST'])
@@ -92,7 +106,19 @@ def create():
 def detail(lottery_id):
     lottery = Lottery.query.get_or_404(lottery_id)
     winners = LotteryWinner.query.filter_by(lottery_id=lottery_id).all()
-    return render_template('admin/lottery_detail.html', lottery=lottery, winners=winners)
+    participants = (
+        LotteryParticipant.query
+        .options(joinedload(LotteryParticipant.user))
+        .filter_by(lottery_id=lottery_id)
+        .order_by(LotteryParticipant.joined_at.asc())
+        .all()
+    )
+    return render_template(
+        'admin/lottery_detail.html',
+        lottery=lottery,
+        winners=winners,
+        participants=participants,
+    )
 
 
 @lottery_admin_bp.route('/<int:lottery_id>/publish', methods=['POST'])

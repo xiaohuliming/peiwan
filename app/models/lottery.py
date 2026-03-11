@@ -15,6 +15,7 @@ class Lottery(db.Model):
     channel_id = db.Column(db.String(100), nullable=False)
     kook_msg_id = db.Column(db.String(100))
     emoji = db.Column(db.String(50), default='🎉')
+    lottery_mode = db.Column(db.String(20), default='reaction', nullable=False, index=True)
 
     eligible_roles = db.Column(db.Text)       # JSON list: ["god", "player", ...]  空=不限
     min_vip_level = db.Column(db.String(50))   # 最低 VIP 等级名称，空=不限
@@ -31,6 +32,8 @@ class Lottery(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     creator = db.relationship('User', foreign_keys=[created_by], backref='lotteries')
+    participants = db.relationship('LotteryParticipant', backref='lottery', lazy='dynamic',
+                                   cascade='all, delete-orphan')
     winners = db.relationship('LotteryWinner', backref='lottery', lazy='dynamic',
                               cascade='all, delete-orphan')
 
@@ -42,6 +45,17 @@ class Lottery(db.Model):
             'drawn': '已开奖',
             'cancelled': '已取消',
         }.get(self.status, self.status)
+
+    @property
+    def is_interactive(self):
+        return self.lottery_mode == 'interactive'
+
+    @property
+    def mode_label(self):
+        return {
+            'reaction': '卡片抽奖',
+            'interactive': '互动抽奖',
+        }.get(self.lottery_mode, self.lottery_mode or '-')
 
     def get_rigged_ids(self):
         import json
@@ -63,6 +77,40 @@ class Lottery(db.Model):
 
     def __repr__(self):
         return f'<Lottery {self.id} {self.title}>'
+
+
+class LotteryParticipant(db.Model):
+    """互动抽奖参与记录"""
+    __tablename__ = 'lottery_participants'
+    __table_args__ = (
+        db.UniqueConstraint('lottery_id', 'kook_id', name='uq_lottery_participants_lottery_kook'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    lottery_id = db.Column(db.Integer, db.ForeignKey('lotteries.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    kook_id = db.Column(db.String(50), nullable=False, index=True)
+    kook_username = db.Column(db.String(100))
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_message_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref='lottery_participations')
+
+    @property
+    def display_name(self):
+        if self.user:
+            for candidate in (
+                self.user.player_nickname,
+                self.user.kook_username,
+                self.user.nickname,
+                self.user.username,
+            ):
+                if candidate:
+                    return candidate
+        return self.kook_username or self.kook_id
+
+    def __repr__(self):
+        return f'<LotteryParticipant lottery={self.lottery_id} kook={self.kook_id}>'
 
 
 class LotteryWinner(db.Model):
