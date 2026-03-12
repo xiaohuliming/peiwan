@@ -161,7 +161,7 @@ def create_app(config_class=Config, start_background_tasks=True):
 
 
 def _ensure_gift_schema_compat(app):
-    """兼容旧库 gifts 表字段（sort_order/deleted_at）。"""
+    """兼容旧库 gifts 表字段（sort_order/deleted_at/crown_broadcast_template）。"""
     with app.app_context():
         try:
             inspector = inspect(db.engine)
@@ -171,18 +171,26 @@ def _ensure_gift_schema_compat(app):
 
             cols = {c.get('name') for c in inspector.get_columns('gifts')}
             altered = False
+            added_columns = []
 
             if 'deleted_at' not in cols:
                 db.session.execute(text('ALTER TABLE gifts ADD COLUMN deleted_at DATETIME NULL'))
                 altered = True
+                added_columns.append('deleted_at')
 
             if 'sort_order' not in cols:
                 db.session.execute(text('ALTER TABLE gifts ADD COLUMN sort_order INT NOT NULL DEFAULT 0'))
                 altered = True
+                added_columns.append('sort_order')
+
+            if 'crown_broadcast_template' not in cols:
+                db.session.execute(text('ALTER TABLE gifts ADD COLUMN crown_broadcast_template TEXT NULL'))
+                altered = True
+                added_columns.append('crown_broadcast_template')
 
             if altered:
                 db.session.commit()
-                app.logger.info('[Schema] gifts 兼容字段已补齐: %s', ','.join(sorted({'deleted_at', 'sort_order'} - cols)))
+                app.logger.info('[Schema] gifts 兼容字段已补齐: %s', ','.join(added_columns))
         except Exception as e:
             db.session.rollback()
             app.logger.warning(f'[Schema] gifts 兼容字段补齐失败: {e}')

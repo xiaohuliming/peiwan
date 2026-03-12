@@ -21,7 +21,7 @@ def allowed_image(filename):
 
 def _ensure_gift_sort_order_column():
     """
-    兼容旧库：若 gifts.sort_order / deleted_at 缺失则自动补齐并初始化排序。
+    兼容旧库：若 gifts.sort_order / deleted_at / crown_broadcast_template 缺失则自动补齐。
     避免在新增礼物时直接 500。
     """
     try:
@@ -31,6 +31,7 @@ def _ensure_gift_sort_order_column():
 
     need_sort_order = 'sort_order' not in cols
     need_deleted_at = 'deleted_at' not in cols
+    need_crown_broadcast_template = 'crown_broadcast_template' not in cols
 
     if need_deleted_at:
         try:
@@ -47,6 +48,14 @@ def _ensure_gift_sort_order_column():
         except Exception as e:
             db.session.rollback()
             return False, f'补齐 gifts.sort_order 字段失败: {e}'
+
+    if need_crown_broadcast_template:
+        try:
+            db.session.execute(text('ALTER TABLE gifts ADD COLUMN crown_broadcast_template TEXT NULL'))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return False, f'补齐 gifts.crown_broadcast_template 字段失败: {e}'
 
     return True, None
 
@@ -174,6 +183,7 @@ def edit_broadcast(gift_id):
         Gift.deleted_at.is_(None),
     ).first_or_404()
     gift.broadcast_template = request.form.get('broadcast_template', '')
+    gift.crown_broadcast_template = request.form.get('crown_broadcast_template', '')
     db.session.commit()
     flash(f'"{gift.name}" 播报模板已更新', 'success')
     return redirect(url_for('gift_admin.index'))

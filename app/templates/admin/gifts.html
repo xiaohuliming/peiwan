@@ -72,11 +72,21 @@
               <span class="px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 text-xs rounded-full font-medium">关闭</span>
               {% endif %}
             </td>
-            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[200px] truncate">{{ gift.broadcast_template or '未设置' }}</td>
+            <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[260px]">
+              {% if gift.broadcast_template %}
+              <div class="truncate"><span class="text-slate-400">通用:</span> {{ gift.broadcast_template }}</div>
+              {% endif %}
+              {% if gift.crown_broadcast_template %}
+              <div class="truncate mt-1"><span class="text-amber-500">冠名:</span> {{ gift.crown_broadcast_template }}</div>
+              {% endif %}
+              {% if not gift.broadcast_template and not gift.crown_broadcast_template %}
+              未设置
+              {% endif %}
+            </td>
             <td class="py-3 text-right">
               <div class="flex justify-end gap-2">
                 <a href="{{ url_for('gift_admin.edit', gift_id=gift.id) }}" class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</a>
-                <button onclick='editBroadcast({{ gift.id }}, {{ gift.broadcast_template|default("", true)|tojson }})' class="text-blue-500 hover:text-blue-600 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">播报</button>
+                <button onclick='editBroadcast({{ gift.id }}, {{ gift.broadcast_template|default("", true)|tojson }}, {{ gift.crown_broadcast_template|default("", true)|tojson }}, {{ gift.gift_type|tojson }})' class="text-blue-500 hover:text-blue-600 text-xs font-medium px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">播报</button>
                 <form action="{{ url_for('gift_admin.delete', gift_id=gift.id) }}" method="post" class="inline">
                   <button type="submit" onclick="return confirm('确认删除礼物「{{ gift.name }}」？\n\n删除后将不可再赠送；历史赠送记录会保留。')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
                 </form>
@@ -96,14 +106,23 @@
 <div id="broadcast-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center" onclick="if(event.target===this)closeBroadcast()">
   <div class="glass-card p-8 max-w-lg w-full mx-4">
     <div class="flex justify-between items-center mb-4">
-      <h3 class="text-lg font-bold text-slate-800 dark:text-white">编辑播报模板</h3>
+      <h3 id="broadcast-modal-title" class="text-lg font-bold text-slate-800 dark:text-white">编辑播报模板</h3>
       <button onclick="closeBroadcast()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" width="20" height="20"></i></button>
     </div>
     <p class="text-xs text-slate-500 mb-1">支持变量: {user}, {player}, {gift_name}, {quantity}, {amount}</p>
-    <p class="text-xs text-slate-400 mb-3">此模板会覆盖“播报管理-礼物播报”模板；仍需在播报管理里配置礼物播报频道ID。</p>
-    <form id="broadcast-form" method="post">
-      <textarea name="broadcast_template" id="broadcast_input" rows="3"
+    <p class="text-xs text-slate-400 mb-3">通用模板会覆盖“播报管理-礼物播报”模板；冠名礼物如果填写了冠名模板，会优先使用冠名模板。</p>
+    <form id="broadcast-form" method="post" class="space-y-4">
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">通用礼物模板</label>
+        <textarea name="broadcast_template" id="broadcast_input" rows="3"
         class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+      </div>
+      <div>
+        <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">冠名礼物模板</label>
+        <textarea name="crown_broadcast_template" id="crown_broadcast_input" rows="3"
+        class="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+        <p class="mt-1 text-[11px] text-slate-400">仅冠名礼物优先使用；留空时回退到通用礼物模板。</p>
+      </div>
       <button type="submit" class="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">保存</button>
     </form>
   </div>
@@ -199,9 +218,12 @@ async function saveGiftOrder() {
   }
 }
 
-function editBroadcast(giftId, template) {
+function editBroadcast(giftId, template, crownTemplate, giftType) {
   document.getElementById('broadcast-form').action = `/admin/gifts/${giftId}/broadcast`;
   document.getElementById('broadcast_input').value = template;
+  document.getElementById('crown_broadcast_input').value = crownTemplate;
+  const title = giftType === 'crown' ? '编辑冠名礼物播报模板' : '编辑礼物播报模板';
+  document.getElementById('broadcast-modal-title').textContent = title;
   const modal = document.getElementById('broadcast-modal');
   modal.classList.remove('hidden');
   modal.classList.add('flex');
@@ -210,6 +232,8 @@ function closeBroadcast() {
   const modal = document.getElementById('broadcast-modal');
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+  document.getElementById('broadcast_input').value = '';
+  document.getElementById('crown_broadcast_input').value = '';
 }
 
 setSortDirty(false);

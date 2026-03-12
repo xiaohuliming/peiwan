@@ -1420,28 +1420,43 @@ def push_gift_broadcast(gift_order):
     gift_image_url = _resolve_image_url(getattr(gift_order.gift, 'image', ''))
     gift_image_local = _resolve_local_image_path(getattr(gift_order.gift, 'image', ''))
     gift_image_asset_url = _upload_kook_asset_from_file(gift_image_local)
-    gift_template_raw = gift_order.gift.broadcast_template or ''
-    gift_template_trimmed = gift_template_raw.strip()
-    # 兼容历史初始化数据: {user} 送给 {player} 一个<礼物名>！
-    # 该值是种子默认文案，不应覆盖“播报管理-礼物播报”模板
-    legacy_seed_templates = {
-        f'{{user}} 送给 {{player}} 一个{gift_order.gift.name}！',
-        f'{{user}} 送给 {{player}} 一个{gift_order.gift.name}!',
-    }
-    if gift_template_trimmed in legacy_seed_templates:
-        gift_template = ''
+
+    def _normalize_legacy_gift_template(template_raw):
+        template_trimmed = (template_raw or '').strip()
+        if not template_trimmed:
+            return ''
+        # 兼容历史初始化数据: {user} 送给 {player} 一个<礼物名>！
+        # 该值是种子默认文案，不应覆盖“播报管理-礼物播报”模板
+        legacy_seed_templates = {
+            f'{{user}} 送给 {{player}} 一个{gift_order.gift.name}！',
+            f'{{user}} 送给 {{player}} 一个{gift_order.gift.name}!',
+        }
+        return '' if template_trimmed in legacy_seed_templates else template_raw
+
+    gift_template = _normalize_legacy_gift_template(getattr(gift_order.gift, 'broadcast_template', '') or '')
+    crown_template = (getattr(gift_order.gift, 'crown_broadcast_template', '') or '')
+    crown_template = crown_template if crown_template.strip() else ''
+    is_crown_gift = getattr(gift_order.gift, 'gift_type', '') == 'crown'
+
+    if is_crown_gift and crown_template:
+        selected_gift_template = crown_template
+        selected_source = 'gift.crown'
+    elif gift_template and gift_template.strip():
+        selected_gift_template = gift_template
+        selected_source = 'gift.custom'
     else:
-        gift_template = gift_template_raw
+        selected_gift_template = ''
+        selected_source = ''
     sent = False
     for cfg in configs:
         if not cfg.channel_id:
             continue
         cfg_template_raw = cfg.template or ''
         cfg_template = cfg_template_raw if cfg_template_raw.strip() else ''
-        use_gift = bool(gift_template and gift_template.strip())
+        use_gift = bool(selected_gift_template and selected_gift_template.strip())
         use_cfg = bool(cfg_template and cfg_template.strip())
-        template = gift_template if use_gift else (cfg_template if use_cfg else meta['default_template'])
-        source = 'gift.custom' if use_gift else ('broadcast.config' if use_cfg else 'broadcast.default')
+        template = selected_gift_template if use_gift else (cfg_template if use_cfg else meta['default_template'])
+        source = selected_source if use_gift else ('broadcast.config' if use_cfg else 'broadcast.default')
         logger.info('[KOOK] 礼物播报模板来源: %s (cfg_id=%s)', source, getattr(cfg, 'id', '-'))
         text = _render_tpl(template, variables)
         # 若礼物图已上传为 KOOK 资源，则图片用独立 type=2 消息发送，避免解析成普通链接

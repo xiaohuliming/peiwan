@@ -13,6 +13,7 @@ class Gift(db.Model):
     status = db.Column(db.Boolean, default=True)  # 开启/关闭
     gift_type = db.Column(db.String(20), default='standard')  # standard/crown (标准/冠名)
     broadcast_template = db.Column(db.Text)  # 播报模板, 支持变量替换
+    crown_broadcast_template = db.Column(db.Text)  # 冠名礼物播报模板, 优先于通用礼物模板
     sort_order = db.Column(db.Integer, default=0, nullable=False, index=True)  # 列表排序(越小越靠前)
     deleted_at = db.Column(db.DateTime, nullable=True, index=True)  # 软删除时间(非空=已删除)
 
