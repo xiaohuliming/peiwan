@@ -1,12 +1,15 @@
 """
 VIP自动升级服务
 """
+import logging
 from decimal import Decimal
 
 from app.extensions import db
 from app.models.user import User
 from app.models.vip import VipLevel, UpgradeRecord
 from app.models.identity_tag import IdentityTag
+
+logger = logging.getLogger(__name__)
 
 
 def get_vip_levels():
@@ -89,9 +92,13 @@ def sync_vip_level_by_experience(user, levels=None, allow_downgrade=True):
         # KOOK 升级播报
         try:
             from app.services.kook_service import push_upgrade_broadcast
-            push_upgrade_broadcast(user, old_level, target_level.name)
-        except Exception:
-            pass  # 推送失败不影响升级流程
+            queued = push_upgrade_broadcast(user, old_level, target_level.name)
+            if queued > 0:
+                logger.info('[VIP] 升级播报已触发 user=%s %s -> %s configs=%s', user.id, old_level, target_level.name, queued)
+            else:
+                logger.warning('[VIP] 升级完成但未命中可用播报配置 user=%s %s -> %s', user.id, old_level, target_level.name)
+        except Exception as e:
+            logger.warning('[VIP] 升级播报异常 user=%s %s -> %s: %s', user.id, old_level, target_level.name, e)
 
     return True, target_level, direction
 

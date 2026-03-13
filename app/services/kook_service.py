@@ -602,7 +602,7 @@ BROADCAST_TYPES = {
             '{@here}': '@在线成员',
         },
         'default_template': '恭喜 `{user}` 升级为 `{level}`!',
-        'hint': 'VIP升级时自动播报到频道',
+        'hint': 'VIP升级时自动播报到频道；支持通用模板和按目标等级配置专属模板',
     },
     # --- 抽奖模板 ---
     'lottery_announce': {
@@ -1501,7 +1501,8 @@ def push_upgrade_broadcast(user, from_level, to_level):
     ).all()
 
     if not configs:
-        return
+        logger.warning('[KOOK] 升级播报跳过: 未找到启用的 upgrade 播报配置')
+        return 0
 
     display_name = _display_name(
         user,
@@ -1519,12 +1520,43 @@ def push_upgrade_broadcast(user, from_level, to_level):
     }
 
     meta = BROADCAST_TYPES['upgrade']
-    for cfg in configs:
-        if not cfg.channel_id:
-            continue
-        text = _render_tpl(cfg.template or meta['default_template'], variables)
+    level_configs = [
+        cfg for cfg in configs
+        if str(getattr(cfg, 'target_level', '') or '').strip() == str(to_level or '').strip()
+    ]
+    generic_configs = [
+        cfg for cfg in configs
+        if not str(getattr(cfg, 'target_level', '') or '').strip()
+    ]
+
+    selected_configs = [cfg for cfg in level_configs if cfg.channel_id]
+    source = 'level'
+    if not selected_configs:
+        if level_configs:
+            logger.warning('[KOOK] 升级播报等级专属配置缺少频道ID，回退通用模板 level=%s', to_level)
+        selected_configs = [cfg for cfg in generic_configs if cfg.channel_id]
+        source = 'generic'
+
+    if not selected_configs:
+        logger.warning('[KOOK] 升级播报跳过: 未找到可用频道配置 level=%s', to_level)
+        return 0
+
+    sent = 0
+    for cfg in selected_configs:
+        template = (cfg.template or '').strip() or meta['default_template']
+        logger.info(
+            '[KOOK] 升级播报模板来源: %s (cfg_id=%s, target_level=%s, to_level=%s)',
+            source,
+            getattr(cfg, 'id', '-'),
+            getattr(cfg, 'target_level', '') or 'ALL',
+            to_level,
+        )
+        text = _render_tpl(template, variables)
         card_json = _build_card(meta['title'], text, meta['color'], image_url=cfg.image_url)
         _async_send(_send_channel_msg, cfg.channel_id, card_json)
+        sent += 1
+
+    return sent
 
 
 def push_recharge_broadcast(user, amount):

@@ -17,6 +17,7 @@ class BroadcastConfig(db.Model):
     template = db.Column(db.Text)
     # 模板内容, 支持变量: {user}, {amount}, {level}, {gift_name}, {player} 等
 
+    target_level = db.Column(db.String(50), nullable=True)  # 升级播报: 目标VIP等级（空=通用）
     channel_id = db.Column(db.String(100))  # KOOK频道ID
     image_url = db.Column(db.Text, nullable=True)  # 卡片附带图片URL
     schedule_weekday = db.Column(db.Integer, nullable=True)  # 定时任务: 周几(0=周一,6=周日)

@@ -23,6 +23,7 @@
         <thead>
           <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
             <th class="pb-3 font-medium">类型</th>
+            <th class="pb-3 font-medium">适用等级</th>
             <th class="pb-3 font-medium">触发阈值</th>
             <th class="pb-3 font-medium">模板内容</th>
             <th class="pb-3 font-medium">图片</th>
@@ -47,6 +48,15 @@
                 {{ broadcast_types[c.broadcast_type].label }}
               </span>
             </td>
+            <td class="py-3 text-xs text-slate-500 dark:text-slate-400">
+              {% if c.broadcast_type == 'upgrade' %}
+              <span class="px-2 py-1 rounded-full {% if c.target_level %}bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300{% else %}bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-300{% endif %}">
+                {{ c.target_level or '通用' }}
+              </span>
+              {% else %}
+              -
+              {% endif %}
+            </td>
             <td class="py-3 font-medium text-slate-800 dark:text-white">{{ "%.0f"|format(c.threshold) }}</td>
             <td class="py-3 text-slate-500 dark:text-slate-400 text-xs max-w-[300px]">
               <span class="block truncate">{{ c.template or '（使用默认模板）' }}</span>
@@ -68,7 +78,7 @@
             </td>
             <td class="py-3 text-right">
               <div class="flex justify-end gap-1">
-                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }}, {{ c.target_level|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
                 <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
                   <button type="submit" onclick="return confirm('确认删除此播报配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
                 </form>
@@ -77,7 +87,7 @@
           </tr>
           {% endfor %}
           {% if not has_channel %}
-          <tr><td colspan="7" class="py-6 text-center text-slate-400 text-sm">暂无频道播报配置</td></tr>
+          <tr><td colspan="8" class="py-6 text-center text-slate-400 text-sm">暂无频道播报配置</td></tr>
           {% endif %}
         </tbody>
       </table>
@@ -123,7 +133,7 @@
             </td>
             <td class="py-3 text-right">
               <div class="flex justify-end gap-1">
-                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }}, {{ c.target_level|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
                 <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
                   <button type="submit" onclick="return confirm('确认删除此通知配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
                 </form>
@@ -188,7 +198,7 @@
             </td>
             <td class="py-3 text-right">
               <div class="flex justify-end gap-1">
-                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }}, "{{ c.schedule_weekday if c.schedule_weekday is not none else 6 }}", "{{ c.schedule_time or "12:00" }}", {{ (c.mention_role_ids or "")|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }}, {{ c.target_level|tojson }}, "{{ c.schedule_weekday if c.schedule_weekday is not none else 6 }}", "{{ c.schedule_time or "12:00" }}", {{ (c.mention_role_ids or "")|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
                 <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
                   <button type="submit" onclick="return confirm('确认删除此定时任务配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
                 </form>
@@ -243,7 +253,7 @@
             </td>
             <td class="py-3 text-right">
               <div class="flex justify-end gap-1">
-                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
+                <button onclick='showEditModal({{ c.id }}, "{{ c.broadcast_type }}", "{{ c.threshold }}", {{ c.template|tojson }}, "{{ c.channel_id or "" }}", {{ "true" if c.status else "false" }}, {{ c.image_url|tojson }}, {{ c.target_level|tojson }})' class="text-purple-500 hover:text-purple-600 text-xs font-medium px-2 py-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors">编辑</button>
                 <form action="{{ url_for('broadcast_admin.delete', config_id=c.id) }}" method="post" class="inline">
                   <button type="submit" onclick="return confirm('确认删除此模板配置?')" class="text-red-500 hover:text-red-600 text-xs font-medium px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">删除</button>
                 </form>
@@ -330,6 +340,18 @@
           class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
           placeholder="必填，消息发送的目标频道">
         <p class="text-[11px] text-slate-400 mt-1">已支持 @角色：先填写频道ID，再点编辑器工具栏的「@角色」即可选中并插入。</p>
+      </div>
+
+      <div id="f_target_level_wrap">
+        <label class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">适用升级到等级</label>
+        <select name="target_level" id="f_target_level"
+          class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+          <option value="">通用模板（所有等级）</option>
+          {% for vip in vip_levels %}
+          <option value="{{ vip.name }}">{{ vip.name }}</option>
+          {% endfor %}
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">仅升级播报使用；选择后只会在升级到该等级时命中，留空则作为通用回退模板。</p>
       </div>
 
       <div id="f_schedule_wrap" class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -692,6 +714,11 @@ function onTypeChange() {
     scheduleWrap.style.display = type === WEEKLY_SCHEDULE_TYPE ? '' : 'none';
   }
 
+  const targetLevelWrap = document.getElementById('f_target_level_wrap');
+  if (targetLevelWrap) {
+    targetLevelWrap.style.display = type === 'upgrade' ? '' : 'none';
+  }
+
   // 显示/隐藏图片（模板类型不需要）
   const imageWrap = document.getElementById('f_image_wrap');
   imageWrap.style.display = meta.target === 'template' ? 'none' : '';
@@ -921,6 +948,7 @@ function showAddModal() {
   document.getElementById('f_threshold').value = '0';
   document.getElementById('f_template').value = '';
   document.getElementById('f_channel').value = '';
+  document.getElementById('f_target_level').value = '';
   document.getElementById('f_schedule_weekday').value = '6';
   document.getElementById('f_schedule_time').value = '12:00';
   document.getElementById('f_mention_role_ids').value = '';
@@ -935,13 +963,14 @@ function showAddModal() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
-function showEditModal(id, type, threshold, template, channel, status, imageUrl, scheduleWeekday, scheduleTime, mentionRoleIds) {
+function showEditModal(id, type, threshold, template, channel, status, imageUrl, targetLevel, scheduleWeekday, scheduleTime, mentionRoleIds) {
   document.getElementById('modal-title').textContent = '编辑播报配置';
   document.getElementById('config-form').action = '/admin/broadcast/' + id + '/edit';
   document.getElementById('f_type').value = type;
   document.getElementById('f_threshold').value = threshold;
   document.getElementById('f_template').value = template || '';
   document.getElementById('f_channel').value = channel;
+  document.getElementById('f_target_level').value = targetLevel || '';
   document.getElementById('f_schedule_weekday').value = (scheduleWeekday !== undefined && scheduleWeekday !== null && scheduleWeekday !== '') ? String(scheduleWeekday) : '6';
   document.getElementById('f_schedule_time').value = scheduleTime || '12:00';
   document.getElementById('f_mention_role_ids').value = mentionRoleIds || '';

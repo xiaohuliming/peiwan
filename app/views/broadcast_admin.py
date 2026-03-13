@@ -5,6 +5,7 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models.broadcast import BroadcastConfig
+from app.models.vip import VipLevel
 from app.utils.permissions import admin_required
 from app.services.log_service import log_operation
 from app.services.kook_service import BROADCAST_TYPES, fetch_kook_role_catalog
@@ -45,7 +46,13 @@ def _normalize_role_ids(raw_value):
 @admin_required
 def index():
     configs = BroadcastConfig.query.order_by(BroadcastConfig.broadcast_type, BroadcastConfig.threshold).all()
-    return render_template('admin/broadcast.html', configs=configs, broadcast_types=BROADCAST_TYPES)
+    vip_levels = VipLevel.query.order_by(VipLevel.sort_order).all()
+    return render_template(
+        'admin/broadcast.html',
+        configs=configs,
+        broadcast_types=BROADCAST_TYPES,
+        vip_levels=vip_levels,
+    )
 
 
 @broadcast_admin_bp.route('/add', methods=['POST'])
@@ -67,6 +74,7 @@ def add():
     schedule_weekday = None
     schedule_time = None
     mention_role_ids = None
+    target_level = None
     if broadcast_type == 'weekly_withdraw_reminder':
         weekday_raw = request.form.get('schedule_weekday', '6')
         try:
@@ -76,11 +84,17 @@ def add():
         schedule_weekday = max(0, min(6, schedule_weekday))
         schedule_time = _normalize_schedule_time(request.form.get('schedule_time', '12:00'))
         mention_role_ids = _normalize_role_ids(request.form.get('mention_role_ids', ''))
+    elif broadcast_type == 'upgrade':
+        target_level = (request.form.get('target_level') or '').strip() or None
+        if target_level and not VipLevel.query.filter_by(name=target_level).first():
+            flash('升级播报目标等级无效', 'error')
+            return redirect(url_for('broadcast_admin.index'))
 
     config = BroadcastConfig(
         broadcast_type=broadcast_type,
         threshold=Decimal(request.form.get('threshold', '0') or '0'),
         template=request.form.get('template', ''),
+        target_level=target_level,
         channel_id=channel_id,
         image_url=request.form.get('image_url', '').strip() or None,
         schedule_weekday=schedule_weekday,
@@ -108,6 +122,7 @@ def edit(config_id):
     config.broadcast_type = request.form.get('broadcast_type', config.broadcast_type)
     config.threshold = Decimal(request.form.get('threshold', '0') or '0')
     config.template = request.form.get('template', '')
+    config.target_level = None
     config.channel_id = request.form.get('channel_id', '').strip()
     if BROADCAST_TYPES.get(config.broadcast_type, {}).get('target') == 'channel' and not config.channel_id:
         flash('该播报类型需要填写 KOOK 频道ID', 'error')
@@ -128,6 +143,13 @@ def edit(config_id):
         config.schedule_time = None
         config.mention_role_ids = None
         config.last_sent_at = None
+
+    if config.broadcast_type == 'upgrade':
+        target_level = (request.form.get('target_level') or '').strip() or None
+        if target_level and not VipLevel.query.filter_by(name=target_level).first():
+            flash('升级播报目标等级无效', 'error')
+            return redirect(url_for('broadcast_admin.index'))
+        config.target_level = target_level
 
     config.status = 'status' in request.form
     db.session.commit()

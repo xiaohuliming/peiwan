@@ -52,6 +52,7 @@ def create_app(config_class=Config, start_background_tasks=True):
     migrate.init_app(app, db)
     login_manager.init_app(app)
     _ensure_gift_schema_compat(app)
+    _ensure_broadcast_schema_compat(app)
 
     # Register blueprints
     from app.views.dashboard import dashboard_bp
@@ -194,6 +195,27 @@ def _ensure_gift_schema_compat(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning(f'[Schema] gifts 兼容字段补齐失败: {e}')
+
+
+def _ensure_broadcast_schema_compat(app):
+    """兼容旧库 broadcast_configs 表字段（target_level）。"""
+    with app.app_context():
+        try:
+            inspector = inspect(db.engine)
+            tables = set(inspector.get_table_names())
+            if 'broadcast_configs' not in tables:
+                return
+
+            cols = {c.get('name') for c in inspector.get_columns('broadcast_configs')}
+            if 'target_level' in cols:
+                return
+
+            db.session.execute(text('ALTER TABLE broadcast_configs ADD COLUMN target_level VARCHAR(50) NULL'))
+            db.session.commit()
+            app.logger.info('[Schema] broadcast_configs 兼容字段已补齐: target_level')
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning(f'[Schema] broadcast_configs 兼容字段补齐失败: {e}')
 
 
 def _start_kook_bot(app):
