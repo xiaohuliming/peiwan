@@ -97,6 +97,7 @@ def index():
         'gifts/index.html',
         gift_orders=gift_orders,
         stats=stats,
+        current_subtab='gift',
         pagination_args=pagination_args,
     )
 

@@ -4,6 +4,16 @@
 
 {% block content %}
 <div class="space-y-6">
+  <div class="glass-card p-3">
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('orders.index', subtab='order') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if current_subtab == 'order' %}bg-purple-600 text-white{% else %}bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700{% endif %}">订单</a>
+      {% if current_user.is_staff %}
+      <a href="{{ url_for('gifts.index') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700">礼物</a>
+      {% endif %}
+      <a href="{{ url_for('orders.index', subtab='escort') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if current_subtab == 'escort' %}bg-purple-600 text-white{% else %}bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700{% endif %}">护航</a>
+      <a href="{{ url_for('orders.index', subtab='training') }}" class="px-4 py-2 rounded-xl text-sm font-medium transition-colors {% if current_subtab == 'training' %}bg-purple-600 text-white{% else %}bg-white/60 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700{% endif %}">代练</a>
+    </div>
+  </div>
 
   {# ===== 客服/管理视图 ===== #}
   {% if view_mode == 'staff' %}
@@ -11,6 +21,7 @@
   {# 搜索栏 #}
   <div class="glass-card p-6">
     <form method="get" action="{{ url_for('orders.index') }}" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 items-end">
+      <input type="hidden" name="subtab" value="{{ current_subtab }}">
       <div>
         <label class="text-xs text-slate-500 dark:text-slate-400 mb-1 block">订单号</label>
         <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="订单号..."
@@ -57,7 +68,7 @@
         <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1">
           <i data-lucide="search" width="16" height="16"></i> 搜索
         </button>
-        <a href="{{ url_for('orders.index') }}" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
+        <a href="{{ url_for('orders.index', subtab=current_subtab) }}" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
       </div>
       
       <div class="col-span-2 md:col-span-4 lg:col-span-7 flex justify-end items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">
@@ -259,7 +270,9 @@
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">我的订单</h2>
       <div class="flex gap-2">
-        <select onchange="location.href='{{ url_for('orders.index') }}?status='+this.value"
+        <form method="get" action="{{ url_for('orders.index') }}">
+          <input type="hidden" name="subtab" value="{{ current_subtab }}">
+          <select name="status" onchange="this.form.submit()"
           class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <option value="all">全部状态</option>
           <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
@@ -267,7 +280,8 @@
           <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
           <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
           <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
-        </select>
+          </select>
+        </form>
       </div>
     </div>
 
@@ -343,7 +357,9 @@
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">我的多身份订单</h2>
       <div class="flex gap-2">
-        <select onchange="location.href='{{ url_for('orders.index') }}?status='+this.value"
+        <form method="get" action="{{ url_for('orders.index') }}">
+          <input type="hidden" name="subtab" value="{{ current_subtab }}">
+          <select name="status" onchange="this.form.submit()"
           class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <option value="all">全部状态</option>
           <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
@@ -351,7 +367,8 @@
           <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
           <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
           <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
-        </select>
+          </select>
+        </form>
       </div>
     </div>
 
@@ -457,7 +474,9 @@
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-xl font-bold tracking-tight text-slate-800 dark:text-white">我的订单</h2>
       <div class="flex gap-2">
-        <select onchange="location.href='{{ url_for('orders.index') }}?status='+this.value"
+        <form method="get" action="{{ url_for('orders.index') }}">
+          <input type="hidden" name="subtab" value="{{ current_subtab }}">
+          <select name="status" onchange="this.form.submit()"
           class="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
           <option value="all">全部状态</option>
           <option value="pending_report" {% if request.args.get('status')=='pending_report' %}selected{% endif %}>待申报</option>
@@ -465,7 +484,8 @@
           <option value="pending_pay" {% if request.args.get('status')=='pending_pay' %}selected{% endif %}>待结算</option>
           <option value="paid" {% if request.args.get('status')=='paid' %}selected{% endif %}>已结算</option>
           <option value="refunded" {% if request.args.get('status')=='refunded' %}selected{% endif %}>已退款</option>
-        </select>
+          </select>
+        </form>
       </div>
     </div>
 

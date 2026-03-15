@@ -19,6 +19,9 @@ orders_bp = Blueprint('orders', __name__)
 def index():
     page = request.args.get('page', 1, type=int)
     status_filter = request.args.get('status')
+    subtab = (request.args.get('subtab', 'order') or 'order').strip().lower()
+    if subtab not in ('order', 'escort', 'training'):
+        subtab = 'order'
 
     query = Order.query
 
@@ -50,6 +53,12 @@ def index():
             view_mode = 'god'
         else:
             view_mode = 'player'
+
+    # 子菜单筛选: 订单(常规) / 护航 / 代练
+    if subtab == 'order':
+        query = query.filter(or_(Order.order_type == 'normal', Order.order_type.is_(None)))
+    else:
+        query = query.filter(Order.order_type == subtab)
 
     # 状态筛选
     if status_filter and status_filter != 'all':
@@ -99,15 +108,15 @@ def index():
     stats = None
     if has_staff_identity:
         paid_statuses = ['pending_pay', 'paid']
-        total_amount = db.session.query(func.sum(Order.total_price)).filter(
-            Order.status.in_(paid_statuses)
-        ).scalar() or Decimal('0')
-        player_wages = db.session.query(func.sum(Order.player_earning)).filter(
-            Order.status.in_(paid_statuses)
-        ).scalar() or Decimal('0')
-        platform_revenue = db.session.query(func.sum(Order.shop_earning)).filter(
-            Order.status.in_(paid_statuses)
-        ).scalar() or Decimal('0')
+        stats_query = Order.query
+        if subtab == 'order':
+            stats_query = stats_query.filter(or_(Order.order_type == 'normal', Order.order_type.is_(None)))
+        else:
+            stats_query = stats_query.filter(Order.order_type == subtab)
+        paid_query = stats_query.filter(Order.status.in_(paid_statuses))
+        total_amount = paid_query.with_entities(func.sum(Order.total_price)).scalar() or Decimal('0')
+        player_wages = paid_query.with_entities(func.sum(Order.player_earning)).scalar() or Decimal('0')
+        platform_revenue = paid_query.with_entities(func.sum(Order.shop_earning)).scalar() or Decimal('0')
         stats = {
             'total_amount': total_amount,
             'player_wages': player_wages,
@@ -123,6 +132,7 @@ def index():
         orders=orders,
         stats=stats,
         view_mode=view_mode,
+        current_subtab=subtab,
         pagination_args=pagination_args,
     )
 
@@ -185,6 +195,7 @@ def dispatch():
             # KOOK 推送: 护航/代练派单通知（不再推送老板建单私信）
             kook_service.push_escort_dispatch(order)
             flash(f'护航/代肝订单已创建并自动结算冻结: {order.order_no}', 'success')
+            target_subtab = 'escort' if project_item.project_type == 'escort' else 'training'
         else:
             order, error = order_service.create_normal_order(
                 boss=boss, player=player, project_item=project_item,
@@ -201,8 +212,9 @@ def dispatch():
             site_url = current_app.config.get('SITE_URL', '')
             kook_service.push_order_dispatch(order, site_url=site_url)
             flash(f'订单已派发: {order.order_no}', 'success')
+            target_subtab = 'order'
 
-        return redirect(url_for('orders.index'))
+        return redirect(url_for('orders.index', subtab=target_subtab))
 
     return render_template('orders/dispatch.html')
 
