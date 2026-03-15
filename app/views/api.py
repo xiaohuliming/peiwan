@@ -254,22 +254,12 @@ def order_detail(order_id):
     result['player_refund_deduct_time'] = (
         fmt_dt(player_refund_deduct_log.created_at, '%Y-%m-%d %H:%M') if player_refund_deduct_log else ''
     )
-    result['staff_refund_deduct'] = 0
-    result['staff_refund_deduct_time'] = ''
 
     # 客服+可见完整财务数据
     if show_financials:
-        staff_refund_deduct_log = CommissionLog.query.filter_by(
-            order_id=order.id,
-            change_type='staff_refund_deduct'
-        ).order_by(CommissionLog.created_at.desc()).first()
         result['commission_rate'] = float(order.commission_rate or 0)
         result['player_earning'] = float(order.player_earning or 0)
         result['shop_earning'] = float(order.shop_earning or 0)
-        result['staff_refund_deduct'] = float(abs(staff_refund_deduct_log.amount)) if staff_refund_deduct_log else 0
-        result['staff_refund_deduct_time'] = (
-            fmt_dt(staff_refund_deduct_log.created_at, '%Y-%m-%d %H:%M') if staff_refund_deduct_log else ''
-        )
     elif order.player_id == current_user.id:
         # 陪玩可以看自己的收益
         result['commission_rate'] = float(order.commission_rate or 0)

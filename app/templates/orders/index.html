@@ -605,7 +605,6 @@ function showDetail(orderId) {
           ${d.consume_amount > 0 ? `<div><span class="text-slate-400">已扣款:</span><span class="ml-2 text-amber-600 font-medium">¥${d.consume_amount.toFixed(2)}</span></div>` : ''}
           ${d.refund_amount > 0 ? `<div><span class="text-slate-400">退款给老板:</span><span class="ml-2 text-green-600 font-medium">¥${d.refund_amount.toFixed(2)}</span></div>` : ''}
           ${d.player_refund_deduct > 0 ? `<div><span class="text-slate-400">扣回陪玩:</span><span class="ml-2 text-red-600 font-medium">${d.player_refund_deduct.toFixed(2)} 小猪粮</span></div>` : ''}
-          ${d.staff_refund_deduct > 0 ? `<div><span class="text-slate-400">扣回客服:</span><span class="ml-2 text-red-600 font-medium">${d.staff_refund_deduct.toFixed(2)} 小猪粮</span></div>` : ''}
           <div><span class="text-slate-400">佣金比例:</span><span class="ml-2 text-slate-800 dark:text-white">${d.commission_rate}%</span></div>
           <div><span class="text-slate-400">陪玩收益:</span><span class="ml-2 text-green-600 font-medium">${d.player_earning.toFixed(2)} 小猪粮</span></div>
           <div><span class="text-slate-400">平台营收:</span><span class="ml-2 text-purple-600 font-medium">¥${d.shop_earning.toFixed(2)}</span></div>
@@ -619,7 +618,6 @@ function showDetail(orderId) {
             ${d.refund_time ? `<div class="text-red-500">退款: ${d.refund_time}</div>` : ''}
             ${d.refund_balance_time ? `<div class="text-green-600">退款记账: ${d.refund_balance_time}</div>` : ''}
             ${d.player_refund_deduct_time ? `<div class="text-red-600">扣回记账: ${d.player_refund_deduct_time}</div>` : ''}
-            ${d.staff_refund_deduct_time ? `<div class="text-red-600">客服扣回记账: ${d.staff_refund_deduct_time}</div>` : ''}
           </div>
           ${d.refund_reason ? `<div class="text-red-500"><span class="text-slate-400">退款说明:</span> ${d.refund_reason}</div>` : ''}
           ${d.remark ? `<div class="text-slate-500"><span class="text-slate-400">备注:</span> ${d.remark}</div>` : ''}

@@ -12,41 +12,6 @@ def _quantize_money(value):
     return Decimal(str(value or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
-def _gift_staff_commission_reason(gift_order):
-    return f'礼物订单 #{gift_order.id} 提成'
-
-
-def _gift_staff_refund_reason(gift_order):
-    return f'礼物订单 #{gift_order.id} 退款扣回客服提成'
-
-
-def _get_gift_staff_refund_amount(gift_order):
-    """返回礼物退款时需扣回的客服提成；已扣回则返回 0。"""
-    if not gift_order.staff_id:
-        return Decimal('0.00')
-
-    refund_reason = _gift_staff_refund_reason(gift_order)
-    refunded = CommissionLog.query.filter_by(
-        user_id=gift_order.staff_id,
-        change_type='staff_refund_deduct',
-        reason=refund_reason,
-    ).first()
-    if refunded:
-        return Decimal('0.00')
-
-    awarded = CommissionLog.query.filter_by(
-        user_id=gift_order.staff_id,
-        change_type='staff_commission',
-        reason=_gift_staff_commission_reason(gift_order),
-    ).order_by(CommissionLog.created_at.desc()).first()
-    if awarded:
-        return _quantize_money(abs(awarded.amount))
-
-    from app.services.order_service import STAFF_COMMISSION_RATE
-    total_price = _quantize_money(gift_order.total_price)
-    return (total_price * STAFF_COMMISSION_RATE).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-
 def send_gift(boss, player, gift, quantity, staff=None):
     """
     赠送礼物:
@@ -155,11 +120,7 @@ def send_gift(boss, player, gift, quantity, staff=None):
     except Exception:
         pass
 
-    # 客服提成: 礼物 1%
-    if staff:
-        from app.services.order_service import award_staff_commission, STAFF_COMMISSION_RATE
-        commission = total_price * STAFF_COMMISSION_RATE
-        award_staff_commission(staff, commission, reason=_gift_staff_commission_reason(gift_order))
+    # 客服提成仅用于平台绩效统计，不写入客服余额。
 
     # 操作日志
     if staff:
@@ -218,11 +179,9 @@ def refund_gift_order(gift_order, operator_id=None):
 
     boss = gift_order.boss
     player = gift_order.player
-    staff = gift_order.staff
     total_price = gift_order.total_price
     player_earning = gift_order.player_earning
     is_crown = bool(gift_order.gift and gift_order.gift.gift_type == 'crown')
-    staff_refund_amount = _get_gift_staff_refund_amount(gift_order)
 
     # 先校验可扣佣金，避免出现“老板已退款但陪玩仅被清零”的账务不一致
     available_frozen = _quantize_money(player.m_bean_frozen)
@@ -236,15 +195,6 @@ def refund_gift_order(gift_order, operator_id=None):
         if available_bean < player_earning:
             shortfall = (player_earning - available_bean).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             return False, f'退款失败：陪玩佣金不足，差额 {shortfall} 小猪粮，请先补足后再退款'
-
-    if staff and staff_refund_amount > 0:
-        staff_available_bean = _quantize_money(staff.m_bean)
-        if staff.id == player.id:
-            player_bean_deduct = max(player_earning - min(available_frozen, player_earning), Decimal('0.00')) if is_crown else player_earning
-            staff_available_bean = available_bean - player_bean_deduct
-        if staff_available_bean < staff_refund_amount:
-            shortfall = (staff_refund_amount - staff_available_bean).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            return False, f'退款失败：客服提成不足，差额 {shortfall} 小猪粮，请先补足后再退款'
 
     # 退还老板余额
     boss.m_coin += total_price
@@ -278,16 +228,6 @@ def refund_gift_order(gift_order, operator_id=None):
     )
     db.session.add(commission_log)
 
-    if staff and staff_refund_amount > 0:
-        staff.m_bean -= staff_refund_amount
-        db.session.add(CommissionLog(
-            user_id=staff.id,
-            change_type='staff_refund_deduct',
-            amount=-staff_refund_amount,
-            balance_after=staff.m_bean,
-            reason=_gift_staff_refund_reason(gift_order),
-        ))
-
     gift_order.status = 'refunded'
     gift_order.freeze_status = 'normal'
     gift_order.refund_time = datetime.utcnow()
@@ -299,8 +239,6 @@ def refund_gift_order(gift_order, operator_id=None):
     if operator_id:
         gift_name = gift_order.gift.name if gift_order.gift else f'礼物#{gift_order.gift_id}'
         detail = f'礼物退款: {gift_name} x{gift_order.quantity}'
-        if staff and staff_refund_amount > 0:
-            detail += f', 扣回客服提成 {staff_refund_amount}'
         log_operation(operator_id, 'gift_refund', 'gift_order', gift_order.id,
                       detail)
     return True, None

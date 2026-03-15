@@ -17,88 +17,18 @@ STAFF_COMMISSION_RATE = Decimal('0.01')     # 护航/代练/礼物: 1%
 
 
 def award_staff_commission(staff, amount, order=None, reason=''):
-    """发放客服提成到 m_bean（同一订单不重复发放）"""
-    if not staff or not amount:
-        return
-    amount = Decimal(str(amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    if amount <= 0:
-        return
-
-    # 防重复: 检查该订单是否已发过客服提成
-    if order:
-        exists = CommissionLog.query.filter_by(
-            order_id=order.id,
-            change_type='staff_commission',
-        ).first()
-        if exists:
-            return
-
-    staff.m_bean += amount
-    log = CommissionLog(
-        user_id=staff.id,
-        change_type='staff_commission',
-        amount=amount,
-        balance_after=staff.m_bean,
-        order_id=order.id if order else None,
-        reason=reason,
-    )
-    db.session.add(log)
+    """客服提成仅做平台绩效统计，不再写入用户余额或流水。"""
+    return
 
 
 def _get_order_staff_refund_amount(order):
-    """返回订单退款时需扣回的客服提成；已扣回则返回 0。"""
-    if not order.staff_id:
-        return Decimal('0.00')
-
-    refunded = CommissionLog.query.filter_by(
-        order_id=order.id,
-        user_id=order.staff_id,
-        change_type='staff_refund_deduct',
-    ).first()
-    if refunded:
-        return Decimal('0.00')
-
-    awarded = CommissionLog.query.filter_by(
-        order_id=order.id,
-        user_id=order.staff_id,
-        change_type='staff_commission',
-    ).order_by(CommissionLog.created_at.desc()).first()
-    if awarded:
-        return _quantize_money(abs(awarded.amount))
-
-    if str(order.order_type or 'normal').lower() in ('escort', 'training'):
-        return (_quantize_money(order.total_price) * STAFF_COMMISSION_RATE).quantize(
-            Decimal('0.01'), rounding=ROUND_HALF_UP
-        )
-    return _quantize_money(STAFF_COMMISSION_NORMAL)
+    """客服提成不入账，退款无需扣回客服余额。"""
+    return Decimal('0.00')
 
 
 def deduct_staff_commission(staff, amount, order, reason=''):
-    """扣回客服提成（同一订单不重复扣回）"""
-    if not staff or not amount or not order:
-        return Decimal('0.00')
-    amount = _quantize_money(amount)
-    if amount <= 0:
-        return Decimal('0.00')
-
-    exists = CommissionLog.query.filter_by(
-        order_id=order.id,
-        user_id=staff.id,
-        change_type='staff_refund_deduct',
-    ).first()
-    if exists:
-        return Decimal('0.00')
-
-    staff.m_bean = _quantize_money(staff.m_bean) - amount
-    db.session.add(CommissionLog(
-        user_id=staff.id,
-        change_type='staff_refund_deduct',
-        amount=-amount,
-        balance_after=staff.m_bean,
-        order_id=order.id,
-        reason=reason or f'订单 {order.order_no} 退款扣回客服提成',
-    ))
-    return amount
+    """客服提成不入账，退款无需扣回客服余额。"""
+    return Decimal('0.00')
 
 
 def _get_boss_discount_percent(boss):
@@ -653,10 +583,7 @@ def confirm_order(order, operator_id=None):
     order.pay_time = datetime.utcnow()
     order.auto_confirm_at = None
 
-    # 客服提成: 常规陪玩 1元/单
-    if order.staff:
-        award_staff_commission(order.staff, STAFF_COMMISSION_NORMAL, order,
-                               f'陪玩订单 {order.order_no} 提成')
+    # 客服提成仅用于平台绩效统计，不写入客服余额。
 
     log_operation(operator_id or _get_operator_id(), 'order_confirm', 'order', order.id,
                   f'订单 {order.order_no} 已确认并自动结算, 佣金 {order.player_earning} 已到账')
@@ -683,11 +610,7 @@ def settle_escort_order(order):
     order.freeze_status = 'frozen'
     order.confirm_time = datetime.utcnow()
 
-    # 客服提成: 护航/代练 1%（结算时发放，防重复由 award_staff_commission 保证）
-    if order.staff:
-        commission = order.total_price * STAFF_COMMISSION_RATE
-        award_staff_commission(order.staff, commission, order,
-                               f'护航/代练订单 {order.order_no} 提成')
+    # 客服提成仅用于平台绩效统计，不写入客服余额。
 
     log_operation(_get_operator_id(), 'order_settle', 'order', order.id,
                   f'订单 {order.order_no} 结算完成, 佣金 {order.player_earning} 已冻结待解冻')
@@ -704,25 +627,14 @@ def refund_order(order):
 
     boss = order.boss
     player = order.player
-    staff = order.staff
     player_earning = _quantize_money(order.player_earning)
     available_frozen = _quantize_money(player.m_bean_frozen)
     available_bean = _quantize_money(player.m_bean)
     player_total_available = available_frozen + available_bean
-    staff_refund_amount = _get_order_staff_refund_amount(order)
 
     if player_total_available < player_earning:
         shortfall = (player_earning - player_total_available).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         return False, f'退款失败：陪玩收益不足，差额 {shortfall} 小猪粮，请先补足后再退款'
-
-    if staff and staff_refund_amount > 0:
-        staff_available_bean = _quantize_money(staff.m_bean)
-        if staff.id == player.id:
-            player_bean_deduct = max(player_earning - min(available_frozen, player_earning), Decimal('0.00'))
-            staff_available_bean = available_bean - player_bean_deduct
-        if staff_available_bean < staff_refund_amount:
-            shortfall = (staff_refund_amount - staff_available_bean).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            return False, f'退款失败：客服提成不足，差额 {shortfall} 小猪粮，请先补足后再退款'
 
     # 退老板
     refund_boss_balance(boss, order.total_price, order.order_no)
@@ -731,21 +643,11 @@ def refund_order(order):
     if order.status in ('pending_pay', 'paid'):
         deduct_player_earning_frozen_first(player, order.player_earning, order)
 
-    if staff and staff_refund_amount > 0:
-        deduct_staff_commission(
-            staff,
-            staff_refund_amount,
-            order,
-            reason=f'订单 {order.order_no} 退款扣回客服提成',
-        )
-
     order.status = 'refunded'
     order.refund_time = datetime.utcnow()
     order.freeze_status = 'normal'
 
     detail = f'订单 {order.order_no} 已退款, 退还: {order.total_price}'
-    if staff and staff_refund_amount > 0:
-        detail += f', 扣回客服提成: {staff_refund_amount}'
     log_operation(_get_operator_id(), 'order_refund', 'order', order.id,
                   detail)
 

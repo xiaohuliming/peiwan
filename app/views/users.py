@@ -227,6 +227,18 @@ def detail(user_id):
         # 小猪粮日志
         q = CommissionLog.query.filter_by(user_id=user_id)
         change_type = request.args.get('change_type', '')
+        allowed_change_types = {
+            'order_income',
+            'gift_income',
+            'withdraw',
+            'refund_deduct',
+            'admin_adjust',
+            'withdraw_freeze',
+            'exchange_in',
+            'exchange_out',
+        }
+        if change_type not in allowed_change_types:
+            change_type = ''
         if change_type:
             q = q.filter(CommissionLog.change_type == change_type)
         if date_from:

@@ -408,6 +408,18 @@ def commission_detail():
     """小猪粮余额明细（陪玩/客服可见）"""
     page = request.args.get('page', 1, type=int)
     change_type = request.args.get('type', '')
+    allowed_change_types = {
+        'order_income',
+        'gift_income',
+        'withdraw_freeze',
+        'withdraw',
+        'refund_deduct',
+        'admin_adjust',
+        'exchange_in',
+        'exchange_out',
+    }
+    if change_type not in allowed_change_types:
+        change_type = ''
 
     query = CommissionLog.query.filter_by(user_id=current_user.id)
     if change_type:
