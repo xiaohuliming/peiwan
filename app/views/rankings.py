@@ -9,6 +9,7 @@ from sqlalchemy.orm import aliased
 from app.extensions import db
 from app.models.order import Order
 from app.models.gift import GiftOrder
+from app.models.intimacy import Intimacy
 from app.models.user import User
 
 rankings_bp = Blueprint('rankings', __name__, template_folder='../templates')
@@ -207,48 +208,33 @@ def index():
         boss_ranking.sort(key=lambda x: x['total'], reverse=True)
 
     elif tab == 'intimacy':
-        # 亲密度排行：仅按“已结算且已解冻”的礼物统计（不计订单）
-        gift_intimacy = db.session.query(
-            GiftOrder.boss_id.label('boss_id'),
-            GiftOrder.player_id.label('player_id'),
-            func.sum(GiftOrder.total_price).label('value'),
-        ).filter(
-            GiftOrder.status == 'paid',
-            GiftOrder.freeze_status == 'normal',
-            GiftOrder.created_at >= start_date,
-            GiftOrder.created_at < end_date,
-        ).group_by(
-            GiftOrder.boss_id,
-            GiftOrder.player_id
-        ).subquery()
-
+        # 亲密度排行：读取 intimacy 当前值，支持手动修改后即时生效
         BossUser = aliased(User)
         PlayerUser = aliased(User)
 
         rows = db.session.query(
+            Intimacy,
             BossUser,
             PlayerUser,
-            gift_intimacy.c.value,
-        ).select_from(
-            gift_intimacy
         ).join(
-            BossUser, gift_intimacy.c.boss_id == BossUser.id
+            BossUser, Intimacy.boss_id == BossUser.id
         ).join(
-            PlayerUser, gift_intimacy.c.player_id == PlayerUser.id
+            PlayerUser, Intimacy.player_id == PlayerUser.id
         ).filter(
-            gift_intimacy.c.value > 0
+            Intimacy.value > 0
         ).order_by(
-            desc(gift_intimacy.c.value)
+            desc(Intimacy.value),
+            desc(Intimacy.updated_at)
         ).limit(100).all()
 
         intimacy_ranking = []
-        for boss, player, value in rows:
+        for intimacy, boss, player in rows:
             boss_profile = _build_ranking_profile(boss, prefer_player_name=False, anonymous_label='匿名老板')
             player_profile = _build_ranking_profile(player, prefer_player_name=True, anonymous_label='匿名陪玩')
             intimacy_ranking.append({
                 'boss': boss,
                 'player': player,
-                'value': Decimal(str(value or 0)),
+                'value': Decimal(str(intimacy.value or 0)),
                 'boss_display_name': boss_profile['name'],
                 'boss_display_avatar': boss_profile['avatar'],
                 'boss_is_anonymous': boss_profile['anonymous'],

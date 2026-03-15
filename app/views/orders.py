@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app
 from flask_login import login_required, current_user
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, case
 from decimal import Decimal
 
 from app.models.order import Order
@@ -123,7 +123,11 @@ def index():
             'platform_revenue': platform_revenue,
         }
 
-    orders = query.order_by(Order.created_at.desc()).paginate(page=page, per_page=15)
+    frozen_first = case((Order.freeze_status == 'frozen', 1), else_=0)
+    orders = query.order_by(
+        frozen_first.desc(),
+        Order.created_at.desc(),
+    ).paginate(page=page, per_page=15)
     pagination_args = request.args.to_dict(flat=True)
     pagination_args.pop('page', None)
 
