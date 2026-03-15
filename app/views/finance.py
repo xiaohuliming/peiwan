@@ -415,6 +415,7 @@ def recharge_overview():
         BalanceLog.change_type == 'recharge',
         BalanceLog.amount > 0,
         BalanceLog.operator_id.isnot(None),
+        ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
     )
 
     from_date_obj = None
@@ -466,6 +467,7 @@ def recharge_overview():
         BalanceLog.change_type == 'recharge',
         BalanceLog.amount > 0,
         BalanceLog.operator_id.isnot(None),
+        ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
         BalanceLog.created_at >= today_start,
         BalanceLog.created_at < tomorrow_start,
     ).with_entities(
@@ -485,6 +487,7 @@ def recharge_overview():
             BalanceLog.change_type == 'recharge',
             BalanceLog.amount > 0,
             BalanceLog.operator_id.isnot(None),
+            ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
             BalanceLog.user_id.in_(list(related_user_ids)),
         ).with_entities(
             BalanceLog.id,
@@ -510,12 +513,17 @@ def recharge_overview():
 
         refunded_ids = _build_refunded_recharge_ids(all_recharge_rows, refund_rows)
 
-    filtered_total = sum((_q_money(r.amount) for r in filtered_rows if r.id not in refunded_ids), Decimal('0.00'))
-    filtered_count = sum((1 for r in filtered_rows if r.id not in refunded_ids))
-    today_total = sum((_q_money(r.amount) for r in today_rows if r.id not in refunded_ids), Decimal('0.00'))
-    today_count = sum((1 for r in today_rows if r.id not in refunded_ids))
+    visible_filtered_rows = [r for r in filtered_rows if r.id not in refunded_ids]
+    visible_today_rows = [r for r in today_rows if r.id not in refunded_ids]
+    filtered_total = sum((_q_money(r.amount) for r in visible_filtered_rows), Decimal('0.00'))
+    filtered_count = len(visible_filtered_rows)
+    today_total = sum((_q_money(r.amount) for r in visible_today_rows), Decimal('0.00'))
+    today_count = len(visible_today_rows)
 
-    logs = query.order_by(BalanceLog.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    logs_query = query
+    if refunded_ids:
+        logs_query = logs_query.filter(~BalanceLog.id.in_(list(refunded_ids)))
+    logs = logs_query.order_by(BalanceLog.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
 
     user_ids = set()
     for log in logs.items:
@@ -542,7 +550,6 @@ def recharge_overview():
             'today_total': today_total,
             'today_count': today_count,
         },
-        refunded_map={log.id: (log.id in refunded_ids) for log in logs.items},
         pagination_args=pagination_args,
     )
 

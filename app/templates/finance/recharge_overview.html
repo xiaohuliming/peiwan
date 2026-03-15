@@ -69,8 +69,7 @@
           {% set target = user_map.get(log.user_id) %}
           {% set operator = user_map.get(log.operator_id) %}
           {% set target_name = (target.player_nickname or target.kook_username or target.nickname or target.username) if target else '用户已删除' %}
-          {% set is_refunded = refunded_map.get(log.id) %}
-          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors {% if is_refunded %}text-slate-900 dark:text-slate-300 line-through{% endif %}">
+          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
             <td class="px-6 py-4 text-slate-500 font-mono">#{{ log.id }}</td>
             <td class="px-6 py-4">
               {% if target %}
@@ -86,16 +85,13 @@
               {% endif %}
             </td>
             <td class="px-6 py-4">
-              <span class="font-bold {% if is_refunded %}text-slate-900 dark:text-slate-300{% else %}text-emerald-600 dark:text-emerald-300{% endif %}">+¥{{ "%.2f"|format(log.amount) }}</span>
+              <span class="font-bold text-emerald-600 dark:text-emerald-300">+¥{{ "%.2f"|format(log.amount) }}</span>
             </td>
             <td class="px-6 py-4 text-slate-700 dark:text-slate-300">
               {{ operator.staff_display_name if operator else '未知' }}
             </td>
             <td class="px-6 py-4 text-slate-500 dark:text-slate-400 max-w-[320px] truncate">
               {{ log.reason or '-' }}
-              {% if is_refunded %}
-              <span class="ml-2 text-xs text-slate-900 dark:text-slate-300">（已退款，不计入统计）</span>
-              {% endif %}
             </td>
             <td class="px-6 py-4 text-slate-500 dark:text-slate-400">{{ fmt_dt(log.created_at, '%Y-%m-%d %H:%M:%S') }}</td>
           </tr>
