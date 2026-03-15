@@ -8,7 +8,7 @@ from app.utils.time_utils import BJ_TZ
 from app.services.log_service import log_operation
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
 from collections import defaultdict, deque
 import re
 import os
@@ -411,11 +411,20 @@ def recharge_overview():
     date_from = request.args.get('date_from', '').strip()
     date_to = request.args.get('date_to', '').strip()
 
-    query = BalanceLog.query.filter(
+    recharge_cond = and_(
         BalanceLog.change_type == 'recharge',
         BalanceLog.amount > 0,
-        BalanceLog.operator_id.isnot(None),
         ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
+    )
+    # 负值管理变账也纳入充值总览，便于人工对账
+    negative_adjust_cond = and_(
+        BalanceLog.change_type == 'admin_adjust',
+        BalanceLog.amount < 0,
+    )
+
+    query = BalanceLog.query.filter(
+        BalanceLog.operator_id.isnot(None),
+        or_(recharge_cond, negative_adjust_cond),
     )
 
     from_date_obj = None
@@ -457,24 +466,26 @@ def recharge_overview():
         BalanceLog.id,
         BalanceLog.user_id,
         BalanceLog.operator_id,
+        BalanceLog.change_type,
         BalanceLog.amount,
+        BalanceLog.reason,
         BalanceLog.created_at,
     ).order_by(BalanceLog.created_at.asc(), BalanceLog.id.asc()).all()
 
     bj_today = datetime.now(BJ_TZ).date()
     today_start, tomorrow_start = _bj_day_utc_range(bj_today)
     today_rows = BalanceLog.query.filter(
-        BalanceLog.change_type == 'recharge',
-        BalanceLog.amount > 0,
         BalanceLog.operator_id.isnot(None),
-        ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
+        or_(recharge_cond, negative_adjust_cond),
         BalanceLog.created_at >= today_start,
         BalanceLog.created_at < tomorrow_start,
     ).with_entities(
         BalanceLog.id,
         BalanceLog.user_id,
         BalanceLog.operator_id,
+        BalanceLog.change_type,
         BalanceLog.amount,
+        BalanceLog.reason,
         BalanceLog.created_at,
     ).order_by(BalanceLog.created_at.asc(), BalanceLog.id.asc()).all()
 
@@ -513,8 +524,13 @@ def recharge_overview():
 
         refunded_ids = _build_refunded_recharge_ids(all_recharge_rows, refund_rows)
 
-    visible_filtered_rows = [r for r in filtered_rows if r.id not in refunded_ids]
-    visible_today_rows = [r for r in today_rows if r.id not in refunded_ids]
+    def _visible_recharge_row(row):
+        if row.change_type == 'recharge' and row.id in refunded_ids:
+            return False
+        return True
+
+    visible_filtered_rows = [r for r in filtered_rows if _visible_recharge_row(r)]
+    visible_today_rows = [r for r in today_rows if _visible_recharge_row(r)]
     filtered_total = sum((_q_money(r.amount) for r in visible_filtered_rows), Decimal('0.00'))
     filtered_count = len(visible_filtered_rows)
     today_total = sum((_q_money(r.amount) for r in visible_today_rows), Decimal('0.00'))
@@ -522,7 +538,10 @@ def recharge_overview():
 
     logs_query = query
     if refunded_ids:
-        logs_query = logs_query.filter(~BalanceLog.id.in_(list(refunded_ids)))
+        logs_query = logs_query.filter(or_(
+            BalanceLog.change_type != 'recharge',
+            ~BalanceLog.id.in_(list(refunded_ids)),
+        ))
     logs = logs_query.order_by(BalanceLog.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
 
     user_ids = set()

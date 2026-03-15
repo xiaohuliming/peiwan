@@ -85,7 +85,11 @@
               {% endif %}
             </td>
             <td class="px-6 py-4">
+              {% if log.amount < 0 %}
+              <span class="font-bold text-red-600 dark:text-red-300">-¥{{ "%.2f"|format(log.amount|abs) }}</span>
+              {% else %}
               <span class="font-bold text-emerald-600 dark:text-emerald-300">+¥{{ "%.2f"|format(log.amount) }}</span>
+              {% endif %}
             </td>
             <td class="px-6 py-4 text-slate-700 dark:text-slate-300">
               {{ operator.staff_display_name if operator else '未知' }}
