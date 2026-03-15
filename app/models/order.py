@@ -63,21 +63,23 @@ class Order(db.Model):
     def project_display(self):
         """显示游戏项目名"""
         if self.project_item:
-            return f"{self.project_item.project.name} - {self.project_item.name}"
+            project_name = self.project_item.project.name if self.project_item.project else '未知游戏'
+            item_name = self.project_item.name or '未知项目'
+            return f"{project_name} - {item_name}"
         return '未知项目'
 
     @property
     def game_name(self):
         """获取游戏名"""
         if self.project_item:
-            return self.project_item.project.name
+            return self.project_item.project.name if self.project_item.project else '未知'
         return '未知'
 
     @property
     def item_name(self):
         """获取子项目名"""
         if self.project_item:
-            return self.project_item.name
+            return self.project_item.name or '未知'
         return '未知'
 
     @property

@@ -1,4 +1,4 @@
-from flask import Flask, session
+from flask import Flask, session, url_for
 from flask_login import current_user
 from sqlalchemy import inspect, text
 from app.config import Config
@@ -134,6 +134,16 @@ def create_app(config_class=Config, start_background_tasks=True):
     app.jinja_env.globals['can_manage_system'] = perm.can_manage_system
     app.jinja_env.globals['fmt_dt'] = fmt_dt
     app.jinja_env.filters['bj'] = fmt_dt
+
+    def static_or_external_url(value):
+        text = str(value or '').strip()
+        if not text:
+            return ''
+        if text.startswith(('http://', 'https://', '/')):
+            return text
+        return url_for('static', filename=text)
+
+    app.jinja_env.globals['static_or_external_url'] = static_or_external_url
 
     @app.context_processor
     def inject_top_notifications():
