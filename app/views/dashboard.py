@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request
+from flask import Blueprint, render_template, request, redirect, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
@@ -12,7 +12,15 @@ from app.utils.time_utils import BJ_TZ
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
+
 @dashboard_bp.route('/')
+@login_required
+def home():
+    """平台默认首页：进入个人中心。"""
+    return redirect(url_for('profile.index'))
+
+
+@dashboard_bp.route('/dashboard')
 @login_required
 def index():
     def _bj_period_start_utc(period_key: str):

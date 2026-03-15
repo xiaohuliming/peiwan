@@ -88,7 +88,7 @@ def load_user(user_id):
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('profile.index'))
         
     if request.method == 'POST':
         username = request.form.get('username')
@@ -110,14 +110,8 @@ def login():
             
             if next_page:
                 return redirect(next_page)
-            
-            # Role-based redirection
-            if user.role in ['god', 'player']:
-                # TODO: Create specific homepages for GOD and Player
-                # For now, redirect to dashboard but it should be customized
-                return redirect(url_for('dashboard.index'))
-            else:
-                return redirect(url_for('dashboard.index'))
+
+            return redirect(url_for('profile.index'))
         else:
             flash('用户名或密码错误', 'error')
             
@@ -126,7 +120,7 @@ def login():
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('profile.index'))
         
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -194,7 +188,7 @@ def register():
 def wechat_oauth_start():
     """微信 OAuth 起点（扫码授权）"""
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('profile.index'))
 
     if not _wechat_oauth_enabled():
         flash('微信注册未配置，请先在服务器设置 WECHAT_APP_ID / WECHAT_APP_SECRET', 'error')
@@ -232,7 +226,7 @@ def wechat_oauth_start():
 def wechat_oauth_callback():
     """微信 OAuth 回调（登录/注册）"""
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('profile.index'))
 
     expected_state = session.pop('wechat_oauth_state', None)
     mode = session.pop('wechat_oauth_mode', 'login')
@@ -289,7 +283,7 @@ def wechat_oauth_callback():
         flash('微信登录成功', 'success')
         if next_page:
             return redirect(next_page)
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('profile.index'))
 
     if mode != 'register':
         flash('该微信还未注册，请先使用微信注册', 'error')
@@ -328,7 +322,7 @@ def wechat_oauth_callback():
     flash('微信注册成功，已自动登录', 'success')
     if next_page:
         return redirect(next_page)
-    return redirect(url_for('dashboard.index'))
+    return redirect(url_for('profile.index'))
 
 @auth_bp.route('/logout')
 @login_required
