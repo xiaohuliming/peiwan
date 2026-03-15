@@ -1555,6 +1555,7 @@ def push_upgrade_broadcast(user, from_level, to_level):
         return 0
 
     sent = 0
+    image_asset_cache = {}
     for cfg in selected_configs:
         template = (cfg.template or '').strip() or meta['default_template']
         logger.info(
@@ -1566,8 +1567,28 @@ def push_upgrade_broadcast(user, from_level, to_level):
             (to_level_bucket or 'ALL').upper(),
         )
         text = _render_tpl(template, variables)
-        card_json = _build_card(meta['title'], text, meta['color'], image_url=cfg.image_url)
+        raw_image = str(getattr(cfg, 'image_url', '') or '').strip()
+        image_asset_url = ''
+        image_url = ''
+        if raw_image:
+            image_url = _resolve_image_url(raw_image)
+            if raw_image in image_asset_cache:
+                image_asset_url = image_asset_cache[raw_image]
+            else:
+                image_local_path = _resolve_local_image_path(raw_image)
+                image_asset_url = _upload_kook_asset_from_file(image_local_path)
+                image_asset_cache[raw_image] = image_asset_url
+
+        # 若图片可上传为 KOOK 资源，则单独发 type=2 图片消息，避免被当作普通链接。
+        card_json = _build_card(
+            meta['title'],
+            text,
+            meta['color'],
+            image_url='' if image_asset_url else image_url,
+        )
         _async_send(_send_channel_msg, cfg.channel_id, card_json)
+        if image_asset_url:
+            _async_send(_send_channel_image, cfg.channel_id, image_asset_url)
         sent += 1
 
     return sent
