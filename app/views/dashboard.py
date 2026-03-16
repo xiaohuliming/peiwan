@@ -219,15 +219,58 @@ def index():
 
         total_customers = User.query.filter(User.role == 'god').count()
         total_orders = Order.query.count() + GiftOrder.query.count()
-        recharge_total, recharge_count = db.session.query(
-            func.coalesce(func.sum(BalanceLog.amount), 0),
-            func.count(BalanceLog.id),
-        ).filter(
+        period_recharge_rows = BalanceLog.query.filter(
             BalanceLog.change_type == 'recharge',
             BalanceLog.amount > 0,
             BalanceLog.operator_id.isnot(None),
+            ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
             BalanceLog.created_at >= start_date,
-        ).first()
+        ).with_entities(
+            BalanceLog.id,
+            BalanceLog.user_id,
+            BalanceLog.operator_id,
+            BalanceLog.amount,
+            BalanceLog.created_at,
+        ).all()
+
+        refunded_recharge_ids = set()
+        period_user_ids = {row.user_id for row in period_recharge_rows}
+        if period_user_ids:
+            from app.views.finance import _build_refunded_recharge_ids
+
+            all_recharge_rows = BalanceLog.query.filter(
+                BalanceLog.change_type == 'recharge',
+                BalanceLog.amount > 0,
+                BalanceLog.operator_id.isnot(None),
+                ~func.coalesce(BalanceLog.reason, '').ilike('%赠金%'),
+                BalanceLog.user_id.in_(list(period_user_ids)),
+            ).with_entities(
+                BalanceLog.id,
+                BalanceLog.user_id,
+                BalanceLog.operator_id,
+                BalanceLog.amount,
+                BalanceLog.created_at,
+            ).all()
+
+            refund_rows = BalanceLog.query.filter(
+                BalanceLog.change_type == 'admin_adjust',
+                BalanceLog.amount < 0,
+                BalanceLog.operator_id.isnot(None),
+                BalanceLog.user_id.in_(list(period_user_ids)),
+            ).with_entities(
+                BalanceLog.id,
+                BalanceLog.user_id,
+                BalanceLog.operator_id,
+                BalanceLog.amount,
+                BalanceLog.created_at,
+                BalanceLog.reason,
+            ).all()
+
+            refunded_recharge_ids = _build_refunded_recharge_ids(all_recharge_rows, refund_rows)
+
+        visible_recharge_rows = [row for row in period_recharge_rows if row.id not in refunded_recharge_ids]
+        recharge_total = sum((Decimal(str(row.amount or 0)) for row in visible_recharge_rows), Decimal('0.00'))
+        recharge_count = len(visible_recharge_rows)
 
         mgmt_stats = {
             'revenue': period_revenue,
