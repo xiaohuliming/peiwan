@@ -528,51 +528,20 @@ def update_info(user_id):
             flash('播报频道已更新', 'success')
 
     elif action == 'update_nickname':
-        username = request.form.get('username', '').strip()
-        nickname = request.form.get('nickname', '').strip()
+        # 用户详情快捷入口仅保留陪玩昵称修改，用户名/客户昵称在此处禁改
         player_nickname = request.form.get('player_nickname', '').strip()
-        changes = []
-        nickname_change_denied = False
-        username_change_denied = False
-
-        if username and username != user.username:
-            if not current_user.is_admin:
-                username_change_denied = True
-            else:
-                if len(username) > 50:
-                    flash('用户名最长50个字符', 'error')
-                    return redirect(url_for('users.detail', user_id=user_id, tab='info'))
-                conflict = User.query.filter(
-                    User.username == username,
-                    User.id != user.id,
-                ).first()
-                if conflict:
-                    flash('用户名已存在，请更换', 'error')
-                    return redirect(url_for('users.detail', user_id=user_id, tab='info'))
-                changes.append(f'用户名: {user.username} -> {username}')
-                user.username = username
-
-        if nickname and nickname != user.nickname:
-            if not current_user.is_admin:
-                nickname_change_denied = True
-            else:
-                changes.append(f'昵称: {user.nickname} -> {nickname}')
-                user.nickname = nickname
         if player_nickname and player_nickname != user.player_nickname:
-            changes.append(f'陪玩昵称: {user.player_nickname} -> {player_nickname}')
+            old_name = user.player_nickname
             user.player_nickname = player_nickname
-        
-        if changes:
-            log_operation(current_user.id, 'user_update_nickname', 'user', user.id, '; '.join(changes))
+            log_operation(
+                current_user.id,
+                'user_update_nickname',
+                'user',
+                user.id,
+                f'陪玩昵称: {old_name} -> {player_nickname}',
+            )
             db.session.commit()
-            flash('昵称已更新', 'success')
-        elif nickname_change_denied or username_change_denied:
-            denied_msgs = []
-            if nickname_change_denied:
-                denied_msgs.append('客户昵称仅管理员及以上可修改')
-            if username_change_denied:
-                denied_msgs.append('用户名仅管理员及以上可修改')
-            flash('；'.join(denied_msgs), 'error')
+            flash('陪玩昵称已更新', 'success')
 
     elif action == 'update_birthday':
         raw_birthday = request.form.get('birthday')

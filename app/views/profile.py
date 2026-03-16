@@ -4,6 +4,7 @@ from datetime import datetime
 from app.models.order import Order
 from app.models.finance import CommissionLog, BalanceLog
 from app.extensions import db
+from app.services import upload_service
 
 profile_bp = Blueprint('profile', __name__)
 _EXCLUDED_BEAN_TYPES = ('staff_commission', 'staff_refund_deduct')
@@ -149,5 +150,30 @@ def update_profile():
     except Exception:
         db.session.rollback()
         flash('资料更新失败', 'error')
+
+    return redirect(url_for('profile.index', tab='info'))
+
+
+@profile_bp.route('/update_avatar', methods=['POST'])
+@login_required
+def update_avatar():
+    """修改个人头像"""
+    file = request.files.get('avatar')
+    if not file or not file.filename:
+        flash('请选择头像图片', 'error')
+        return redirect(url_for('profile.index', tab='info'))
+
+    path, error = upload_service.save_file(file, 'avatars')
+    if error:
+        flash(f'头像上传失败: {error}', 'error')
+        return redirect(url_for('profile.index', tab='info'))
+
+    current_user.avatar = f'/static/{path}'
+    try:
+        db.session.commit()
+        flash('头像已更新', 'success')
+    except Exception:
+        db.session.rollback()
+        flash('头像更新失败', 'error')
 
     return redirect(url_for('profile.index', tab='info'))

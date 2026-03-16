@@ -17,10 +17,14 @@
             <img src="{{ current_user.avatar_url }}" alt="Avatar" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
         </div>
       </div>
-      <button class="absolute bottom-1 right-1 p-2 bg-white dark:bg-slate-800 rounded-full shadow-md border border-slate-100 dark:border-slate-700 text-slate-500 hover:text-purple-600 transition-colors">
+      <button type="button" onclick="triggerAvatarUpload()" class="absolute bottom-1 right-1 p-2 bg-white dark:bg-slate-800 rounded-full shadow-md border border-slate-100 dark:border-slate-700 text-slate-500 hover:text-purple-600 transition-colors">
         <i data-lucide="camera" width="16" height="16"></i>
       </button>
     </div>
+
+    <form id="avatar-upload-form" action="{{ url_for('profile.update_avatar') }}" method="post" enctype="multipart/form-data" class="hidden">
+      <input id="avatar-file-input" type="file" name="avatar" accept="image/*">
+    </form>
 
     <!-- 信息 -->
     <div class="flex-1 text-center md:text-left space-y-2">
@@ -65,44 +69,10 @@
 
     <!-- 快捷操作 -->
     <div class="flex flex-col gap-3 min-w-[140px]">
-        <button type="button" onclick="openEditProfileModal()" class="btn-primary w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 transition-colors shadow-lg shadow-slate-200 dark:shadow-none font-medium text-sm">
-            <i data-lucide="edit-3" width="16" height="16"></i>
-            编辑资料
+        <button type="button" onclick="triggerAvatarUpload()" class="btn-primary w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 transition-colors shadow-lg shadow-slate-200 dark:shadow-none font-medium text-sm">
+            <i data-lucide="camera" width="16" height="16"></i>
+            修改头像
         </button>
-        <button class="w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300 font-medium text-sm">
-            <i data-lucide="share-2" width="16" height="16"></i>
-            分享名片
-        </button>
-    </div>
-  </div>
-
-  {# 编辑资料弹窗 #}
-  <div id="edit-profile-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeEditProfileModal()">
-    <div class="glass-card p-8 w-full max-w-md mx-4">
-      <div class="flex items-center justify-between mb-5">
-        <h3 class="text-lg font-bold text-slate-800 dark:text-white">编辑资料</h3>
-        <button type="button" onclick="closeEditProfileModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-          <i data-lucide="x" width="18" height="18"></i>
-        </button>
-      </div>
-      <form action="{{ url_for('profile.update_profile') }}" method="post" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">客户昵称</label>
-          <input type="text" name="nickname" required value="{{ current_user.nickname or current_user.username }}"
-                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
-        </div>
-        {% if current_user.role == 'player' %}
-        <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">陪玩昵称</label>
-          <input type="text" name="player_nickname" value="{{ current_user.player_nickname or '' }}"
-                 class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
-        </div>
-        {% endif %}
-        <div class="flex gap-3 pt-2">
-          <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">保存</button>
-          <button type="button" onclick="closeEditProfileModal()" class="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 py-2.5 rounded-xl text-sm font-medium transition-colors">取消</button>
-        </div>
-      </form>
     </div>
   </div>
 
@@ -638,16 +608,19 @@
 
 {% block scripts %}
 <script>
-function openEditProfileModal() {
-  const m = document.getElementById('edit-profile-modal');
-  m.classList.remove('hidden');
-  m.classList.add('flex');
+function triggerAvatarUpload() {
+  const input = document.getElementById('avatar-file-input');
+  if (input) input.click();
 }
 
-function closeEditProfileModal() {
-  const m = document.getElementById('edit-profile-modal');
-  m.classList.add('hidden');
-  m.classList.remove('flex');
+const avatarInput = document.getElementById('avatar-file-input');
+if (avatarInput) {
+  avatarInput.addEventListener('change', function() {
+    if (this.files && this.files.length > 0) {
+      const form = document.getElementById('avatar-upload-form');
+      if (form) form.submit();
+    }
+  });
 }
 </script>
 {% endblock %}
