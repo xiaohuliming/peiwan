@@ -4,6 +4,7 @@ from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from app.models.user import User
+from app.models.project import ProjectItem
 from app.models.order import Order
 from app.models.gift import GiftOrder
 from app.models.finance import WithdrawRequest, CommissionLog, BalanceLog
@@ -293,36 +294,68 @@ def index():
         # --- 客服绩效 ---
         current_perf_period = request.args.get('perf_period', 'today')
         if current_perf_period == 'week':
-            perf_start_date = today_start - timedelta(days=today_start.weekday())
+            perf_start_date = _bj_period_start_utc('week')
         elif current_perf_period == 'month':
-            perf_start_date = today_start.replace(day=1)
+            perf_start_date = _bj_period_start_utc('month')
         else:
-            perf_start_date = today_start
+            perf_start_date = _bj_period_start_utc('day')
+
+        # 客服绩效按结算时间口径统计（优先 pay_time，兼容历史回退 confirm_time/created_at）
+        perf_time_expr = func.coalesce(Order.pay_time, Order.confirm_time, Order.created_at)
+        # 历史清洗兼容：
+        # 早期部分订单 order_type 被错误写为 normal，
+        # 这里优先信任 project_item.project_type，避免护航/代练污染客服派单时长。
+        project_type_expr = func.lower(func.coalesce(ProjectItem.project_type, ''))
+        raw_order_type_expr = func.lower(func.coalesce(Order.order_type, 'normal'))
+        order_type_expr = db.case(
+            (project_type_expr.in_(('normal', 'escort', 'training')), project_type_expr),
+            else_=raw_order_type_expr
+        )
+        billing_type_expr = func.lower(func.coalesce(ProjectItem.billing_type, 'hour'))
 
         # 订单绩效：
-        # - 累计订单时长：仅统计已结算(paid)
-        # - 其余绩效项维持现有口径（pending_pay + paid）
+        # - 所有绩效项仅统计已结算(paid)
+        # - 累计订单时长：排除护航/代练订单，仅统计常规陪玩订单
         staff_perf_raw = db.session.query(
             User,
             func.count(Order.id).label('order_count'),
+            # 按小时计费的常规订单时长
             func.coalesce(func.sum(
-                db.case((Order.status == 'paid', Order.duration), else_=0)
-            ), 0).label('total_duration'),
+                db.case((
+                    db.and_(
+                        order_type_expr == 'normal',
+                        billing_type_expr == 'hour',
+                    ),
+                    Order.duration
+                ), else_=0)
+            ), 0).label('total_hours'),
+            # 按局计费的常规订单局数
+            func.coalesce(func.sum(
+                db.case((
+                    db.and_(
+                        order_type_expr == 'normal',
+                        billing_type_expr == 'round',
+                    ),
+                    Order.duration
+                ), else_=0)
+            ), 0).label('total_rounds'),
             # 常规陪玩订单数(1元/单)
             func.coalesce(func.sum(
-                db.case((Order.order_type == 'normal', 1), else_=0)
+                db.case((order_type_expr == 'normal', 1), else_=0)
             ), 0).label('normal_count'),
             # 护航订单总额(1%)
             func.coalesce(func.sum(
-                db.case((Order.order_type == 'escort', Order.total_price), else_=0)
+                db.case((order_type_expr == 'escort', Order.total_price), else_=0)
             ), 0).label('escort_total'),
             # 代练订单总额(1%)
             func.coalesce(func.sum(
-                db.case((Order.order_type == 'training', Order.total_price), else_=0)
+                db.case((order_type_expr == 'training', Order.total_price), else_=0)
             ), 0).label('training_total'),
-        ).join(Order, User.id == Order.staff_id).filter(
-            Order.created_at >= perf_start_date,
-            Order.status.in_(['pending_pay', 'paid']),
+        ).join(Order, User.id == Order.staff_id
+        ).outerjoin(ProjectItem, Order.project_item_id == ProjectItem.id
+        ).filter(
+            perf_time_expr >= perf_start_date,
+            Order.status == 'paid',
         ).group_by(User.id).all()
 
         # 礼物派发绩效：按客服分组
@@ -338,7 +371,7 @@ def index():
         gift_map = {row.staff_id: {'gift_count': row.gift_count, 'gift_total': float(row.gift_total)} for row in gift_perf_raw}
 
         staff_perf = []
-        for staff_user, order_count, total_duration, normal_count, escort_total, training_total in staff_perf_raw:
+        for staff_user, order_count, total_hours, total_rounds, normal_count, escort_total, training_total in staff_perf_raw:
             gd = gift_map.pop(staff_user.id, {'gift_count': 0, 'gift_total': 0})
             # 提成: 常规1元/单 + 护航/代练1% + 礼物1%
             escort_amount = float(escort_total or 0)
@@ -347,7 +380,8 @@ def index():
             staff_perf.append({
                 'user': staff_user,
                 'order_count': order_count,
-                'total_duration': float(total_duration),
+                'total_hours': float(total_hours),
+                'total_rounds': float(total_rounds),
                 'gift_count': gd['gift_count'],
                 'gift_total': round(float(gd['gift_total']), 2),
                 'escort_total': round(escort_amount, 2),
@@ -363,7 +397,8 @@ def index():
                 staff_perf.append({
                     'user': staff_user,
                     'order_count': 0,
-                    'total_duration': 0,
+                    'total_hours': 0,
+                    'total_rounds': 0,
                     'gift_count': gd['gift_count'],
                     'gift_total': round(float(gd['gift_total']), 2),
                     'escort_total': 0.0,

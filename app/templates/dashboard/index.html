@@ -349,7 +349,8 @@
                     <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
                       <th class="pb-4 font-medium">客服</th>
                       <th class="pb-4 font-medium">派发订单数</th>
-                      <th class="pb-4 font-medium">派单订单时长</th>
+                      <th class="pb-4 font-medium">派单小时数</th>
+                      <th class="pb-4 font-medium">派单局数</th>
                       <th class="pb-4 font-medium">派单礼物总额</th>
                       <th class="pb-4 font-medium">派发护航总额</th>
                       <th class="pb-4 font-medium">代练总额</th>
@@ -365,7 +366,8 @@
                         </div>
                       </td>
                       <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{{ item.order_count }}</td>
-                      <td class="py-4 text-sm text-slate-600 dark:text-slate-300">{{ "%.1f"|format(item.total_duration) }} 小时</td>
+                      <td class="py-4 text-sm font-bold text-slate-800 dark:text-slate-200">{{ "%.1f"|format(item.total_hours) }} 小时</td>
+                      <td class="py-4 text-sm text-slate-600 dark:text-slate-300">{{ "%.0f"|format(item.total_rounds) }} 局</td>
                       <td class="py-4 text-sm text-slate-800 dark:text-slate-200">¥ {{ "%.2f"|format(item.gift_total) }}</td>
                       <td class="py-4 text-sm text-slate-800 dark:text-slate-200">¥ {{ "%.2f"|format(item.escort_total) }}</td>
                       <td class="py-4 text-sm text-slate-800 dark:text-slate-200">¥ {{ "%.2f"|format(item.training_total) }}</td>
