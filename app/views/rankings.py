@@ -31,6 +31,11 @@ def _is_user_anonymous_for_ranking(user):
 
 
 def _build_ranking_profile(user, prefer_player_name=False, anonymous_label='匿名用户'):
+    if prefer_player_name:
+        real_name = user.player_nickname or user.nickname or user.username
+    else:
+        real_name = user.nickname or user.username
+
     anonymous = _is_user_anonymous_for_ranking(user)
     if anonymous:
         return {
@@ -38,18 +43,19 @@ def _build_ranking_profile(user, prefer_player_name=False, anonymous_label='匿�
             'avatar': ANON_AVATAR_URL,
             'code': '******',
             'anonymous': True,
+            'real_name': real_name,
+            'real_avatar': user.avatar_url,
+            'real_code': user.user_code,
         }
 
-    if prefer_player_name:
-        name = user.player_nickname or user.nickname or user.username
-    else:
-        name = user.nickname or user.username
-
     return {
-        'name': name,
+        'name': real_name,
         'avatar': user.avatar_url,
         'code': user.user_code,
         'anonymous': False,
+        'real_name': real_name,
+        'real_avatar': user.avatar_url,
+        'real_code': user.user_code,
     }
 
 
@@ -154,6 +160,9 @@ def index():
                 'display_avatar': profile['avatar'],
                 'display_code': profile['code'],
                 'is_anonymous': profile['anonymous'],
+                'real_name': profile['real_name'],
+                'real_avatar': profile['real_avatar'],
+                'real_code': profile['real_code'],
             })
         player_ranking.sort(key=lambda x: x['total'], reverse=True)
 
@@ -204,6 +213,9 @@ def index():
                 'display_avatar': profile['avatar'],
                 'display_code': profile['code'],
                 'is_anonymous': profile['anonymous'],
+                'real_name': profile['real_name'],
+                'real_avatar': profile['real_avatar'],
+                'real_code': profile['real_code'],
             })
         boss_ranking.sort(key=lambda x: x['total'], reverse=True)
 
@@ -238,9 +250,13 @@ def index():
                 'boss_display_name': boss_profile['name'],
                 'boss_display_avatar': boss_profile['avatar'],
                 'boss_is_anonymous': boss_profile['anonymous'],
+                'boss_real_name': boss_profile['real_name'],
+                'boss_real_avatar': boss_profile['real_avatar'],
                 'player_display_name': player_profile['name'],
                 'player_display_avatar': player_profile['avatar'],
                 'player_is_anonymous': player_profile['anonymous'],
+                'player_real_name': player_profile['real_name'],
+                'player_real_avatar': player_profile['real_avatar'],
             })
 
     return render_template('rankings/index.html',

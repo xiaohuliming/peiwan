@@ -78,11 +78,19 @@
             </td>
             <td class="py-3">
               <div class="flex items-center gap-3">
+                {% if item.is_anonymous and current_user.is_superadmin %}
+                <img src="{{ item.real_avatar }}" class="w-8 h-8 rounded-full" alt="">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-white">{{ item.real_name }} <span class="ml-1 px-1.5 py-0.5 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] rounded-md font-medium">匿名</span></p>
+                  <p class="text-xs text-slate-400">{{ item.real_code }}</p>
+                </div>
+                {% else %}
                 <img src="{{ item.display_avatar }}" class="w-8 h-8 rounded-full" alt="">
                 <div>
                   <p class="font-medium text-slate-800 dark:text-white">{{ item.display_name }}</p>
                   <p class="text-xs text-slate-400">{{ item.display_code }}</p>
                 </div>
+                {% endif %}
               </div>
             </td>
             <td class="py-3 text-right text-slate-600 dark:text-slate-300">{{ "%.2f"|format(item.order_earning) }}</td>
@@ -135,11 +143,19 @@
             </td>
             <td class="py-3">
               <div class="flex items-center gap-3">
+                {% if item.is_anonymous and current_user.is_superadmin %}
+                <img src="{{ item.real_avatar }}" class="w-8 h-8 rounded-full" alt="">
+                <div>
+                  <p class="font-medium text-slate-800 dark:text-white">{{ item.real_name }} <span class="ml-1 px-1.5 py-0.5 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] rounded-md font-medium">匿名</span></p>
+                  <p class="text-xs text-slate-400">{{ item.real_code }}</p>
+                </div>
+                {% else %}
                 <img src="{{ item.display_avatar }}" class="w-8 h-8 rounded-full" alt="">
                 <div>
                   <p class="font-medium text-slate-800 dark:text-white">{{ item.display_name }}</p>
                   <p class="text-xs text-slate-400">{{ item.display_code }}</p>
                 </div>
+                {% endif %}
               </div>
             </td>
             {% if current_user.is_admin %}
@@ -193,14 +209,24 @@
             </td>
             <td class="py-3">
               <div class="flex items-center gap-2">
+                {% if item.boss_is_anonymous and current_user.is_superadmin %}
+                <img src="{{ item.boss_real_avatar }}" class="w-7 h-7 rounded-full" alt="">
+                <span class="font-medium text-slate-800 dark:text-white">{{ item.boss_real_name }} <span class="ml-0.5 px-1.5 py-0.5 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] rounded-md font-medium">匿名</span></span>
+                {% else %}
                 <img src="{{ item.boss_display_avatar }}" class="w-7 h-7 rounded-full" alt="">
                 <span class="font-medium text-slate-800 dark:text-white">{{ item.boss_display_name }}</span>
+                {% endif %}
               </div>
             </td>
             <td class="py-3">
               <div class="flex items-center gap-2">
+                {% if item.player_is_anonymous and current_user.is_superadmin %}
+                <img src="{{ item.player_real_avatar }}" class="w-7 h-7 rounded-full" alt="">
+                <span class="font-medium text-slate-800 dark:text-white">{{ item.player_real_name }} <span class="ml-0.5 px-1.5 py-0.5 bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300 text-[10px] rounded-md font-medium">匿名</span></span>
+                {% else %}
                 <img src="{{ item.player_display_avatar }}" class="w-7 h-7 rounded-full" alt="">
                 <span class="font-medium text-slate-800 dark:text-white">{{ item.player_display_name }}</span>
+                {% endif %}
               </div>
             </td>
             <td class="py-3 text-right">
