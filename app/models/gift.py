@@ -50,6 +50,10 @@ class GiftOrder(db.Model):
     player_earning = db.Column(db.Numeric(10, 2), default=0)   # 陪玩收益
     shop_earning = db.Column(db.Numeric(10, 2), default=0)     # 平台营收
 
+    # 老板支付拆分（用于原路退款）
+    boss_paid_coin = db.Column(db.Numeric(10, 2), default=0)   # 从嗯呢币支付的部分
+    boss_paid_gift = db.Column(db.Numeric(10, 2), default=0)   # 从赠金支付的部分
+
     # 状态
     status = db.Column(db.String(20), default='paid', index=True)  # paid/refunded
     freeze_status = db.Column(db.String(20), default='normal')  # normal/frozen

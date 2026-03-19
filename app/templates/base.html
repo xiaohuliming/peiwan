@@ -110,11 +110,11 @@
           <span class="text-[15px]">总览</span>
         </a>
 
-        {# 陪玩管理 - 客服+(管理) 和 老板(点单浏览) #}
-        {% if current_user.is_staff or current_user.is_god %}
+        {# 陪玩管理 - 仅客服+ #}
+        {% if current_user.is_staff %}
         <a href="{{ url_for('companions.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 {% if request.endpoint and 'companions' in request.endpoint %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
           <i data-lucide="users" width="20" height="20" stroke-width="{% if request.endpoint and 'companions' in request.endpoint %}2.5{% else %}2{% endif %}"></i>
-          <span class="text-[15px]">{% if current_user.is_god %}点单{% else %}陪玩管理{% endif %}</span>
+          <span class="text-[15px]">陪玩管理</span>
         </a>
         {% endif %}
 
@@ -124,13 +124,6 @@
           <span class="text-[15px]">订单中心</span>
         </a>
 
-        {# 礼物中心 - 客服+ #}
-        {% if current_user.is_staff %}
-        <a href="{{ url_for('gifts.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 {% if request.endpoint and request.endpoint.startswith('gifts.') %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
-          <i data-lucide="gift" width="20" height="20" stroke-width="{% if request.endpoint and request.endpoint.startswith('gifts.') %}2.5{% else %}2{% endif %}"></i>
-          <span class="text-[15px]">礼物中心</span>
-        </a>
-        {% endif %}
 
         {# 工作打卡 - 仅客服可打卡，管理员可查看 #}
         {% if current_user.has_role('staff') or current_user.is_admin %}

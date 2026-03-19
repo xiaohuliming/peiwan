@@ -97,42 +97,43 @@ def deduct_boss_balance(boss, amount, order_no):
     """
     扣除老板余额: 优先扣m_coin, 再扣m_coin_gift
     同时记录消费日志和经验值
-    返回: True/False
+    返回: (success, coin_deducted, gift_deducted)
     """
     amount = Decimal(str(amount))
     total_available = boss.m_coin + boss.m_coin_gift
 
     if total_available < amount:
-        return False
+        return False, Decimal('0'), Decimal('0')
 
     # 优先扣 m_coin
     if boss.m_coin >= amount:
-        boss.m_coin -= amount
         coin_deducted = amount
+        gift_deducted = Decimal('0')
+        boss.m_coin -= amount
     else:
         coin_deducted = boss.m_coin
         gift_deducted = amount - boss.m_coin
         boss.m_coin = Decimal('0')
         boss.m_coin_gift -= gift_deducted
 
-    # 记录消费日志
+    # 记录消费日志（含拆分明细）
     log = BalanceLog(
         user_id=boss.id,
         change_type='consume',
         amount=-amount,
         balance_after=boss.m_coin + boss.m_coin_gift,
-        reason=f'订单 {order_no} 消费'
+        reason=f'订单 {order_no} 消费 (币:{coin_deducted}, 赠:{gift_deducted})'
     )
     db.session.add(log)
 
-    # m_coin消费增加经验（支持身份标签经验倍率）
+    # m_coin消费增加经验
     from app.services.vip_service import apply_consume_experience, check_and_upgrade
     apply_consume_experience(boss, coin_deducted)
 
     # 检查VIP升级
     check_and_upgrade(boss)
 
-    # KOOK 私信通知（老板消费）
+    # KOOK 私信通知
     try:
         from app.services.kook_service import push_boss_consume_notice
         push_boss_consume_notice(
@@ -143,7 +144,7 @@ def deduct_boss_balance(boss, amount, order_no):
     except Exception:
         pass
 
-    return True
+    return True, coin_deducted, gift_deducted
 
 
 def _quantize_money(value):
@@ -251,17 +252,29 @@ def _adjust_order_hold(order, target_total):
     return True, None
 
 
-def refund_boss_balance(boss, amount, order_no):
-    """退还老板嗯呢币"""
+def refund_boss_balance(boss, amount, order_no, refund_coin=None, refund_gift=None):
+    """
+    退还老板余额（支持原路退回）。
+    如果提供了 refund_coin / refund_gift 则按拆分退回；
+    否则全部退到 m_coin（兼容历史调用）。
+    """
     amount = Decimal(str(amount))
-    boss.m_coin += amount
+    if refund_coin is not None and refund_gift is not None:
+        coin_back = _quantize_money(refund_coin)
+        gift_back = _quantize_money(refund_gift)
+    else:
+        coin_back = amount
+        gift_back = Decimal('0')
+
+    boss.m_coin += coin_back
+    boss.m_coin_gift += gift_back
 
     log = BalanceLog(
         user_id=boss.id,
         change_type='refund',
         amount=amount,
         balance_after=boss.m_coin + boss.m_coin_gift,
-        reason=f'订单 {order_no} 退款'
+        reason=f'订单 {order_no} 退款 (币:{coin_back}, 赠:{gift_back})'
     )
     db.session.add(log)
 
@@ -283,11 +296,13 @@ def award_player_earning(player, amount, order):
 
 
 def deduct_player_earning(player, amount, order):
-    """扣回陪玩小猪粮 (退款时)"""
+    """扣回陪玩小猪粮 (退款时) — 余额不足时拒绝而非静默清零"""
     amount = Decimal(str(amount))
+    if player.m_bean < amount:
+        shortfall = (amount - player.m_bean).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        raise ValueError(f'deduct_player_earning: shortfall {shortfall}')
+
     player.m_bean -= amount
-    if player.m_bean < 0:
-        player.m_bean = Decimal('0')
 
     log = CommissionLog(
         user_id=player.id,
@@ -437,9 +452,14 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
                   f'创建护航/代练订单 {order.order_no}, 总价: {total_price}')
 
     # 即时扣款
-    if not deduct_boss_balance(boss, total_price, order.order_no):
+    ok, coin_deducted, gift_deducted = deduct_boss_balance(boss, total_price, order.order_no)
+    if not ok:
         db.session.rollback()
         return None, '扣款失败'
+
+    # 记录嗯呢币/赠金拆分（用于原路退款）
+    order.boss_hold_coin = coin_deducted
+    order.boss_hold_gift = gift_deducted
 
     # 冻结陪玩佣金
     player.m_bean_frozen += player_earning
@@ -534,10 +554,15 @@ def confirm_order(order, operator_id=None):
     remaining_pay = total_price - consume_from_hold
 
     coin_direct = Decimal('0.00')
+    gift_direct = Decimal('0.00')
     if remaining_pay > 0:
-        ok, coin_direct, _gift_direct = _deduct_boss_balance_silent(boss, remaining_pay)
+        ok, coin_direct, gift_direct = _deduct_boss_balance_silent(boss, remaining_pay)
         if not ok:
             return False, '老板余额不足，无法确认订单'
+
+    # 计算总嗯呢币/赠金消费拆分
+    total_coin_consumed = consume_coin_from_hold + coin_direct
+    total_gift_consumed = consume_gift_from_hold + gift_direct
 
     # 支付能力确认后，再落冻结金额变动，避免失败路径污染
     order.boss_hold_coin = hold_coin - consume_coin_from_hold
@@ -547,12 +572,16 @@ def confirm_order(order, operator_id=None):
     if _quantize_money(order.boss_hold_coin) + _quantize_money(order.boss_hold_gift) > 0:
         _release_order_hold(order, reason='确认后自动解冻差额')
 
+    # 确认后将 hold 字段复用为"实际支付拆分"，供退款原路退回使用
+    order.boss_hold_coin = total_coin_consumed
+    order.boss_hold_gift = total_gift_consumed
+
     db.session.add(BalanceLog(
         user_id=boss.id,
         change_type='consume',
         amount=-total_price,
         balance_after=_quantize_money(boss.m_coin) + _quantize_money(boss.m_coin_gift),
-        reason=f'订单 {order.order_no} 消费'
+        reason=f'订单 {order.order_no} 消费 (币:{total_coin_consumed}, 赠:{total_gift_consumed})'
     ))
 
     # 仅真实嗯呢币消费增加经验（冻结嗯呢币 + 兜底扣款中的嗯呢币）
@@ -636,8 +665,11 @@ def refund_order(order):
         shortfall = (player_earning - player_total_available).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
         return False, f'退款失败：陪玩收益不足，差额 {shortfall} 小猪粮，请先补足后再退款'
 
-    # 退老板
-    refund_boss_balance(boss, order.total_price, order.order_no)
+    # 退老板（原路退回嗯呢币/赠金）
+    refund_coin = _quantize_money(order.boss_hold_coin)
+    refund_gift = _quantize_money(order.boss_hold_gift)
+    refund_boss_balance(boss, order.total_price, order.order_no,
+                        refund_coin=refund_coin, refund_gift=refund_gift)
 
     # 扣回陪玩收益（优先冻结，再可用）
     if order.status in ('pending_pay', 'paid'):

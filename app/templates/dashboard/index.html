@@ -105,7 +105,7 @@
         {% if todo_stats %}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <!-- 待解冻订单 -->
-          <a href="{{ url_for('orders.index', freeze_status='frozen') }}" class="glass-card p-6 flex items-center gap-4 hover:-translate-y-1 transition-transform duration-300 group">
+          <a href="{{ url_for('orders.index', subtab='escort', freeze_status='frozen') }}" class="glass-card p-6 flex items-center gap-4 hover:-translate-y-1 transition-transform duration-300 group">
             {% if todo_stats.frozen_orders > 0 %}
             <div class="p-3 rounded-2xl bg-red-500/10 text-red-500">
               <i data-lucide="alert-triangle" width="24" height="24" stroke-width="2"></i>

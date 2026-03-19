@@ -58,15 +58,19 @@ def send_gift(boss, player, gift, quantity, staff=None):
 
     # 扣老板余额 (优先扣 m_coin)
     amount = total_price
-    coin_deducted = Decimal('0')
     if boss.m_coin >= amount:
-        boss.m_coin -= amount
         coin_deducted = amount
+        gift_deducted = Decimal('0')
+        boss.m_coin -= amount
     else:
         coin_deducted = boss.m_coin
         gift_deducted = amount - boss.m_coin
         boss.m_coin = Decimal('0')
         boss.m_coin_gift -= gift_deducted
+
+    # 记录嗯呢币/赠金拆分（用于原路退款）
+    gift_order.boss_paid_coin = coin_deducted
+    gift_order.boss_paid_gift = gift_deducted
 
     receiver_name = player.player_nickname or player.nickname or player.username
 
@@ -196,14 +200,21 @@ def refund_gift_order(gift_order, operator_id=None):
             shortfall = (player_earning - available_bean).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
             return False, f'退款失败：陪玩佣金不足，差额 {shortfall} 小猪粮，请先补足后再退款'
 
-    # 退还老板余额
-    boss.m_coin += total_price
+    # 退还老板余额（原路退回）
+    coin_back = _quantize_money(gift_order.boss_paid_coin)
+    gift_back = _quantize_money(gift_order.boss_paid_gift)
+    # 兼容历史数据：如果没有记录拆分，全部退到 m_coin
+    if coin_back + gift_back <= 0:
+        coin_back = total_price
+        gift_back = Decimal('0')
+    boss.m_coin += coin_back
+    boss.m_coin_gift += gift_back
     balance_log = BalanceLog(
         user_id=boss.id,
         change_type='refund',
         amount=total_price,
         balance_after=boss.m_coin + boss.m_coin_gift,
-        reason=f'礼物订单 #{gift_order.id} 退款'
+        reason=f'礼物订单 #{gift_order.id} 退款 (币:{coin_back}, 赠:{gift_back})'
     )
     db.session.add(balance_log)
 

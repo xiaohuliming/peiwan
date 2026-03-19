@@ -192,6 +192,21 @@ def _ensure_gift_schema_compat(app):
             if altered:
                 db.session.commit()
                 app.logger.info('[Schema] gifts 兼容字段已补齐: %s', ','.join(added_columns))
+
+            # gift_orders 表兼容字段
+            if 'gift_orders' in tables:
+                go_cols = {c.get('name') for c in inspector.get_columns('gift_orders')}
+                go_altered = False
+                go_added = []
+                for col_name in ('boss_paid_coin', 'boss_paid_gift'):
+                    if col_name not in go_cols:
+                        db.session.execute(text(f'ALTER TABLE gift_orders ADD COLUMN {col_name} DECIMAL(10,2) NOT NULL DEFAULT 0'))
+                        go_altered = True
+                        go_added.append(col_name)
+                if go_altered:
+                    db.session.commit()
+                    app.logger.info('[Schema] gift_orders 兼容字段已补齐: %s', ','.join(go_added))
+
         except Exception as e:
             db.session.rollback()
             app.logger.warning(f'[Schema] gifts 兼容字段补齐失败: {e}')

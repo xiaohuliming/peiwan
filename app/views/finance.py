@@ -707,9 +707,9 @@ def audit_withdraw(request_id):
             wr.status = 'paid'
             wr.paid_at = datetime.utcnow()
             
-            # Unfreeze (reduce frozen amount)
+            # Unfreeze (reduce frozen amount, with lower bound protection)
             # Money was already deducted from m_bean when requesting
-            wr.user.m_bean_frozen -= wr.amount
+            wr.user.m_bean_frozen = max(Decimal('0'), wr.user.m_bean_frozen - wr.amount)
             
             # Log commission change (actual payout)
             log = CommissionLog(
@@ -732,9 +732,9 @@ def audit_withdraw(request_id):
         elif action == 'reject':
             wr.status = 'rejected'
             
-            # Refund balance
+            # Refund balance (with lower bound protection on frozen)
             wr.user.m_bean += wr.amount
-            wr.user.m_bean_frozen -= wr.amount
+            wr.user.m_bean_frozen = max(Decimal('0'), wr.user.m_bean_frozen - wr.amount)
             log_operation(
                 current_user.id,
                 'withdraw_reject',
