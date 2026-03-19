@@ -800,7 +800,12 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({message: msg, history: assistantHistory.slice(-20)})
       })
-      .then(function(r){ return r.json(); })
+      .then(function(r){
+        if (!r.ok && r.status >= 500) {
+          throw new Error('服务器错误 (HTTP ' + r.status + ')');
+        }
+        return r.json().catch(function(){ throw new Error('响应解析失败 (HTTP ' + r.status + ')'); });
+      })
       .then(function(data) {
         removeTypingIndicator();
         if (data.ok) {
@@ -811,9 +816,9 @@
           appendAssistantMsg('assistant', data.error || '出了点问题，请稍后再试~');
         }
       })
-      .catch(function() {
+      .catch(function(err) {
         removeTypingIndicator();
-        appendAssistantMsg('assistant', '网络异常，请检查网络后重试 😢');
+        appendAssistantMsg('assistant', (err && err.message) ? err.message + ' 😢' : '网络异常，请检查网络后重试 😢');
       })
       .finally(function() {
         assistantBusy = false;

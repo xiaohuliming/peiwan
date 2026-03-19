@@ -197,7 +197,7 @@ def index():
         ).outerjoin(
             gift_spend, User.id == gift_spend.c.boss_id
         ).filter(
-            User.role == 'god',
+            User.role_filter_expr('god'),
             db.or_(order_spend.c.order_spend != None, gift_spend.c.gift_spend != None)
         ).all()
 
