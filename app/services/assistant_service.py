@@ -48,11 +48,16 @@ def _build_system_prompt(user):
 
 回答规则:
 - 用中文简洁回复，善用emoji让回复更生动
-- 数据查询时给出准确数字
-- 如果问到你无法确定的数据，诚实说明
-- 不要编造数据
+- 所有数据必须且只能来自下方"上下文数据"部分，绝对不可以编造任何订单号、用户名、金额等
+- 如果上下文中没有请求的数据，直接说"这部分数据我暂时无法获取"
+- 不要编造虚假数据来填充回答
 
-重要: 你没有任何工具(tool)或函数调用(function call)能力。不要输出任何XML标签、tool_call或函数调用格式。所有需要的数据已在下方上下文中提供，直接基于这些数据用自然语言回答。"""
+格式规则:
+- 不要使用markdown表格(| --- |)格式，改用简洁的列表格式展示数据
+- 可以用序号列表、分隔线等方式让信息更清晰
+- 每条记录用一行或几行展示关键字段即可
+
+重要: 你没有任何工具(tool)或函数调用(function call)能力。不要输出任何XML标签、tool_call或函数调用格式。所有需要的数据已在下方"上下文数据"部分提供，直接基于这些数据用自然语言回答。"""
 
     # 按角色添加权限说明
     if user.is_admin or user.has_role('staff'):
@@ -167,6 +172,22 @@ def _get_platform_context(user):
                     details.append(f'  · {o.order_no} | 老板:{boss_name} | 陪玩:{player_name} | 项目:{project_name} | 金额:{o.boss_pay} | 状态:{o.status}')
                 context_parts.append('⏳ 待处理订单明细:\n' + '\n'.join(details))
 
+            # 用户列表摘要（方便查询用户信息）
+            all_users = User.query.order_by(User.id).all()
+            if all_users:
+                user_lines = []
+                for u in all_users[:50]:
+                    role_str = u.role or ''
+                    nick = u.nickname or u.username or '无昵称'
+                    code = getattr(u, 'user_code', '') or ''
+                    balance_info = ''
+                    if u.is_god:
+                        balance_info = f'嗯呢币:{u.m_coin} 赠金:{u.m_coin_gift}'
+                    elif u.is_player:
+                        balance_info = f'小猪粮:{u.m_bean} 冻结:{u.m_bean_frozen}'
+                    user_lines.append(f'  · ID:{u.id} | {nick} | 编号:{code} | 角色:{role_str} | {balance_info}')
+                context_parts.append('👥 用户列表:\n' + '\n'.join(user_lines))
+
         # 老板: 仅个人余额和订单数
         if user.is_god:
             my_orders = Order.query.filter_by(boss_id=user.id, status='paid').count()
@@ -202,7 +223,7 @@ def chat(user_message, conversation_history=None):
     platform_context = _get_platform_context(user)
 
     messages = [
-        {'role': 'system', 'content': system_prompt + '\n\n' + platform_context}
+        {'role': 'system', 'content': system_prompt + '\n\n=== 上下文数据 ===\n' + platform_context}
     ]
 
     # 加入对话历史（最多保留最近 10 轮）

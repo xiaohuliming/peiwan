@@ -735,10 +735,49 @@
     }
 
     function formatReply(text) {
-      // 简单 markdown: **bold**, \n→<br>
-      return escapeHtml(text)
-        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-        .replace(/\n/g, '<br>');
+      var s = escapeHtml(text);
+      // 处理 markdown 表格 → HTML 表格
+      s = s.replace(/((?:^|\n)\|.+\|(?:\n\|[\s\-:]+\|)?(?:\n\|.+\|)*)/g, function(match) {
+        var rows = match.trim().split('\n').filter(function(r){ return r.trim(); });
+        if (rows.length < 2) return match;
+        var html = '<table style="width:100%;border-collapse:collapse;margin:8px 0;font-size:13px;">';
+        for (var i = 0; i < rows.length; i++) {
+          var row = rows[i];
+          // 跳过分隔行 |---|---|
+          if (/^\|[\s\-:]+\|$/.test(row.trim())) continue;
+          var cells = row.split('|').filter(function(c,idx,arr){ return idx > 0 && idx < arr.length - 1; });
+          var tag = (i === 0) ? 'th' : 'td';
+          var bgStyle = (i === 0) ? 'background:rgba(139,92,246,0.08);font-weight:600;' : (i % 2 === 0 ? 'background:rgba(0,0,0,0.02);' : '');
+          html += '<tr>';
+          for (var j = 0; j < cells.length; j++) {
+            html += '<' + tag + ' style="padding:6px 8px;border:1px solid rgba(0,0,0,0.08);text-align:left;' + bgStyle + '">' + cells[j].trim() + '</' + tag + '>';
+          }
+          html += '</tr>';
+        }
+        html += '</table>';
+        return html;
+      });
+      // **bold** → <b>
+      s = s.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+      // *italic* → <i>
+      s = s.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<i>$1</i>');
+      // `code` → <code>
+      s = s.replace(/`([^`]+?)`/g, '<code style="background:rgba(139,92,246,0.1);padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>');
+      // ### heading → bold
+      s = s.replace(/^#{1,3}\s+(.+)$/gm, '<b>$1</b>');
+      // --- → <hr>
+      s = s.replace(/^-{3,}$/gm, '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.1);margin:8px 0;">');
+      // - list items → styled bullets
+      s = s.replace(/^[\-•]\s+(.+)$/gm, '<div style="padding-left:12px;text-indent:-12px;">• $1</div>');
+      // numbered lists 1. 2. etc
+      s = s.replace(/^(\d+)\.\s+(.+)$/gm, '<div style="padding-left:16px;text-indent:-16px;">$1. $2</div>');
+      // \n → <br> (but not after block elements)
+      s = s.replace(/\n/g, '<br>');
+      // clean up double <br> after block elements
+      s = s.replace(/(<\/div>)<br>/g, '$1');
+      s = s.replace(/(<\/table>)<br>/g, '$1');
+      s = s.replace(/(<hr[^>]*>)<br>/g, '$1');
+      return s;
     }
 
     function sendAssistantMessage(e) {
