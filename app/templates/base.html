@@ -78,10 +78,44 @@
     details > summary::-webkit-details-marker {
       display: none;
     }
+
+    /* 移动端侧边栏抽屉 */
+    #mobile-overlay {
+      transition: opacity 0.3s ease;
+    }
+    #mobile-drawer {
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    #mobile-drawer.drawer-closed {
+      transform: translateX(-100%);
+    }
+    #mobile-drawer.drawer-open {
+      transform: translateX(0);
+    }
+
+    /* 表格在移动端可横滑 */
+    .table-responsive {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    @media (max-width: 767px) {
+      /* 自动让所有表格的父容器可横滑 */
+      .glass-card, main {
+        overflow-x: visible;
+      }
+      table {
+        min-width: 640px;
+      }
+      /* glass-card 内的表格自动可滑 */
+      .glass-card {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+    }
   </style>
   {% block styles %}{% endblock %}
 </head>
-<body class="min-h-screen bg-[#f4f5f7] dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-100 selection:bg-purple-200 dark:selection:bg-purple-900 relative overflow-hidden transition-colors duration-300">
+<body class="min-h-screen bg-[#f4f5f7] dark:bg-slate-900 font-sans text-slate-800 dark:text-slate-100 selection:bg-purple-200 dark:selection:bg-purple-900 relative md:overflow-hidden transition-colors duration-300">
   
   <!-- 渐变背景底色 -->
   <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-[#f4f5f7] to-purple-50 dark:from-slate-900 dark:via-slate-950 dark:to-indigo-950 -z-20 transition-colors duration-500"></div>
@@ -91,11 +125,89 @@
   <div class="fixed top-0 right-0 w-96 h-96 bg-blue-300/20 dark:bg-blue-600/10 rounded-full mix-blend-multiply dark:mix-blend-normal filter blur-[100px] opacity-70 animate-blob animation-delay-2000 -z-10 pointer-events-none"></div>
   <div class="fixed -bottom-8 left-20 w-96 h-96 bg-pink-300/20 dark:bg-pink-600/10 rounded-full mix-blend-multiply dark:mix-blend-normal filter blur-[100px] opacity-70 animate-blob animation-delay-4000 -z-10 pointer-events-none"></div>
 
+  <!-- 移动端抽屉遮罩 -->
+  <div id="mobile-overlay" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden opacity-0 md:hidden" onclick="closeMobileDrawer()"></div>
+
+  <!-- 移动端侧边栏抽屉 -->
+  <aside id="mobile-drawer" class="fixed top-0 left-0 bottom-0 w-72 z-50 flex flex-col bg-[#f4f5f7]/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl drawer-closed md:hidden overflow-y-auto">
+    <div class="flex items-center justify-between px-5 py-5 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl overflow-hidden border border-white/70 dark:border-slate-700/70 shadow-lg bg-white">
+          <img src="{{ url_for('static', filename='img/site-logo.png') }}" alt="Logo" class="w-full h-full object-cover">
+        </div>
+        <span class="text-lg font-semibold text-slate-800 dark:text-white">嗯呢呗电竞</span>
+      </div>
+      <button onclick="closeMobileDrawer()" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/40 dark:hover:bg-slate-800/40 text-slate-500 transition-colors">
+        <i data-lucide="x" width="20" height="20"></i>
+      </button>
+    </div>
+    <nav class="flex-1 px-3 space-y-1.5 overflow-y-auto custom-scrollbar pb-4" id="mobile-nav-menu">
+      {# 总览 #}
+      <a href="{{ url_for('dashboard.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint == 'dashboard.index' %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="layout-dashboard" width="20" height="20"></i>
+        <span class="text-[15px]">总览</span>
+      </a>
+      {% if current_user.is_staff %}
+      <a href="{{ url_for('companions.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint and 'companions' in request.endpoint %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="users" width="20" height="20"></i>
+        <span class="text-[15px]">陪玩管理</span>
+      </a>
+      {% endif %}
+      <a href="{{ url_for('orders.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint and 'orders' in request.endpoint %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="gamepad-2" width="20" height="20"></i>
+        <span class="text-[15px]">订单中心</span>
+      </a>
+      {% if current_user.has_role('staff') or current_user.is_admin %}
+      <a href="{{ url_for('clock.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint and 'clock' in request.endpoint %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="clock" width="20" height="20"></i>
+        <span class="text-[15px]">{% if current_user.is_admin %}打卡管理{% else %}工作打卡{% endif %}</span>
+      </a>
+      {% endif %}
+      {% if current_user.is_player or current_user.is_admin %}
+      <a href="{{ url_for('finance.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint and 'finance' in request.endpoint %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="wallet" width="20" height="20"></i>
+        <span class="text-[15px]">财务中心</span>
+      </a>
+      {% endif %}
+      <a href="{{ url_for('rankings.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint and 'rankings' in request.endpoint %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="trophy" width="20" height="20"></i>
+        <span class="text-[15px]">排行榜</span>
+      </a>
+      {% if current_user.is_staff %}
+      <a href="{{ url_for('users.index') }}" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 {% if request.endpoint and request.endpoint.startswith('users.') %}bg-white/60 dark:bg-slate-800/60 shadow-sm border border-white/80 dark:border-slate-700/50 text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30{% endif %}">
+        <i data-lucide="user-cog" width="20" height="20"></i>
+        <span class="text-[15px]">用户管理</span>
+      </a>
+      {% endif %}
+      {% if current_user.is_admin %}
+      <div class="pt-2 border-t border-slate-200/50 dark:border-slate-700/50 mt-2">
+        <p class="px-4 py-1 text-xs text-slate-400 dark:text-slate-500 font-medium uppercase">管理后台</p>
+        <a href="{{ url_for('project_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'project_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">项目管理</a>
+        <a href="{{ url_for('account_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'account_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">账号管理</a>
+        <a href="{{ url_for('identity_tag_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'identity_tag_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">身份标签</a>
+        <a href="{{ url_for('logs.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'logs' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">操作日志</a>
+        <a href="{{ url_for('broadcast_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'broadcast_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">播报管理</a>
+        <a href="{{ url_for('upgrade_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'upgrade_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">升级记录</a>
+        <a href="{{ url_for('system.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'system' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">系统工具</a>
+        <a href="{{ url_for('lottery_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'lottery_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">抽奖管理</a>
+      </div>
+      {% endif %}
+      {% if current_user.is_admin %}
+      <div class="pt-2">
+        <a href="{{ url_for('export.export_all') }}" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 transition-all duration-300">
+          <i data-lucide="download" width="20" height="20"></i>
+          <span class="text-[15px]">数据导出</span>
+        </a>
+      </div>
+      {% endif %}
+    </nav>
+  </aside>
+
   <!-- 页面主容器 -->
-  <div class="flex relative z-10 max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8 h-screen gap-8">
+  <div class="flex relative z-10 max-w-[1600px] mx-auto p-3 sm:p-6 lg:p-8 min-h-screen md:h-screen gap-4 md:gap-8">
     
-    <!-- 左侧导航栏 -->
-    <aside class="w-64 flex-shrink-0 flex flex-col h-full overflow-hidden hidden md:flex">
+    <!-- 左侧导航栏 (桌面端) -->
+    <aside class="w-64 flex-shrink-0 flex-col h-full overflow-hidden hidden md:flex">
       <div class="flex items-center gap-3 px-6 py-8 flex-shrink-0">
         <div class="w-11 h-11 rounded-2xl overflow-hidden border border-white/70 dark:border-slate-700/70 shadow-lg shadow-slate-300/30 dark:shadow-black/20 bg-white">
           <img src="{{ url_for('static', filename='img/site-logo.png') }}" alt="嗯呢呗电竞 Logo" class="w-full h-full object-cover">
@@ -211,22 +323,28 @@
     <main class="flex-1 flex flex-col h-full overflow-y-auto pr-2 pb-8 custom-scrollbar">
       
       <!-- 顶部 Header -->
-      <header class="flex items-center justify-between py-6">
-        <div>
-          <h1 class="text-3xl font-bold tracking-tight text-slate-800 dark:text-white">
-            {% block header_title %}
-              {% if current_user.is_authenticated %}
-                下午好，{{ current_user.nickname or current_user.username }}
-              {% else %}
-                嗯呢呗电竞
-              {% endif %}
-            {% endblock %}
-          </h1>
-          <p class="text-slate-500 dark:text-slate-400 mt-1 text-sm font-medium" id="current-date">正在获取当前时间...</p>
+      <header class="flex items-center justify-between py-4 md:py-6">
+        <div class="flex items-center gap-3">
+          <!-- 移动端汉堡菜单按钮 -->
+          <button id="mobile-menu-btn" onclick="openMobileDrawer()" class="md:hidden w-10 h-10 flex items-center justify-center bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-full text-slate-600 dark:text-slate-300 hover:bg-white/60 dark:hover:bg-slate-800/60 transition-all shadow-sm flex-shrink-0">
+            <i data-lucide="menu" width="20" height="20"></i>
+          </button>
+          <div>
+            <h1 class="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-slate-800 dark:text-white">
+              {% block header_title %}
+                {% if current_user.is_authenticated %}
+                  下午好，{{ current_user.nickname or current_user.username }}
+                {% else %}
+                  嗯呢呗电竞
+                {% endif %}
+              {% endblock %}
+            </h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1 text-xs sm:text-sm font-medium" id="current-date">正在获取当前时间...</p>
+          </div>
         </div>
 
-        <div class="flex items-center gap-4">
-          <div class="relative">
+        <div class="flex items-center gap-2 sm:gap-4">
+          <div class="relative hidden sm:block">
             <i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" width="18" height="18"></i>
             <input 
               id="global-search-input"
@@ -335,6 +453,32 @@
   <script>
     // 初始化 Lucide Icons
     lucide.createIcons();
+
+    // 移动端抽屉菜单
+    function openMobileDrawer() {
+      var overlay = document.getElementById('mobile-overlay');
+      var drawer = document.getElementById('mobile-drawer');
+      overlay.classList.remove('hidden');
+      requestAnimationFrame(function() {
+        overlay.classList.remove('opacity-0');
+        overlay.classList.add('opacity-100');
+        drawer.classList.remove('drawer-closed');
+        drawer.classList.add('drawer-open');
+      });
+      document.body.style.overflow = 'hidden';
+      // 重新初始化抽屉内的图标
+      lucide.createIcons({ nameAttr: 'data-lucide', attrs: {} });
+    }
+    function closeMobileDrawer() {
+      var overlay = document.getElementById('mobile-overlay');
+      var drawer = document.getElementById('mobile-drawer');
+      overlay.classList.remove('opacity-100');
+      overlay.classList.add('opacity-0');
+      drawer.classList.remove('drawer-open');
+      drawer.classList.add('drawer-closed');
+      document.body.style.overflow = '';
+      setTimeout(function() { overlay.classList.add('hidden'); }, 300);
+    }
 
     // Dark Mode Toggle Logic
     const themeToggle = document.getElementById('theme-toggle');
