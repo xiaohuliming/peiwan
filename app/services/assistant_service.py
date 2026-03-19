@@ -53,7 +53,13 @@ def _build_system_prompt(user):
 - 如果问到你无法确定的数据，诚实说明
 - 不要编造数据
 
-重要: 你没有任何工具(tool)或函数调用(function call)能力。不要输出任何XML标签、tool_call或函数调用格式。所有需要的数据已在下方上下文中提供，直接基于这些数据用自然语言回答。"""
+重要: 你没有任何工具(tool)或函数调用(function call)能力。不要输出任何XML标签、tool_call或函数调用格式。所有需要的数据已在下方上下文中提供，直接基于这些数据用自然语言回答。
+
+严格禁止输出以下格式:
+- <minimax:tool_call> 或任何类似的XML标签
+- <invoke> 或 <parameter> 标签
+- 任何 tool_call、function_call 格式
+你的回复必须是纯自然语言文本，不包含任何XML或代码调用格式。如果上下文中没有相关数据，就直接说"这个信息我暂时无法查到"。"""
 
     # 按角色添加权限说明
     if user.is_admin or user.has_role('staff'):
@@ -202,7 +208,19 @@ def chat(user_message, conversation_history=None):
 
         data = resp.json()
         reply = data['choices'][0]['message']['content']
-        return True, reply.strip(), None
+
+        # 后处理: 去除模型可能输出的 XML tool_call 标签
+        import re
+        reply = re.sub(r'</?minimax:[^>]*>', '', reply)
+        reply = re.sub(r'</?invoke[^>]*>', '', reply)
+        reply = re.sub(r'</?parameter[^>]*>', '', reply)
+        reply = re.sub(r'</?tool_call[^>]*>', '', reply)
+        reply = reply.strip()
+
+        if not reply:
+            reply = '让我看看... 这个信息我暂时无法查到，请换个方式问问我哦~'
+
+        return True, reply, None
 
     except requests.Timeout:
         return False, None, '请求超时，请稍后重试 ⏳'

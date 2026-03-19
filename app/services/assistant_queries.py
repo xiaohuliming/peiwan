@@ -36,7 +36,7 @@ def _register(keywords, admin_only=True):
 
 # ---- 管理员/客服可用的查询 ----
 
-@_register(['今日订单', '今天订单', '今天下单', '今日下单', '今天的订单'], admin_only=True)
+@_register(['今日订单', '今天订单', '今天下单', '今日下单', '今天的订单', '今天有多少订单', '今天几个订单', '今天有多少单'], admin_only=True)
 def query_today_orders(user, msg):
     """今日订单列表"""
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -52,7 +52,24 @@ def query_today_orders(user, msg):
     return '\n'.join(lines)
 
 
-@_register(['本周订单', '这周订单', '一周订单', '近7天', '最近7天'], admin_only=True)
+@_register(['这两天', '近两天', '最近两天', '昨天', '前两天', '两天订单'], admin_only=True)
+def query_recent_days_orders(user, msg):
+    """最近2天订单列表"""
+    two_days_ago = datetime.utcnow() - timedelta(days=2)
+    orders = Order.query.filter(Order.created_at >= two_days_ago).order_by(desc(Order.created_at)).limit(50).all()
+    if not orders:
+        return '📋 最近两天暂无订单'
+    lines = [f'📋 最近两天订单 (共{len(orders)}单):']
+    for o in orders:
+        boss = (o.boss.nickname or o.boss.username) if o.boss else '未知'
+        player = (o.player.nickname or o.player.username) if o.player else '待分配'
+        project = o.project_item.name if o.project_item else '未知'
+        date = o.created_at.strftime('%m-%d %H:%M') if o.created_at else ''
+        lines.append(f'  · {o.order_no} | 老板:{boss} | 陪玩:{player} | {project} | ¥{o.boss_pay} | {o.status_label} | {date}')
+    return '\n'.join(lines)
+
+
+@_register(['本周订单', '这周订单', '一周订单', '近7天', '最近7天', '近一周'], admin_only=True)
 def query_week_orders(user, msg):
     """近7天订单统计"""
     now = datetime.utcnow()
