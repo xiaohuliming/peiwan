@@ -20,21 +20,16 @@ SILICONFLOW_MODEL = 'Pro/MiniMaxAI/MiniMax-M2.5'
 
 
 def _build_system_prompt(user):
-    """构建包含平台上下文的系统提示词"""
+    """构建包含平台上下文的系统提示词（按权限区分）"""
     role_label = '老板' if user.is_god else ('陪玩' if user.is_player else ('客服' if user.has_role('staff') else ('管理员' if user.is_admin else '用户')))
-    return f"""你是"助理小呢"，嗯呢呗电竞陪玩店的智能助理。你性格温柔可爱、专业靠谱。
+
+    base = f"""你是"助理小呢"，嗯呢呗电竞陪玩店的智能助理。你性格温柔可爱、专业靠谱。
 当前用户: {user.nickname or user.username} (角色: {role_label}, ID: {user.id})
 
 平台介绍:
 - 嗯呢呗电竞是一个基于KOOK的游戏陪玩店中控管理系统
 - 支持常规陪玩、护航、代练三种订单类型
-- 货币体系: 嗯呢币(m_coin, 充值余额) + 赠金(m_coin_gift, 赠送余额) + 小猪粮(m_bean, 陪玩收益) + 冻结小猪粮(m_bean_frozen)
 - 老板通过充值嗯呢币下单，陪玩通过接单赚取小猪粮
-
-你可以帮助用户:
-1. 查询平台数据（用户信息、订单统计、财务概况等）
-2. 解答平台使用问题
-3. 提供运营建议
 
 回答规则:
 - 用中文简洁回复，善用emoji让回复更生动
@@ -42,29 +37,75 @@ def _build_system_prompt(user):
 - 如果问到你无法确定的数据，诚实说明
 - 不要编造数据"""
 
+    # 按角色添加权限说明
+    if user.is_admin or user.has_role('staff'):
+        base += """
+
+你的权限: 完整平台数据访问
+你可以帮助:
+1. 查询平台整体数据（用户数、订单统计、财务概况、待处理事项等）
+2. 查询任意用户信息和订单详情
+3. 解答运营问题、提供运营建议
+4. 解释平台功能和操作流程"""
+    elif user.is_god:
+        base += """
+
+你的权限: 仅限当前用户个人数据
+你可以帮助:
+1. 查询当前用户的余额、订单记录
+2. 解答下单、充值等使用问题
+3. 介绍平台功能
+
+严格禁止:
+- 不可透露平台总用户数、总订单数等整体运营数据
+- 不可透露其他用户的信息
+- 如果用户询问平台整体数据，礼貌告知"抱歉，这些信息仅管理人员可查看哦~" """
+    elif user.is_player:
+        base += """
+
+你的权限: 仅限当前用户个人数据
+你可以帮助:
+1. 查询当前用户的收益、提现记录
+2. 解答接单、提现等使用问题
+3. 介绍平台功能
+
+严格禁止:
+- 不可透露平台总用户数、总订单数等整体运营数据
+- 不可透露其他用户的信息
+- 如果用户询问平台整体数据，礼貌告知"抱歉，这些信息仅管理人员可查看哦~" """
+    else:
+        base += """
+
+你的权限: 仅公开信息
+你可以帮助:
+1. 解答平台使用问题
+2. 介绍平台功能
+严格禁止透露任何平台内部数据。"""
+
+    return base
+
 
 def _get_platform_context(user):
-    """获取平台实时数据作为上下文"""
+    """获取平台实时数据作为上下文（按权限区分）"""
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     context_parts = []
 
     try:
-        # 基本统计
-        total_users = User.query.count()
-        total_orders = Order.query.filter(Order.status == 'paid').count()
-        today_orders = Order.query.filter(
-            Order.status == 'paid',
-            Order.created_at >= today_start
-        ).count()
+        # 管理员/客服: 可查看完整平台数据
+        if user.is_admin or user.has_role('staff'):
+            total_users = User.query.count()
+            total_orders = Order.query.filter(Order.status == 'paid').count()
+            today_orders = Order.query.filter(
+                Order.status == 'paid',
+                Order.created_at >= today_start
+            ).count()
+            pending_orders = Order.query.filter(Order.status.in_(['pending_report', 'pending_confirm'])).count()
+            frozen_orders = Order.query.filter(Order.freeze_status == 'frozen', Order.status == 'paid').count()
+            pending_withdraws = WithdrawRequest.query.filter_by(status='pending').count()
 
-        # 待处理事项
-        pending_orders = Order.query.filter(Order.status.in_(['pending_report', 'pending_confirm'])).count()
-        frozen_orders = Order.query.filter(Order.freeze_status == 'frozen', Order.status == 'paid').count()
-        pending_withdraws = WithdrawRequest.query.filter_by(status='pending').count()
-
-        context_parts.append(f"""📊 平台实时数据:
+            context_parts.append(f"""📊 平台实时数据:
 - 总用户数: {total_users}
 - 已完成订单: {total_orders}
 - 今日订单: {today_orders}
@@ -72,21 +113,25 @@ def _get_platform_context(user):
 - 冻结中订单: {frozen_orders}
 - 待审提现: {pending_withdraws}""")
 
-        # 若是当前用户的个人数据
+        # 老板: 仅个人余额和订单数
         if user.is_god:
-            context_parts.append(f"""
-💰 当前用户余额:
+            my_orders = Order.query.filter_by(boss_id=user.id, status='paid').count()
+            context_parts.append(f"""💰 你的账户信息:
 - 嗯呢币: {user.m_coin}
-- 赠金: {user.m_coin_gift}""")
+- 赠金: {user.m_coin_gift}
+- 历史订单数: {my_orders}""")
+
+        # 陪玩: 仅个人收益和订单数
         elif user.is_player:
-            context_parts.append(f"""
-💰 当前用户余额:
+            my_orders = Order.query.filter_by(player_id=user.id, status='paid').count()
+            context_parts.append(f"""💰 你的账户信息:
 - 小猪粮: {user.m_bean}
-- 冻结小猪粮: {user.m_bean_frozen}""")
+- 冻结小猪粮: {user.m_bean_frozen}
+- 已完成订单数: {my_orders}""")
 
     except Exception as e:
         current_app.logger.warning(f'[Assistant] 获取平台数据失败: {e}')
-        context_parts.append('(平台数据暂时无法获取)')
+        context_parts.append('(数据暂时无法获取)')
 
     return '\n'.join(context_parts)
 
