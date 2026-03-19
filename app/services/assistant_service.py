@@ -120,7 +120,7 @@ def _get_platform_context(user):
             boss_name = (o.boss.nickname or o.boss.username) if o.boss else '未知'
             player_name = (o.player.nickname or o.player.username) if o.player else '待分配'
             project_name = o.project_item.name if o.project_item else '未知项目'
-            line = f'  · {o.order_no} | 老板:{boss_name} | 陪玩:{player_name} | 项目:{project_name} | 金额:{o.boss_pay}'
+            line = f'  · {o.order_no} | 老板:{boss_name} | 陪玩:{player_name} | 项目:{project_name} | 金额:{o.total_price}'
             if extra_fields:
                 line += ' | ' + extra_fields
             return line
