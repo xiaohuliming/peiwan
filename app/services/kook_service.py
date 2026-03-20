@@ -450,9 +450,9 @@ def grant_kook_role(user, role_id):
                     logger.info('[KOOK] 角色授予成功: user=%s role=%s guild=%s', kook_id, role_id, guild_id)
                     return  # 成功一次即可
                 else:
-                    logger.debug('[KOOK] 角色授予失败(guild=%s): %s', guild_id, data.get('message', ''))
+                    logger.warning('[KOOK] 角色授予失败(guild=%s): code=%s msg=%s', guild_id, data.get('code'), data.get('message', ''))
             except Exception as e:
-                logger.debug('[KOOK] 角色授予异常(guild=%s): %s', guild_id, e)
+                logger.warning('[KOOK] 角色授予异常(guild=%s): %s', guild_id, e)
 
         logger.warning('[KOOK] 角色授予: 所有服务器均失败 user=%s role=%s', kook_id, role_id)
     except Exception as e:
