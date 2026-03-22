@@ -355,7 +355,7 @@ def create_normal_order(boss, player, project_item, price_tier, staff,
     base_price = Decimal(str(project_item.get_price_by_tier(price_tier) or 0))
     extra_price_dec = Decimal(str(extra_price))
     addon_price_dec = Decimal(str(addon_price))
-    commission_rate = project_item.commission_rate
+    commission_rate = player.commission_rate if player.commission_rate is not None else project_item.commission_rate
     boss_discount = _get_boss_discount_percent(boss)
 
     # 创建前余额校验：按 1 小时/局的最低可扣金额预校验
@@ -403,7 +403,7 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     即时扣款 + 直接结算 + 自动冻结（无需报单）
     """
     base_price = Decimal(str(project_item.get_price_by_tier(price_tier) or 0))
-    commission_rate = project_item.commission_rate
+    commission_rate = player.commission_rate if player.commission_rate is not None else project_item.commission_rate
     boss_discount = _get_boss_discount_percent(boss)
     unit_price = base_price + Decimal(str(extra_price))
     duration_dec = Decimal(str(duration))

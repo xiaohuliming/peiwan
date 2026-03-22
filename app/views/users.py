@@ -504,6 +504,38 @@ def update_info(user_id):
         db.session.commit()
         flash('老板折扣已更新（后续新建/申报订单按该折扣计算）', 'success')
 
+    elif action == 'update_commission_rate':
+        if not current_user.is_admin:
+            flash('需要管理员权限', 'error')
+            return redirect(request.referrer or url_for('users.detail', user_id=user_id))
+
+        raw_rate = (request.form.get('commission_rate') or '').strip()
+        if not raw_rate:
+            # 清空 = 走项目默认
+            old_rate = user.commission_rate
+            user.commission_rate = None
+            log_operation(current_user.id, 'user_update_commission_rate', 'user', user.id,
+                          f'陪玩分成: {old_rate}% -> 项目默认')
+            db.session.commit()
+            flash('已清除自定义分成，将使用项目默认值', 'success')
+        else:
+            try:
+                new_rate = Decimal(raw_rate)
+            except Exception:
+                flash('分成比例格式无效', 'error')
+                return redirect(request.referrer or url_for('users.detail', user_id=user_id, tab='info'))
+
+            if new_rate < 0 or new_rate > 100:
+                flash('分成比例范围 0-100', 'error')
+                return redirect(request.referrer or url_for('users.detail', user_id=user_id, tab='info'))
+
+            old_rate = user.commission_rate
+            user.commission_rate = new_rate.quantize(Decimal('0.01'))
+            log_operation(current_user.id, 'user_update_commission_rate', 'user', user.id,
+                          f'陪玩分成: {old_rate or "默认"}% -> {user.commission_rate}%')
+            db.session.commit()
+            flash(f'陪玩分成已更新为 {user.commission_rate}%', 'success')
+
     elif action in ('toggle_anonymous_all', 'toggle_anonymous_upgrade'):
         new_state = not user.anonymous_broadcast_all
         user.set_anonymous_broadcast_all(new_state)

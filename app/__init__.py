@@ -160,6 +160,7 @@ def create_app(config_class=Config, start_background_tasks=True):
                 ('anonymous_gift_recv', 'BOOLEAN DEFAULT 0'),
                 ('anonymous_upgrade', 'BOOLEAN DEFAULT 0'),
                 ('anonymous_ranking', 'BOOLEAN DEFAULT 0'),
+                ('commission_rate', 'DECIMAL(5,2)'),
             ]
             for col_name, col_type in anon_cols:
                 if col_name not in user_cols:

@@ -31,8 +31,8 @@ def send_gift(boss, player, gift, quantity, staff=None):
     if total_available < total_price:
         return None, '老板余额不足'
 
-    # 计算分成 (默认80%)
-    commission_rate = Decimal('80')
+    # 计算分成 (默认80%, 陪玩自定义优先)
+    commission_rate = Decimal(str(player.commission_rate)) if player.commission_rate is not None else Decimal('80')
     player_earning = (total_price * commission_rate / Decimal('100')).quantize(
         Decimal('0.01'), rounding=ROUND_HALF_UP
     )
@@ -160,7 +160,7 @@ def freeze_gift_order(gift_order, operator_id=None):
 
 
 def unfreeze_gift_order(gift_order, operator_id=None):
-    """解冻礼物订单 — 冠名礼物解冻后佣金到账"""
+    """解冻礼物订单 -- 冠名礼物解冻后佣金到账"""
     if gift_order.freeze_status != 'frozen':
         return False, '未冻结'
 
@@ -197,7 +197,7 @@ def refund_gift_order(gift_order, operator_id=None):
     player_earning = gift_order.player_earning
     is_crown = bool(gift_order.gift and gift_order.gift.gift_type == 'crown')
 
-    # 先校验可扣佣金，避免出现“老板已退款但陪玩仅被清零”的账务不一致
+    # 先校验可扣佣金，避免出现"老板已退款但陪玩仅被清零"的账务不一致
     available_frozen = _quantize_money(player.m_bean_frozen)
     available_bean = _quantize_money(player.m_bean)
     if is_crown:

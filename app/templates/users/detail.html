@@ -187,6 +187,16 @@
           </form>
 
           <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2">
+            <input type="hidden" name="action" value="update_commission_rate">
+            <div class="flex flex-col">
+              <label class="text-xs text-slate-400 mb-1">陪玩分成比例（留空=项目默认，如80=80%）</label>
+              <input type="number" name="commission_rate" value="{{ user.commission_rate if user.commission_rate is not none else '' }}" min="0" max="100" step="0.01" placeholder="项目默认"
+                class="w-40 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-xs font-medium">设置分成</button>
+          </form>
+
+          <form method="post" action="{{ url_for('users.update_info', user_id=user.id) }}" class="flex gap-2 items-end mt-2">
             <input type="hidden" name="action" value="update_broadcast_channel">
             <input type="text" name="broadcast_channel" value="{{ user.broadcast_channel or '' }}" placeholder="频道ID" class="w-40 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-medium">设置播报频道</button>

@@ -46,6 +46,7 @@ class User(UserMixin, db.Model):
     anonymous_gift_recv = db.Column(db.Boolean, default=False)
     anonymous_upgrade = db.Column(db.Boolean, default=False)
     anonymous_ranking = db.Column(db.Boolean, default=False)
+    commission_rate = db.Column(db.Numeric(5, 2))  # 陪玩分成比例(NULL=走项目默认, 如80=80%)
     broadcast_channel = db.Column(db.String(100))
 
     referrer_id = db.Column(db.Integer, db.ForeignKey('users.id'))
