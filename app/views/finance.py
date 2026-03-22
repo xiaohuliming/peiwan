@@ -303,11 +303,7 @@ def withdraw():
             flash('余额不足', 'error')
             return _render_page()
 
-        pending = WithdrawRequest.query.filter_by(user_id=current_user.id, status='pending').first()
-        if pending:
-            flash(f'你有一笔待审核提现（#{pending.id}），请等待处理', 'error')
-            return _render_page()
-
+        # 3天内只能提现1次（不计已拒绝/失败的）
         recent_wr = _get_recent_withdrawal_within_3_days(current_user.id)
         if recent_wr:
             next_time = (recent_wr.created_at + timedelta(days=3)).strftime('%Y-%m-%d %H:%M')
