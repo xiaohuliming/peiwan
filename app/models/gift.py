@@ -16,8 +16,8 @@ class Gift(db.Model):
     crown_broadcast_template = db.Column(db.Text)  # 冠名礼物播报模板, 优先于通用礼物模板
     sort_order = db.Column(db.Integer, default=0, nullable=False, index=True)  # 列表排序(越小越靠前)
     deleted_at = db.Column(db.DateTime, nullable=True, index=True)  # 软删除时间(非空=已删除)
-    sender_kook_role_id = db.Column(db.String(50), nullable=True)    # 赠送人获得的KOOK角色ID
-    receiver_kook_role_id = db.Column(db.String(50), nullable=True)  # 被赠送人获得的KOOK角色ID
+    sender_kook_role_id = db.Column(db.String(50), nullable=True)    # 赠送人获得的KOOK标签ID
+    receiver_kook_role_id = db.Column(db.String(50), nullable=True)  # 被赠送人获得的KOOK标签ID
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

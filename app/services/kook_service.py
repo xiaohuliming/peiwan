@@ -418,16 +418,16 @@ def grant_kook_role(user, role_id):
         return
     kook_id = getattr(user, 'kook_id', None)
     if not kook_id:
-        logger.warning('[KOOK] 用户 %s 无 kook_id，跳过角色授予', user.id)
+        logger.warning('[KOOK] 用户 %s 无 kook_id，跳过标签授予', user.id)
         return
     if not _get_token() or _get_token() == 'your-kook-bot-token':
-        logger.warning('[KOOK] Token 未配置，跳过角色授予')
+        logger.warning('[KOOK] Token 未配置，跳过标签授予')
         return
 
     try:
         guilds, err = _fetch_all_guilds()
         if err or not guilds:
-            logger.warning('[KOOK] 获取服务器列表失败，跳过角色授予: %s', err)
+            logger.warning('[KOOK] 获取服务器列表失败，跳过标签授予: %s', err)
             return
 
         for guild in guilds:
@@ -447,14 +447,14 @@ def grant_kook_role(user, role_id):
                 )
                 data = resp.json()
                 if data.get('code') == 0:
-                    logger.info('[KOOK] 角色授予成功: user=%s role=%s guild=%s', kook_id, role_id, guild_id)
+                    logger.info('[KOOK] 标签授予成功: user=%s role=%s guild=%s', kook_id, role_id, guild_id)
                     return  # 成功一次即可
                 else:
-                    logger.warning('[KOOK] 角色授予失败(guild=%s): code=%s msg=%s', guild_id, data.get('code'), data.get('message', ''))
+                    logger.warning('[KOOK] 标签授予失败(guild=%s): code=%s msg=%s', guild_id, data.get('code'), data.get('message', ''))
             except Exception as e:
-                logger.warning('[KOOK] 角色授予异常(guild=%s): %s', guild_id, e)
+                logger.warning('[KOOK] 标签授予异常(guild=%s): %s', guild_id, e)
 
-        logger.warning('[KOOK] 角色授予: 所有服务器均失败 user=%s role=%s', kook_id, role_id)
+        logger.warning('[KOOK] 标签授予: 所有服务器均失败 user=%s role=%s', kook_id, role_id)
     except Exception as e:
         logger.error('[KOOK] grant_kook_role 异常: %s', e)
 

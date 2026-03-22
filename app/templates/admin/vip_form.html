@@ -45,22 +45,22 @@
              class="w-full px-4 py-2.5 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 text-slate-800 dark:text-slate-200">
     </div>
 
-    <!-- KOOK 角色 -->
+    <!-- KOOK 标签 -->
     <div>
       <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
         <i data-lucide="shield" width="14" height="14" class="inline text-purple-500"></i>
-        升级自动授予 KOOK 角色
+        升级自动授予 KOOK 标签
       </label>
       <select name="kook_role_id"
               class="w-full px-4 py-2.5 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 text-slate-800 dark:text-slate-200">
-        <option value="">不授予角色</option>
+        <option value="">不授予标签</option>
         {% for role in kook_roles %}
         <option value="{{ role.role_id }}" {% if level and level.kook_role_id == role.role_id|string %}selected{% endif %}>
           {{ role.name }} (ID: {{ role.role_id }})
         </option>
         {% endfor %}
       </select>
-      <p class="text-xs text-slate-400 mt-1">用户升级到此等级时，将自动授予选定的 KOOK 服务器角色</p>
+      <p class="text-xs text-slate-400 mt-1">用户升级到此等级时，将自动授予选定的 KOOK 服务器标签</p>
     </div>
 
     <!-- 权益描述 -->
