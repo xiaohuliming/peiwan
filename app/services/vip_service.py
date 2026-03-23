@@ -100,12 +100,23 @@ def sync_vip_level_by_experience(user, levels=None, allow_downgrade=True):
         except Exception as e:
             logger.warning('[VIP] 升级播报异常 user=%s %s -> %s: %s', user.id, old_level, target_level.name, e)
 
-        # KOOK 角色自动授予
+        # KOOK 标签自动授予
         try:
             kook_role = getattr(target_level, 'kook_role_id', None)
-            if kook_role:
+            if kook_role and user.kook_id:
                 from app.services.kook_service import grant_kook_role, _async_send
-                _async_send(grant_kook_role, user, kook_role)
+
+                # 提前提取所需属性，避免 _async_send 线程中 User 对象与 session 脱离
+                _uid = user.id
+                _kook_id = user.kook_id
+
+                class _UserLike:
+                    """轻量代理，仅供 grant_kook_role 读取 kook_id / id"""
+                    def __init__(self, uid, kook_id):
+                        self.id = uid
+                        self.kook_id = kook_id
+
+                _async_send(grant_kook_role, _UserLike(_uid, _kook_id), kook_role)
                 logger.info('[VIP] 升级标签授予已触发 user=%s role=%s level=%s', user.id, kook_role, target_level.name)
         except Exception as e:
             logger.warning('[VIP] 升级标签授予异常 user=%s: %s', user.id, e)

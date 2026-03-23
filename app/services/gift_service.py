@@ -124,13 +124,19 @@ def send_gift(boss, player, gift, quantity, staff=None):
     except Exception:
         pass
 
-    # KOOK 角色自动授予（礼物配置了角色时）
+    # KOOK 标签自动授予（礼物配置了标签时）
     try:
         from app.services.kook_service import grant_kook_role, _async_send
-        if gift.sender_kook_role_id:
-            _async_send(grant_kook_role, boss, gift.sender_kook_role_id)
-        if gift.receiver_kook_role_id:
-            _async_send(grant_kook_role, player, gift.receiver_kook_role_id)
+
+        class _UserLike:
+            def __init__(self, uid, kook_id):
+                self.id = uid
+                self.kook_id = kook_id
+
+        if gift.sender_kook_role_id and boss.kook_id:
+            _async_send(grant_kook_role, _UserLike(boss.id, boss.kook_id), gift.sender_kook_role_id)
+        if gift.receiver_kook_role_id and player.kook_id:
+            _async_send(grant_kook_role, _UserLike(player.id, player.kook_id), gift.receiver_kook_role_id)
     except Exception:
         pass
 
