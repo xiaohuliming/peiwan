@@ -98,5 +98,41 @@
     </form>
   </div>
 
+  {# 标签授予调测 #}
+  <div class="glass-card p-6">
+    <div class="flex items-center gap-4 mb-4">
+      <div class="p-3 rounded-2xl bg-blue-500/10 text-blue-500">
+        <i data-lucide="shield-check" width="24" height="24"></i>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">KOOK 标签授予调测</h3>
+        <p class="text-xs text-slate-400 mt-0.5">手动测试给指定用户授予 KOOK 服务器标签（同步调用，直接返回结果）</p>
+      </div>
+    </div>
+    <form action="{{ url_for('system.test_grant_role') }}" method="post" class="space-y-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm text-slate-600 dark:text-slate-300 mb-1">平台用户 ID</label>
+          <input type="number" name="user_id" required placeholder="如: 5"
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+        </div>
+        <div>
+          <label class="block text-sm text-slate-600 dark:text-slate-300 mb-1">KOOK 标签 ID</label>
+          <select name="role_id" required
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white/80 dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+            <option value="">选择标签</option>
+            {% for role in kook_roles %}
+            <option value="{{ role.id }}">{{ role.name }}（ID: {{ role.id }}）</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">
+        <i data-lucide="zap" width="16" height="16"></i>
+        测试授予
+      </button>
+    </form>
+  </div>
+
 </div>
 {% endblock %}

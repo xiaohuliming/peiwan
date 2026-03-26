@@ -169,3 +169,37 @@ def save_register_kook_roles():
 
     flash('注册 KOOK 标签配置已保存', 'success')
     return redirect(url_for('system.index'))
+
+
+@system_bp.route('/test-grant-role', methods=['POST'])
+@login_required
+@admin_required
+def test_grant_role():
+    """调测: 手动测试 KOOK 标签授予"""
+    from app.models.user import User
+
+    user_id = request.form.get('user_id', '').strip()
+    role_id = request.form.get('role_id', '').strip()
+
+    if not user_id or not role_id:
+        flash('请填写用户ID和标签ID', 'error')
+        return redirect(url_for('system.index'))
+
+    user = User.query.get(int(user_id))
+    if not user:
+        flash(f'用户 #{user_id} 不存在', 'error')
+        return redirect(url_for('system.index'))
+
+    if not user.kook_id:
+        flash(f'用户 #{user_id} 未绑定 KOOK', 'error')
+        return redirect(url_for('system.index'))
+
+    # 同步调用（不用 _async_send），这样能直接看到结果
+    try:
+        from app.services.kook_service import grant_kook_role
+        grant_kook_role(user, role_id)
+        flash(f'标签授予已执行: user={user.kook_id}, role_id={role_id}，请检查 KOOK 服务器是否生效', 'success')
+    except Exception as e:
+        flash(f'标签授予异常: {e}', 'error')
+
+    return redirect(url_for('system.index'))
