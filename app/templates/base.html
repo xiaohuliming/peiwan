@@ -187,6 +187,7 @@
         <a href="{{ url_for('identity_tag_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'identity_tag_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">身份标签</a>
         <a href="{{ url_for('logs.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'logs' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">操作日志</a>
         <a href="{{ url_for('broadcast_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'broadcast_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">播报管理</a>
+        <a href="{{ url_for('vip_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'vip_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">VIP管理</a>
         <a href="{{ url_for('upgrade_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'upgrade_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">升级记录</a>
         <a href="{{ url_for('system.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'system' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">系统工具</a>
         <a href="{{ url_for('lottery_admin.index') }}" class="block px-4 py-2.5 rounded-xl text-sm transition-colors {% if request.endpoint and 'lottery_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/20{% endif %}">抽奖管理</a>
@@ -269,7 +270,7 @@
 
         {# 管理后台 - 管理员+ #}
         {% if current_user.is_admin %}
-        {% set is_admin_active = request.endpoint and ('project_admin' in request.endpoint or 'account_admin' in request.endpoint or 'identity_tag_admin' in request.endpoint or 'logs' in request.endpoint or 'broadcast_admin' in request.endpoint or 'upgrade_admin' in request.endpoint or 'system' in request.endpoint or 'lottery_admin' in request.endpoint) %}
+        {% set is_admin_active = request.endpoint and ('project_admin' in request.endpoint or 'account_admin' in request.endpoint or 'identity_tag_admin' in request.endpoint or 'logs' in request.endpoint or 'broadcast_admin' in request.endpoint or 'vip_admin' in request.endpoint or 'upgrade_admin' in request.endpoint or 'system' in request.endpoint or 'lottery_admin' in request.endpoint) %}
         <details id="admin-menu-container" class="group" {% if is_admin_active %}open{% endif %}>
           <summary class="nav-btn w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 cursor-pointer {% if is_admin_active %}text-purple-600 dark:text-purple-400 font-medium{% else %}text-slate-500 dark:text-slate-400 hover:bg-white/30 dark:hover:bg-slate-800/30 hover:text-slate-800 dark:hover:text-slate-200{% endif %}">
             <i data-lucide="settings-2" width="20" height="20" stroke-width="2"></i>
@@ -293,6 +294,9 @@
             </a>
             <a href="{{ url_for('broadcast_admin.index') }}" class="block px-3 py-2 rounded-xl text-sm transition-colors {% if request.endpoint and 'broadcast_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/20 dark:hover:bg-slate-800/20{% endif %}">
               播报管理
+            </a>
+            <a href="{{ url_for('vip_admin.index') }}" class="block px-3 py-2 rounded-xl text-sm transition-colors {% if request.endpoint and 'vip_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/20 dark:hover:bg-slate-800/20{% endif %}">
+              VIP管理
             </a>
             <a href="{{ url_for('upgrade_admin.index') }}" class="block px-3 py-2 rounded-xl text-sm transition-colors {% if request.endpoint and 'upgrade_admin' in request.endpoint %}text-purple-600 dark:text-purple-400 font-medium bg-white/40 dark:bg-slate-800/40{% else %}text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-white/20 dark:hover:bg-slate-800/20{% endif %}">
               升级记录
