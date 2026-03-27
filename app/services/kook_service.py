@@ -142,40 +142,50 @@ def fetch_kook_role_catalog(guild_id=None, channel_id=None):
 
     roles = []
     for gid in target_guild_ids:
-        try:
-            resp = requests.get(
-                f'{KOOK_API_BASE}/guild-role/list',
-                headers=_headers(),
-                params={'guild_id': str(gid)},
-                timeout=10,
-            )
-            data = resp.json()
-        except Exception as e:
-            logger.warning('[KOOK] 获取角色列表异常(guild=%s): %s', gid, e)
-            continue
+        page = 1
+        while True:
+            try:
+                resp = requests.get(
+                    f'{KOOK_API_BASE}/guild-role/list',
+                    headers=_headers(),
+                    params={'guild_id': str(gid), 'page': page, 'page_size': 100},
+                    timeout=10,
+                )
+                data = resp.json()
+            except Exception as e:
+                logger.warning('[KOOK] 获取角色列表异常(guild=%s page=%s): %s', gid, page, e)
+                break
 
-        if data.get('code') != 0:
-            logger.warning('[KOOK] 获取角色列表失败(guild=%s): %s', gid, data)
-            continue
+            if data.get('code') != 0:
+                logger.warning('[KOOK] 获取角色列表失败(guild=%s page=%s): %s', gid, page, data)
+                break
 
-        role_items = _extract_items(data.get('data') or {})
-        guild_name = (guild_map.get(str(gid)) or {}).get('name') or f'服务器 {gid}'
-        for role in role_items:
-            role_id = str(role.get('role_id') or role.get('id') or '').strip()
-            if not role_id:
-                continue
-            perms_value, perm_bits = _permission_bits(role.get('permissions'))
-            roles.append({
-                'id': role_id,
-                'name': str(role.get('name') or role.get('role_name') or role_id),
-                'permissions': perms_value,
-                'permission_bits': perm_bits,
-                'hoist': bool(role.get('hoist')),
-                'mentionable': bool(role.get('mentionable', True)),
-                'position': _safe_int(role.get('position'), 0),
-                'guild_id': str(gid),
-                'guild_name': guild_name,
-            })
+            payload = data.get('data') or {}
+            role_items = _extract_items(payload)
+            guild_name = (guild_map.get(str(gid)) or {}).get('name') or f'服务器 {gid}'
+            for role in role_items:
+                role_id = str(role.get('role_id') or role.get('id') or '').strip()
+                if not role_id:
+                    continue
+                perms_value, perm_bits = _permission_bits(role.get('permissions'))
+                roles.append({
+                    'id': role_id,
+                    'name': str(role.get('name') or role.get('role_name') or role_id),
+                    'permissions': perms_value,
+                    'permission_bits': perm_bits,
+                    'hoist': bool(role.get('hoist')),
+                    'mentionable': bool(role.get('mentionable', True)),
+                    'position': _safe_int(role.get('position'), 0),
+                    'guild_id': str(gid),
+                    'guild_name': guild_name,
+                })
+
+            # 分页: 检查是否有更多页
+            meta = payload.get('meta') if isinstance(payload, dict) else {}
+            page_total = _safe_int((meta or {}).get('page_total'), 1)
+            if page >= page_total:
+                break
+            page += 1
 
     roles.sort(key=lambda x: (x.get('guild_name', ''), -_safe_int(x.get('position'), 0), x.get('name', '')))
     guild_list = [{
