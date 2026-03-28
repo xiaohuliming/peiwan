@@ -364,6 +364,7 @@ def _send_channel_msg(channel_id, content):
     content 为 dict (含 text/image_url/color) 时用卡片消息 (type 10)，图片作为独立模块。
     """
     if not _get_token() or _get_token() == 'your-kook-bot-token':
+        print(f'[KOOK _send_channel_msg] Token 未配置，跳过 channel={channel_id}')
         logger.warning('[KOOK] Token 未配置，跳过推送')
         return False
 
@@ -387,6 +388,7 @@ def _send_channel_msg(channel_id, content):
         else:
             payload = {'target_id': str(channel_id), 'content': content, 'type': 9}
 
+        print(f'[KOOK _send_channel_msg] POST channel={channel_id}, type={payload["type"]}, content_len={len(str(payload.get("content","")))}')
         resp = requests.post(
             f'{KOOK_API_BASE}/message/create',
             headers=_headers(),
@@ -395,10 +397,13 @@ def _send_channel_msg(channel_id, content):
         )
         data = resp.json()
         if data.get('code') != 0:
+            print(f'[KOOK _send_channel_msg] 失败: {data}')
             logger.error(f'[KOOK] 频道消息失败: {data}')
             return False
+        print(f'[KOOK _send_channel_msg] 成功: channel={channel_id}')
         return True
     except Exception as e:
+        print(f'[KOOK _send_channel_msg] 异常: {e}')
         logger.error(f'[KOOK] 频道消息异常: {e}')
         return False
 
@@ -1511,7 +1516,10 @@ def push_gift_broadcast(gift_order):
         broadcast_type='gift', status=True
     ).all()
 
+    print(f'[KOOK 礼物播报] push_gift_broadcast 调用, gift_order={gift_order.id}, configs 数量={len(configs)}')
+
     if not configs:
+        print('[KOOK 礼物播报] 跳过: 未找到启用的 gift 播报配置')
         logger.info('[KOOK] 礼物播报跳过: 未找到启用的 gift 播报配置')
         return
 
@@ -1574,6 +1582,21 @@ def push_gift_broadcast(gift_order):
         selected_gift_template = ''
         selected_source = ''
     sent = False
+    # 收集播报目标频道: 配置频道 + 用户自定义频道
+    target_channels = set()
+    for cfg in configs:
+        if cfg.channel_id:
+            target_channels.add(cfg.channel_id.strip())
+    # 用户私有播报频道覆盖（额外发送到用户设置的频道）
+    boss_ch = getattr(boss, 'broadcast_channel', None)
+    player_ch = getattr(player, 'broadcast_channel', None)
+    if boss_ch and str(boss_ch).strip():
+        target_channels.add(str(boss_ch).strip())
+    if player_ch and str(player_ch).strip():
+        target_channels.add(str(player_ch).strip())
+
+    print(f'[KOOK 礼物播报] configs={len(configs)}, target_channels={target_channels}')
+
     for cfg in configs:
         if not cfg.channel_id:
             continue
@@ -1588,12 +1611,40 @@ def push_gift_broadcast(gift_order):
         # 若礼物图已上传为 KOOK 资源，则图片用独立 type=2 消息发送，避免解析成普通链接
         image_url = '' if gift_image_asset_url else (gift_image_url or _resolve_image_url(cfg.image_url))
         card_json = _build_card(meta['title'], text, meta['color'], image_url=image_url)
+        print(f'[KOOK 礼物播报] 发送到 cfg 频道={cfg.channel_id}, card_type={type(card_json).__name__}')
         _async_send(_send_channel_msg, cfg.channel_id, card_json)
         if gift_image_asset_url:
             _async_send(_send_channel_image, cfg.channel_id, gift_image_asset_url)
         sent = True
 
+    # 发送到用户自定义播报频道（如果与配置频道不同）
+    user_channels = set()
+    if boss_ch and str(boss_ch).strip():
+        user_channels.add(str(boss_ch).strip())
+    if player_ch and str(player_ch).strip():
+        user_channels.add(str(player_ch).strip())
+    config_channels = {cfg.channel_id.strip() for cfg in configs if cfg.channel_id}
+    extra_channels = user_channels - config_channels
+    if extra_channels:
+        # 用第一个配置或默认模板
+        cfg = configs[0] if configs else None
+        cfg_template_raw = (cfg.template or '') if cfg else ''
+        cfg_template = cfg_template_raw if cfg_template_raw.strip() else ''
+        use_gift = bool(selected_gift_template and selected_gift_template.strip())
+        use_cfg = bool(cfg_template and cfg_template.strip())
+        template = selected_gift_template if use_gift else (cfg_template if use_cfg else meta['default_template'])
+        text = _render_tpl(template, variables)
+        image_url = '' if gift_image_asset_url else (gift_image_url or (_resolve_image_url(cfg.image_url) if cfg else ''))
+        card_json = _build_card(meta['title'], text, meta['color'], image_url=image_url)
+        for ch in extra_channels:
+            print(f'[KOOK 礼物播报] 发送到用户自定义频道={ch}')
+            _async_send(_send_channel_msg, ch, card_json)
+            if gift_image_asset_url:
+                _async_send(_send_channel_image, ch, gift_image_asset_url)
+            sent = True
+
     if not sent:
+        print('[KOOK 礼物播报] 跳过: gift 配置存在但未填写频道ID，且用户无自定义频道')
         logger.warning('[KOOK] 礼物播报跳过: gift 配置存在但未填写频道ID')
 
 
@@ -1741,6 +1792,11 @@ def push_recharge_broadcast(user, amount):
     text = _render_tpl(cfg.template or meta['default_template'], variables)
     card_json = _build_card(meta['title'], text, meta['color'], image_url=cfg.image_url)
     _async_send(_send_channel_msg, cfg.channel_id, card_json)
+
+    # 用户自定义播报频道（额外发送）
+    user_ch = getattr(user, 'broadcast_channel', None)
+    if user_ch and str(user_ch).strip() and str(user_ch).strip() != cfg.channel_id.strip():
+        _async_send(_send_channel_msg, str(user_ch).strip(), card_json)
 
 
 def push_boss_recharge_notice(user, amount, reason='', operator=''):
