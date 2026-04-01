@@ -369,6 +369,7 @@ def _send_channel_msg(channel_id, content):
         return False
 
     try:
+        overflow_image = None  # 超长图片URL，需单独发送
         if isinstance(content, dict):
             # 卡片消息：文字 + 图片模块
             modules = [
@@ -376,7 +377,12 @@ def _send_channel_msg(channel_id, content):
             ]
             img_url = content.get('image_url')
             if img_url:
-                modules.append({'type': 'container', 'elements': [{'type': 'image', 'src': img_url}]})
+                if len(str(img_url)) <= 256:
+                    modules.append({'type': 'container', 'elements': [{'type': 'image', 'src': img_url}]})
+                else:
+                    # 图片URL超长，不放卡片里，后面单独发 type=2
+                    print(f'[KOOK _send_channel_msg] 图片URL过长({len(str(img_url))}字符)，将单独发送')
+                    overflow_image = img_url
             card_json = json.dumps([{
                 'type': 'card',
                 'theme': 'secondary',
@@ -401,6 +407,11 @@ def _send_channel_msg(channel_id, content):
             logger.error(f'[KOOK] 频道消息失败: {data}')
             return False
         print(f'[KOOK _send_channel_msg] 成功: channel={channel_id}')
+
+        # 超长图片单独发送
+        if overflow_image:
+            _send_channel_image(channel_id, overflow_image)
+
         return True
     except Exception as e:
         print(f'[KOOK _send_channel_msg] 异常: {e}')
