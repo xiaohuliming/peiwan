@@ -99,16 +99,23 @@
           <option value="{{ w.id }}" {% if filter_user == w.id|string %}selected{% endif %}>{{ w.player_nickname or w.nickname or w.username }} ({{ w.role_name }})</option>
           {% endfor %}
         </select>
-        <input type="date" name="date" value="{{ filter_date }}"
+        <input type="date" name="date_from" value="{{ request.args.get('date_from', '') }}" placeholder="开始日期"
+               class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        <span class="text-slate-400 text-sm">至</span>
+        <input type="date" name="date_to" value="{{ request.args.get('date_to', '') }}" placeholder="结束日期"
                class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
         <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors">
           筛选
         </button>
-        {% if filter_date or filter_user %}
+        {% if request.args.get('date_from') or request.args.get('date_to') or filter_user %}
         <a href="{{ url_for('clock.index') }}" class="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           清除
         </a>
         {% endif %}
+        <a href="{{ url_for('clock.export_clock', user_id=filter_user, date_from=request.args.get('date_from',''), date_to=request.args.get('date_to','')) }}"
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors flex items-center gap-1">
+          <i data-lucide="download" width="16" height="16"></i> 导出
+        </a>
       </form>
     </div>
 

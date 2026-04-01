@@ -69,6 +69,10 @@
           <i data-lucide="search" width="16" height="16"></i> 搜索
         </button>
         <a href="{{ url_for('orders.index', subtab=current_subtab) }}" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-medium transition-colors">重置</a>
+        <a href="{{ url_for('orders.export_orders', subtab=current_subtab, status=request.args.get('status',''), staff_name=request.args.get('staff_name',''), boss_name=request.args.get('boss_name',''), player_name=request.args.get('player_name',''), date_from=request.args.get('date_from',''), date_to=request.args.get('date_to','')) }}"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1">
+          <i data-lucide="download" width="16" height="16"></i> 导出
+        </a>
       </div>
       
       <div class="col-span-2 md:col-span-4 lg:col-span-7 flex justify-end items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 mt-2">

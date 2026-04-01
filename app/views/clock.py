@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask import Blueprint, render_template, request, flash, redirect, url_for, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -143,8 +143,10 @@ def _admin_view():
     auto_timeout_check()
 
     today_start, _ = _beijing_day_range_utc()
-    filter_date = request.args.get('date', '')
+    filter_date = request.args.get('date', '')  # backward compat
     filter_user = request.args.get('user_id', '', type=str)
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
     page = request.args.get('page', 1, type=int)
 
     # 统计：当前在班人数（客服身份，含身份标签）
@@ -177,7 +179,22 @@ def _admin_view():
         User.role_filter_expr('staff')
     ).order_by(ClockRecord.clock_in.desc())
 
-    if filter_date:
+    # 日期范围筛选
+    if date_from:
+        try:
+            start_utc, _ = _beijing_day_range_utc(date_from)
+            history_query = history_query.filter(ClockRecord.clock_in >= start_utc)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            _, end_utc = _beijing_day_range_utc(date_to)
+            history_query = history_query.filter(ClockRecord.clock_in < end_utc)
+        except ValueError:
+            pass
+
+    # 旧版兼容：单日筛选
+    if filter_date and not date_from and not date_to:
         try:
             date_obj, date_end = _beijing_day_range_utc(filter_date)
             history_query = history_query.filter(
@@ -326,3 +343,114 @@ def clock_out():
     if current_user.is_admin:
         return redirect(request.referrer or url_for('clock.index', mode='mine'))
     return redirect(request.referrer or url_for('clock.index'))
+
+
+@clock_bp.route('/export')
+@login_required
+def export_clock():
+    """导出打卡记录为 Excel（支持按客服/日期范围筛选）"""
+    if not current_user.is_admin:
+        flash('需要管理员权限', 'error')
+        return redirect(url_for('clock.index'))
+
+    import io
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill
+    except ImportError:
+        flash('导出失败，请安装 openpyxl', 'error')
+        return redirect(url_for('clock.index'))
+
+    from app.utils.time_utils import to_beijing
+
+    filter_user = request.args.get('user_id', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+
+    query = ClockRecord.query.join(User, ClockRecord.user_id == User.id).filter(
+        User.role_filter_expr('staff')
+    ).order_by(ClockRecord.clock_in.desc())
+
+    staff_display_name = ''
+    if filter_user:
+        try:
+            uid = int(filter_user)
+            query = query.filter(ClockRecord.user_id == uid)
+            u = User.query.get(uid)
+            if u:
+                staff_display_name = u.staff_display_name or u.nickname or u.username
+        except ValueError:
+            pass
+
+    if date_from:
+        try:
+            start_utc, _ = _beijing_day_range_utc(date_from)
+            query = query.filter(ClockRecord.clock_in >= start_utc)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            _, end_utc = _beijing_day_range_utc(date_to)
+            query = query.filter(ClockRecord.clock_in < end_utc)
+        except ValueError:
+            pass
+
+    rows = query.all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '打卡记录'
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='7C3AED', end_color='7C3AED', fill_type='solid')
+    header_align = Alignment(horizontal='center', vertical='center')
+    headers = ['客服', '上班时间', '下班时间', '工时(分钟)', '工时', '状态']
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    status_map = {
+        'clocked_in': '在班中', 'clocked_out': '已下班', 'auto_timeout': '自动超时',
+    }
+
+    def _fmt(dt):
+        bj = to_beijing(dt)
+        return bj.strftime('%Y-%m-%d %H:%M:%S') if bj else ''
+
+    for i, r in enumerate(rows, 2):
+        user = User.query.get(r.user_id)
+        ws.cell(row=i, column=1, value=(user.staff_display_name or user.nickname or user.username) if user else '-')
+        ws.cell(row=i, column=2, value=_fmt(r.clock_in))
+        ws.cell(row=i, column=3, value=_fmt(r.clock_out))
+        ws.cell(row=i, column=4, value=r.duration_minutes or 0)
+        ws.cell(row=i, column=5, value=r.duration_display if hasattr(r, 'duration_display') else '')
+        ws.cell(row=i, column=6, value=status_map.get(r.status, r.status))
+
+    # 自动列宽
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                val_len = len(str(cell.value or ''))
+                if val_len > max_len:
+                    max_len = val_len
+            except Exception:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+    staff_suffix = f'_{staff_display_name}' if staff_display_name else ''
+    filename = f'打卡记录{staff_suffix}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
+

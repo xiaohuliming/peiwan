@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import or_, func, case
 from decimal import Decimal
@@ -413,3 +413,133 @@ def delete(order_id):
         flash(error, 'error')
 
     return redirect(request.referrer or url_for('orders.index'))
+
+
+@orders_bp.route('/export')
+@login_required
+@staff_required
+def export_orders():
+    """导出筛选后的派单记录为 Excel"""
+    import io
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill
+    except ImportError:
+        flash('导出失败，请安装 openpyxl', 'error')
+        return redirect(url_for('orders.index'))
+
+    from app.utils.time_utils import to_beijing
+
+    subtab = (request.args.get('subtab', 'order') or 'order').strip().lower()
+    if subtab not in ('order', 'escort', 'training'):
+        subtab = 'order'
+
+    query = Order.query
+    if subtab == 'order':
+        query = query.filter(or_(Order.order_type == 'normal', Order.order_type.is_(None)))
+    else:
+        query = query.filter(Order.order_type == subtab)
+
+    status_filter = request.args.get('status')
+    if status_filter and status_filter != 'all':
+        query = query.filter(Order.status == status_filter)
+
+    staff_name = request.args.get('staff_name', '').strip()
+    if staff_name:
+        staff_ids = db.session.query(User.id).filter(
+            or_(User.player_nickname.ilike(f'%{staff_name}%'), User.nickname.ilike(f'%{staff_name}%'))
+        ).subquery()
+        query = query.filter(Order.staff_id.in_(staff_ids))
+
+    boss_name = request.args.get('boss_name', '').strip()
+    if boss_name:
+        boss_ids = db.session.query(User.id).filter(
+            User.role_filter_expr('god'), User.nickname.ilike(f'%{boss_name}%')
+        ).subquery()
+        query = query.filter(Order.boss_id.in_(boss_ids))
+
+    player_name = request.args.get('player_name', '').strip()
+    if player_name:
+        player_ids = db.session.query(User.id).filter(
+            User.role_filter_expr('player'), User.player_nickname.ilike(f'%{player_name}%')
+        ).subquery()
+        query = query.filter(Order.player_id.in_(player_ids))
+
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+    if date_from:
+        query = query.filter(Order.created_at >= date_from)
+    if date_to:
+        query = query.filter(Order.created_at <= date_to + ' 23:59:59')
+
+    rows = query.order_by(Order.created_at.desc()).all()
+
+    wb = Workbook()
+    ws = wb.active
+    subtab_labels = {'order': '常规派单', 'escort': '护航派单', 'training': '代练派单'}
+    ws.title = subtab_labels.get(subtab, '派单')
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='7C3AED', end_color='7C3AED', fill_type='solid')
+    header_align = Alignment(horizontal='center', vertical='center')
+    headers = ['订单号', '类型', '老板', '陪玩', '游戏项目', '总价', '陪玩收益', '平台营收',
+               '佣金比例', '时长(h)', '状态', '派单客服', '派单时间']
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    status_map = {
+        'pending_report': '待申报', 'pending_confirm': '待确认',
+        'pending_pay': '待结算', 'paid': '已结算',
+        'cancelled': '已取消', 'refunded': '已退款',
+    }
+    type_map = {'normal': '常规', 'escort': '护航', 'training': '代练'}
+
+    def _fmt(dt):
+        bj = to_beijing(dt)
+        return bj.strftime('%Y-%m-%d %H:%M:%S') if bj else ''
+
+    for i, o in enumerate(rows, 2):
+        ws.cell(row=i, column=1, value=o.order_no or str(o.id))
+        ws.cell(row=i, column=2, value=type_map.get(o.order_type, o.order_type or '常规'))
+        ws.cell(row=i, column=3, value=(o.boss.nickname or o.boss.username) if o.boss else '-')
+        ws.cell(row=i, column=4, value=(o.player.player_nickname or o.player.nickname or o.player.username) if o.player else '-')
+        ws.cell(row=i, column=5, value=o.project_display or '-')
+        ws.cell(row=i, column=6, value=float(o.total_price or 0))
+        ws.cell(row=i, column=7, value=float(o.player_earning or 0))
+        ws.cell(row=i, column=8, value=float(o.shop_earning or 0))
+        ws.cell(row=i, column=9, value=f'{o.commission_rate}%' if o.commission_rate else '-')
+        ws.cell(row=i, column=10, value=float(o.duration or 0))
+        ws.cell(row=i, column=11, value=status_map.get(o.status, o.status))
+        ws.cell(row=i, column=12, value=o.staff.staff_display_name if o.staff else '-')
+        ws.cell(row=i, column=13, value=_fmt(o.created_at))
+
+    # 自动列宽
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                val_len = len(str(cell.value or ''))
+                if val_len > max_len:
+                    max_len = val_len
+            except Exception:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+    from datetime import datetime
+    staff_suffix = f'_{staff_name}' if staff_name else ''
+    filename = f'{subtab_labels.get(subtab, "派单")}{staff_suffix}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
+
