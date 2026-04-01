@@ -239,7 +239,8 @@
           <option value="">全部类型</option>
           <option value="recharge" {% if request.args.get('change_type')=='recharge' %}selected{% endif %}>充值</option>
           <option value="consume" {% if request.args.get('change_type')=='consume' %}selected{% endif %}>消费</option>
-          <option value="gift_send" {% if request.args.get('change_type')=='gift_send' %}selected{% endif %}>赠送/赠金</option>
+          <option value="gift_send" {% if request.args.get('change_type')=='gift_send' %}selected{% endif %}>赠送礼物</option>
+          <option value="admin_gift" {% if request.args.get('change_type')=='admin_gift' %}selected{% endif %}>赠金</option>
           <option value="order_hold" {% if request.args.get('change_type')=='order_hold' %}selected{% endif %}>订单冻结</option>
           <option value="order_unhold" {% if request.args.get('change_type')=='order_unhold' %}selected{% endif %}>订单解冻</option>
           <option value="refund" {% if request.args.get('change_type')=='refund' %}selected{% endif %}>退款</option>
@@ -272,7 +273,7 @@
           {% for log in balance_logs.items %}
           <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
             <td class="py-3">
-              {% set type_labels = {'recharge':'充值','consume':'消费','gift_send':'赠送/赠金','order_hold':'订单冻结','order_unhold':'订单解冻','refund':'退款','admin_adjust':'管理变账'} %}
+              {% set type_labels = {'recharge':'充值','consume':'消费','gift_send':'赠送礼物','admin_gift':'赠金','order_hold':'订单冻结','order_unhold':'订单解冻','refund':'退款','admin_adjust':'管理变账'} %}
               <span class="px-2 py-1 text-xs rounded-full {% if log.amount > 0 %}bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300{% else %}bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300{% endif %}">
                 {{ type_labels.get(log.change_type, log.change_type) }}
               </span>

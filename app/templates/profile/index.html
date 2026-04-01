@@ -316,7 +316,7 @@
               <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
                 <td class="py-3 px-3 text-slate-500 dark:text-slate-400">{{ fmt_dt(log.created_at, '%m-%d %H:%M') }}</td>
                 <td class="py-3 px-3 text-slate-700 dark:text-slate-300">
-                  {% set t = {'recharge':'充值','consume':'消费','gift_send':'赠金/赠送','refund':'退款','admin_adjust':'管理变账','exchange_in':'转换转入','exchange_out':'转换转出','order_hold':'订单冻结','order_unhold':'订单解冻'} %}
+                  {% set t = {'recharge':'充值','consume':'消费','gift_send':'赠送礼物','admin_gift':'赠金','refund':'退款','admin_adjust':'管理变账','exchange_in':'转换转入','exchange_out':'转换转出','order_hold':'订单冻结','order_unhold':'订单解冻'} %}
                   {{ t.get(log.change_type, log.change_type) }}
                 </td>
                 <td class="py-3 px-3 font-bold {% if log.amount >= 0 %}text-green-600{% else %}text-red-600{% endif %}">

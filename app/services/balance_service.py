@@ -101,7 +101,7 @@ def manual_gift_balance(user, amount, reason, operator_id):
     user.m_coin_gift += amount
     log = BalanceLog(
         user_id=user.id,
-        change_type='gift_send',
+        change_type='admin_gift',
         amount=amount,
         balance_after=user.m_coin + user.m_coin_gift,
         reason=reason or '管理员赠金',
