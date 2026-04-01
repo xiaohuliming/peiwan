@@ -312,8 +312,8 @@ def _append_sheet(wb, used_names, title, headers, rows):
     return sheet_name, len(rows)
 
 
-def export_all_tables_workbook(include_sections=None):
-    """按业务关系导出可读型全量数据工作簿。"""
+def export_all_tables_workbook(include_sections=None, date_from=None, date_to=None):
+    """按业务关系导出可读型全量数据工作簿。支持 date_from/date_to 日期范围筛选。"""
     if not HAS_OPENPYXL:
         return None
 
@@ -323,10 +323,24 @@ def export_all_tables_workbook(include_sections=None):
     used_sheet_names = {info_ws.title}
     sheets_summary = []
 
+    # 日期范围辅助
+    _dt_from = None
+    _dt_to = None
+    if date_from:
+        try:
+            _dt_from = datetime.strptime(date_from, '%Y-%m-%d')
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            _dt_to = datetime.strptime(date_to + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            pass
+
     users = User.query.order_by(User.id.asc()).all()
     user_map = {u.id: u for u in users}
 
-    orders = (
+    order_q = (
         Order.query
         .options(
             joinedload(Order.boss),
@@ -334,10 +348,14 @@ def export_all_tables_workbook(include_sections=None):
             joinedload(Order.staff),
             joinedload(Order.project_item).joinedload(ProjectItem.project),
         )
-        .order_by(Order.created_at.desc())
-        .all()
     )
-    gift_orders = (
+    if _dt_from:
+        order_q = order_q.filter(Order.created_at >= _dt_from)
+    if _dt_to:
+        order_q = order_q.filter(Order.created_at <= _dt_to)
+    orders = order_q.order_by(Order.created_at.desc()).all()
+
+    gift_q = (
         GiftOrder.query
         .options(
             joinedload(GiftOrder.boss),
@@ -345,39 +363,53 @@ def export_all_tables_workbook(include_sections=None):
             joinedload(GiftOrder.staff),
             joinedload(GiftOrder.gift),
         )
-        .order_by(GiftOrder.created_at.desc())
-        .all()
     )
-    withdraw_requests = (
+    if _dt_from:
+        gift_q = gift_q.filter(GiftOrder.created_at >= _dt_from)
+    if _dt_to:
+        gift_q = gift_q.filter(GiftOrder.created_at <= _dt_to)
+    gift_orders = gift_q.order_by(GiftOrder.created_at.desc()).all()
+
+    wr_q = (
         WithdrawRequest.query
         .options(
             joinedload(WithdrawRequest.user),
             joinedload(WithdrawRequest.auditor),
         )
-        .order_by(WithdrawRequest.created_at.desc())
-        .all()
     )
-    balance_logs = (
-        BalanceLog.query
-        .options(joinedload(BalanceLog.user))
-        .order_by(BalanceLog.created_at.desc())
-        .all()
-    )
-    commission_logs = (
+    if _dt_from:
+        wr_q = wr_q.filter(WithdrawRequest.created_at >= _dt_from)
+    if _dt_to:
+        wr_q = wr_q.filter(WithdrawRequest.created_at <= _dt_to)
+    withdraw_requests = wr_q.order_by(WithdrawRequest.created_at.desc()).all()
+
+    bl_q = BalanceLog.query.options(joinedload(BalanceLog.user))
+    if _dt_from:
+        bl_q = bl_q.filter(BalanceLog.created_at >= _dt_from)
+    if _dt_to:
+        bl_q = bl_q.filter(BalanceLog.created_at <= _dt_to)
+    balance_logs = bl_q.order_by(BalanceLog.created_at.desc()).all()
+
+    cl_q = (
         CommissionLog.query
         .options(
             joinedload(CommissionLog.user),
             joinedload(CommissionLog.order),
         )
-        .order_by(CommissionLog.created_at.desc())
-        .all()
     )
-    clock_records = (
-        ClockRecord.query
-        .options(joinedload(ClockRecord.user))
-        .order_by(ClockRecord.clock_in.desc())
-        .all()
-    )
+    if _dt_from:
+        cl_q = cl_q.filter(CommissionLog.created_at >= _dt_from)
+    if _dt_to:
+        cl_q = cl_q.filter(CommissionLog.created_at <= _dt_to)
+    commission_logs = cl_q.order_by(CommissionLog.created_at.desc()).all()
+
+    cr_q = ClockRecord.query.options(joinedload(ClockRecord.user))
+    if _dt_from:
+        cr_q = cr_q.filter(ClockRecord.clock_in >= _dt_from)
+    if _dt_to:
+        cr_q = cr_q.filter(ClockRecord.clock_in <= _dt_to)
+    clock_records = cr_q.order_by(ClockRecord.clock_in.desc()).all()
+
     intimacies = (
         Intimacy.query
         .options(
@@ -402,12 +434,13 @@ def export_all_tables_workbook(include_sections=None):
         .order_by(LotteryWinner.created_at.desc())
         .all()
     )
-    operation_logs = (
-        OperationLog.query
-        .options(joinedload(OperationLog.operator))
-        .order_by(OperationLog.created_at.desc())
-        .all()
-    )
+    ol_q = OperationLog.query.options(joinedload(OperationLog.operator))
+    if _dt_from:
+        ol_q = ol_q.filter(OperationLog.created_at >= _dt_from)
+    if _dt_to:
+        ol_q = ol_q.filter(OperationLog.created_at <= _dt_to)
+    operation_logs = ol_q.order_by(OperationLog.created_at.desc()).all()
+
     project_items = (
         ProjectItem.query
         .options(joinedload(ProjectItem.project))

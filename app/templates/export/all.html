@@ -18,6 +18,36 @@
       </div>
     </div>
 
+    <!-- 日期范围筛选 -->
+    <div class="glass-card p-5">
+      <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3 flex items-center gap-2">
+        <i data-lucide="calendar-range" width="16" height="16" class="text-purple-500"></i>
+        数据时间范围（可选）
+      </h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">留空则导出全部时间的数据；设定范围将筛选订单、流水、打卡、提现、操作日志等带时间的记录。</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2">
+          <label for="date_from" class="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">开始日期</label>
+          <input type="date" id="date_from" name="date_from"
+                 class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        </div>
+        <span class="text-slate-400 text-sm">至</span>
+        <div class="flex items-center gap-2">
+          <label for="date_to" class="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">结束日期</label>
+          <input type="date" id="date_to" name="date_to"
+                 class="px-3 py-2 bg-white/40 dark:bg-slate-800/40 border border-white/60 dark:border-slate-700/50 backdrop-blur-md rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-slate-800 dark:text-slate-200" />
+        </div>
+        <div class="flex items-center gap-1.5 ml-2">
+          <button type="button" id="quick-today" class="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 text-xs text-purple-700 dark:text-purple-300 font-medium transition-colors">今天</button>
+          <button type="button" id="quick-7d" class="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 text-xs text-purple-700 dark:text-purple-300 font-medium transition-colors">近7天</button>
+          <button type="button" id="quick-30d" class="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 text-xs text-purple-700 dark:text-purple-300 font-medium transition-colors">近30天</button>
+          <button type="button" id="quick-month" class="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 text-xs text-purple-700 dark:text-purple-300 font-medium transition-colors">本月</button>
+          <button type="button" id="quick-last-month" class="px-2.5 py-1.5 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 text-xs text-purple-700 dark:text-purple-300 font-medium transition-colors">上月</button>
+          <button type="button" id="quick-clear" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs text-slate-500 dark:text-slate-400 font-medium transition-colors">清除</button>
+        </div>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {% for item in section_options %}
       <label class="glass-card p-4 cursor-pointer hover:bg-white/60 dark:hover:bg-slate-800/40 transition-colors">
@@ -63,6 +93,45 @@
         checkboxes().forEach((el) => { el.checked = false; });
       });
     }
+
+    // --- 日期快捷按钮 ---
+    const dateFrom = document.getElementById('date_from');
+    const dateTo = document.getElementById('date_to');
+
+    function fmtDate(d) {
+      return d.toISOString().slice(0, 10);
+    }
+
+    function setRange(from, to) {
+      dateFrom.value = fmtDate(from);
+      dateTo.value = fmtDate(to);
+    }
+
+    document.getElementById('quick-today').addEventListener('click', function() {
+      const t = new Date(); setRange(t, t);
+    });
+    document.getElementById('quick-7d').addEventListener('click', function() {
+      const t = new Date(); const f = new Date(); f.setDate(f.getDate() - 6);
+      setRange(f, t);
+    });
+    document.getElementById('quick-30d').addEventListener('click', function() {
+      const t = new Date(); const f = new Date(); f.setDate(f.getDate() - 29);
+      setRange(f, t);
+    });
+    document.getElementById('quick-month').addEventListener('click', function() {
+      const t = new Date();
+      const f = new Date(t.getFullYear(), t.getMonth(), 1);
+      setRange(f, t);
+    });
+    document.getElementById('quick-last-month').addEventListener('click', function() {
+      const t = new Date();
+      const f = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+      const e = new Date(t.getFullYear(), t.getMonth(), 0);
+      setRange(f, e);
+    });
+    document.getElementById('quick-clear').addEventListener('click', function() {
+      dateFrom.value = ''; dateTo.value = '';
+    });
   })();
 </script>
 {% endblock %}
