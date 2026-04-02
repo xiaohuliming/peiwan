@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, send_file
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_, case
 from decimal import Decimal
@@ -202,3 +202,128 @@ def gift_action(order_id, action):
         flash('未知操作', 'error')
 
     return redirect(request.referrer or url_for('gifts.index'))
+
+
+@gifts_bp.route('/export')
+@login_required
+@staff_required
+def export_gifts():
+    """导出筛选后的礼物记录为 Excel"""
+    import io
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill
+    except ImportError:
+        flash('导出失败，请安装 openpyxl', 'error')
+        return redirect(url_for('gifts.index'))
+
+    from app.utils.time_utils import to_beijing
+    from datetime import datetime as dt_cls
+
+    query = GiftOrder.query
+
+    gift_name = request.args.get('gift_name', '').strip()
+    if gift_name:
+        gift_ids = db.session.query(Gift.id).filter(Gift.name.ilike(f'%{gift_name}%')).subquery()
+        query = query.filter(GiftOrder.gift_id.in_(gift_ids))
+
+    boss_name = request.args.get('boss_name', '').strip()
+    if boss_name:
+        boss_ids = db.session.query(User.id).filter(
+            User.role_filter_expr('god'), User.nickname.ilike(f'%{boss_name}%')
+        ).subquery()
+        query = query.filter(GiftOrder.boss_id.in_(boss_ids))
+
+    player_name = request.args.get('player_name', '').strip()
+    if player_name:
+        player_ids = db.session.query(User.id).filter(
+            or_(
+                User.role_filter_expr('player'),
+                User.role_filter_expr('god')
+            ),
+            or_(
+                User.player_nickname.ilike(f'%{player_name}%'),
+                User.nickname.ilike(f'%{player_name}%')
+            )
+        ).subquery()
+        query = query.filter(GiftOrder.player_id.in_(player_ids))
+
+    staff_name = request.args.get('staff_name', '').strip()
+    if staff_name:
+        staff_ids = db.session.query(User.id).filter(
+            or_(
+                User.player_nickname.ilike(f'%{staff_name}%'),
+                User.nickname.ilike(f'%{staff_name}%')
+            )
+        ).subquery()
+        query = query.filter(GiftOrder.staff_id.in_(staff_ids))
+
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+    if date_from:
+        query = query.filter(GiftOrder.created_at >= date_from)
+    if date_to:
+        query = query.filter(GiftOrder.created_at <= date_to + ' 23:59:59')
+
+    rows = query.order_by(GiftOrder.created_at.desc()).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = '礼物记录'
+
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_fill = PatternFill(start_color='7C3AED', end_color='7C3AED', fill_type='solid')
+    header_align = Alignment(horizontal='center', vertical='center')
+    headers = ['老板', '收礼人', '礼物', '类型', '数量', '总价', '收礼收益',
+               '平台营收', '佣金比例', '客服', '状态', '时间']
+    for col_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    status_map = {'paid': '已完成', 'refunded': '已退款'}
+    type_map = {'normal': '普通', 'crown': '冠名'}
+
+    def _fmt(dt_val):
+        bj = to_beijing(dt_val)
+        return bj.strftime('%Y-%m-%d %H:%M:%S') if bj else ''
+
+    for i, g in enumerate(rows, 2):
+        ws.cell(row=i, column=1, value=(g.boss.nickname or g.boss.username) if g.boss else '-')
+        ws.cell(row=i, column=2, value=(g.player.player_nickname or g.player.nickname or g.player.username) if g.player else '-')
+        ws.cell(row=i, column=3, value=g.gift.name if g.gift else '-')
+        ws.cell(row=i, column=4, value=type_map.get(g.gift.gift_type, g.gift.gift_type) if g.gift else '-')
+        ws.cell(row=i, column=5, value=g.quantity or 0)
+        ws.cell(row=i, column=6, value=float(g.total_price or 0))
+        ws.cell(row=i, column=7, value=float(g.player_earning or 0))
+        ws.cell(row=i, column=8, value=float(g.shop_earning or 0))
+        ws.cell(row=i, column=9, value=f'{g.commission_rate}%' if g.commission_rate else '-')
+        ws.cell(row=i, column=10, value=g.staff.staff_display_name if g.staff else '-')
+        frozen_label = '冻结中' if g.is_frozen else ''
+        ws.cell(row=i, column=11, value=frozen_label or status_map.get(g.status, g.status))
+        ws.cell(row=i, column=12, value=_fmt(g.created_at))
+
+    for col in ws.columns:
+        max_len = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                val_len = len(str(cell.value or ''))
+                if val_len > max_len:
+                    max_len = val_len
+            except Exception:
+                pass
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+    filename = f'礼物记录_{dt_cls.now().strftime("%Y%m%d")}.xlsx'
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
