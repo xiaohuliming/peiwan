@@ -323,17 +323,21 @@ def export_all_tables_workbook(include_sections=None, date_from=None, date_to=No
     used_sheet_names = {info_ws.title}
     sheets_summary = []
 
-    # 日期范围辅助
+    # 日期范围辅助 —— 用户输入北京时间，DB 存 UTC，需转换
+    from datetime import timezone, timedelta
+    _bj_tz = timezone(timedelta(hours=8))
     _dt_from = None
     _dt_to = None
     if date_from:
         try:
-            _dt_from = datetime.strptime(date_from, '%Y-%m-%d')
+            # 北京时间当天 00:00:00 → UTC
+            _dt_from = datetime.strptime(date_from, '%Y-%m-%d').replace(tzinfo=_bj_tz).astimezone(timezone.utc).replace(tzinfo=None)
         except ValueError:
             pass
     if date_to:
         try:
-            _dt_to = datetime.strptime(date_to + ' 23:59:59', '%Y-%m-%d %H:%M:%S')
+            # 北京时间当天 23:59:59 → UTC
+            _dt_to = datetime.strptime(date_to + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=_bj_tz).astimezone(timezone.utc).replace(tzinfo=None)
         except ValueError:
             pass
 

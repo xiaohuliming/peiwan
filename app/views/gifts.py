@@ -261,9 +261,21 @@ def export_gifts():
     date_from = request.args.get('date_from', '').strip()
     date_to = request.args.get('date_to', '').strip()
     if date_from:
-        query = query.filter(GiftOrder.created_at >= date_from)
+        from datetime import datetime as dt_mod, timezone as tz_mod, timedelta as td_mod
+        _bj = tz_mod(td_mod(hours=8))
+        try:
+            utc_from = dt_mod.strptime(date_from, '%Y-%m-%d').replace(tzinfo=_bj).astimezone(tz_mod.utc).replace(tzinfo=None)
+            query = query.filter(GiftOrder.created_at >= utc_from)
+        except ValueError:
+            pass
     if date_to:
-        query = query.filter(GiftOrder.created_at <= date_to + ' 23:59:59')
+        from datetime import datetime as dt_mod, timezone as tz_mod, timedelta as td_mod
+        _bj = tz_mod(td_mod(hours=8))
+        try:
+            utc_to = dt_mod.strptime(date_to + ' 23:59:59', '%Y-%m-%d %H:%M:%S').replace(tzinfo=_bj).astimezone(tz_mod.utc).replace(tzinfo=None)
+            query = query.filter(GiftOrder.created_at <= utc_to)
+        except ValueError:
+            pass
 
     rows = query.order_by(GiftOrder.created_at.desc()).all()
 
