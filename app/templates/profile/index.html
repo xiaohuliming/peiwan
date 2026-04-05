@@ -107,13 +107,8 @@
     <div class="glass-card p-6 relative overflow-hidden group">
         <div class="absolute -right-4 -top-4 p-8 bg-blue-500/5 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
         <div class="relative z-10">
-            <div class="flex justify-between items-start mb-4">
-                <div class="p-3 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-900/20 dark:text-blue-400">
-                    <i data-lucide="wallet" width="24" height="24"></i>
-                </div>
-                <button class="text-xs font-bold px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200 dark:shadow-none">
-                    充值
-                </button>
+            <div class="p-3 bg-blue-50 text-blue-600 rounded-xl dark:bg-blue-900/20 dark:text-blue-400 mb-4 inline-block">
+                <i data-lucide="wallet" width="24" height="24"></i>
             </div>
             <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">嗯呢币余额</h3>
             <p class="text-3xl font-bold text-slate-800 dark:text-white mt-1">{{ "%.2f"|format(current_user.m_coin) }}</p>
@@ -150,14 +145,6 @@
             <div class="flex justify-between items-start mb-4">
                 <div class="p-3 bg-purple-50 text-purple-600 rounded-xl dark:bg-purple-900/20 dark:text-purple-400">
                     <i data-lucide="piggy-bank" width="24" height="24"></i>
-                </div>
-                <div class="flex gap-2">
-                    <button class="text-xs font-bold px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
-                        兑换
-                    </button>
-                    <button class="text-xs font-bold px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm shadow-purple-200 dark:shadow-none">
-                        提现
-                    </button>
                 </div>
             </div>
             <h3 class="text-slate-500 dark:text-slate-400 text-sm font-medium">小猪粮余额 (收益)</h3>
