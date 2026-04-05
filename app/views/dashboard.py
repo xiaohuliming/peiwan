@@ -81,7 +81,7 @@ def index():
     elif current_user.is_player:
         order_base_query = order_base_query.filter(Order.player_id == current_user.id)
 
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = _bj_period_start_utc('day')  # 北京时间今天00:00 → UTC
 
     # 1. Today's Stats
     paid_statuses = ['pending_pay', 'paid']
@@ -149,7 +149,7 @@ def index():
     stat_growth = _calc_growth(stat_count, yesterday_stat_count)
 
     # 4. 本周完成单数（真实统计）
-    week_start = today_start - timedelta(days=today_start.weekday())
+    week_start = _bj_period_start_utc('week')  # 北京时间本周一00:00 → UTC
     last_week_start = week_start - timedelta(days=7)
     completed_week = order_base_query.filter(
         Order.created_at >= week_start,
@@ -182,6 +182,7 @@ def index():
     # 7. Chart Data (Last 7 days)
     chart_data = []
     days = []
+    bj_today = datetime.now(BJ_TZ).date()
     for i in range(6, -1, -1):
         day_start = today_start - timedelta(days=i)
         day_end = day_start + timedelta(days=1)
@@ -194,7 +195,8 @@ def index():
             daily_rev = _sum_order_total(day_start, day_end) + _sum_gift_total(day_start, day_end)
 
         chart_data.append(float(daily_rev))
-        days.append(day_start.strftime('%a'))
+        bj_day = bj_today - timedelta(days=i)
+        days.append(bj_day.strftime('%a'))
 
     # ====== 管理统计 (仅客服/管理员) ======
     mgmt_stats = None
