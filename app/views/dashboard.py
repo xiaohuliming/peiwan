@@ -169,17 +169,43 @@ def index():
     # 5. Recent Orders
     recent_orders = order_base_query.order_by(Order.created_at.desc()).limit(5).all()
 
-    # 6. Top Players
+    # 6. Top Players — 与排行榜页面口径一致: 仅计已结算+已解冻的订单/礼物收益
     top_players = []
     if current_user.is_staff or current_user.is_god:
+        order_income = db.session.query(
+            Order.player_id.label('player_id'),
+            func.sum(Order.player_earning).label('earning'),
+        ).filter(
+            Order.status == 'paid',
+            Order.freeze_status == 'normal',
+            Order.created_at >= week_start,
+        ).group_by(Order.player_id).subquery()
+
+        gift_income = db.session.query(
+            GiftOrder.player_id.label('player_id'),
+            func.sum(GiftOrder.player_earning).label('earning'),
+        ).filter(
+            GiftOrder.status == 'paid',
+            GiftOrder.freeze_status == 'normal',
+            GiftOrder.created_at >= week_start,
+        ).group_by(GiftOrder.player_id).subquery()
+
         top_players = db.session.query(
             User,
-            func.sum(CommissionLog.amount).label('total_income')
-        ).join(CommissionLog, User.id == CommissionLog.user_id).filter(
+            (func.coalesce(order_income.c.earning, 0) + func.coalesce(gift_income.c.earning, 0)).label('total_income'),
+        ).outerjoin(
+            order_income, User.id == order_income.c.player_id
+        ).outerjoin(
+            gift_income, User.id == gift_income.c.player_id
+        ).filter(
             User.role_filter_expr('player'),
-            CommissionLog.change_type.in_(['order_income', 'gift_income', 'refund_deduct']),
-            CommissionLog.created_at >= week_start,
-        ).group_by(User.id).order_by(func.sum(CommissionLog.amount).desc()).limit(3).all()
+            db.or_(
+                order_income.c.earning != None,
+                gift_income.c.earning != None,
+            )
+        ).order_by(
+            (func.coalesce(order_income.c.earning, 0) + func.coalesce(gift_income.c.earning, 0)).desc()
+        ).limit(3).all()
 
     # 7. Chart Data (Last 7 days)
     chart_data = []
