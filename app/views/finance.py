@@ -245,13 +245,13 @@ def _get_saved_withdraw_payment(user_id):
 
 
 def _get_recent_withdrawal_within_3_days(user_id):
-    """获取3天内最近一笔提现（不计已拒绝/失败）"""
+    """获取3天内最近一笔有效提现（仅 pending/paid 计入限制，rejected/failed 不限制）"""
     window_start = datetime.utcnow() - timedelta(days=3)
     return (
         WithdrawRequest.query
         .filter(WithdrawRequest.user_id == user_id)
         .filter(WithdrawRequest.created_at >= window_start)
-        .filter(~WithdrawRequest.status.in_(['rejected', 'failed']))
+        .filter(WithdrawRequest.status.in_(['pending', 'paid']))
         .order_by(WithdrawRequest.created_at.desc())
         .first()
     )
