@@ -11,7 +11,7 @@ def _get_ext(filename):
 
 
 IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tiff'}
-MAX_IMAGE_SIZE = 256  # 缩略图最大边长 (px)
+MAX_IMAGE_SIZE = 512  # 最大边长 (px)，兼顾页面显示和 KOOK 播报清晰度
 
 
 def allowed_file(filename):
