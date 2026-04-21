@@ -370,8 +370,54 @@ def my_wallet():
     # Transaction history (Withdrawals + Commission Logs)
     withdrawals = WithdrawRequest.query.filter_by(user_id=current_user.id).order_by(WithdrawRequest.created_at.desc()).all()
     commission_logs = CommissionLog.query.filter_by(user_id=current_user.id).order_by(CommissionLog.created_at.desc()).limit(20).all()
-    
-    return render_template('finance/wallet.html', withdrawals=withdrawals, commission_logs=commission_logs)
+
+    from app.models.gift import GiftOrder
+    from app.models.order import Order
+
+    pending_withdraw_frozen = _q_money(
+        db.session.query(func.coalesce(func.sum(WithdrawRequest.amount), 0))
+        .filter(
+            WithdrawRequest.user_id == current_user.id,
+            WithdrawRequest.status == 'pending',
+        )
+        .scalar()
+    )
+    order_frozen = _q_money(
+        db.session.query(func.coalesce(func.sum(Order.player_earning), 0))
+        .filter(
+            Order.player_id == current_user.id,
+            Order.status == 'paid',
+            Order.freeze_status == 'frozen',
+        )
+        .scalar()
+    )
+    gift_frozen = _q_money(
+        db.session.query(func.coalesce(func.sum(GiftOrder.player_earning), 0))
+        .filter(
+            GiftOrder.player_id == current_user.id,
+            GiftOrder.status == 'paid',
+            GiftOrder.freeze_status == 'frozen',
+        )
+        .scalar()
+    )
+    total_frozen = _q_money(current_user.m_bean_frozen)
+    known_frozen = pending_withdraw_frozen + order_frozen + gift_frozen
+    other_frozen = _q_money(total_frozen - known_frozen)
+    frozen_breakdown = {
+        'total': total_frozen,
+        'pending_withdraw': pending_withdraw_frozen,
+        'order': order_frozen,
+        'gift': gift_frozen,
+        'other': other_frozen,
+        'has_other': other_frozen != Decimal('0.00'),
+    }
+
+    return render_template(
+        'finance/wallet.html',
+        withdrawals=withdrawals,
+        commission_logs=commission_logs,
+        frozen_breakdown=frozen_breakdown,
+    )
 
 
 @finance_bp.route('/withdraw/<int:request_id>/payment-code/<string:slot>')

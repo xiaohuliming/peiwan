@@ -1,0 +1,62 @@
+# Local assistant / agent state
+.codex/
+.claude/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Flask / local runtime
+instance/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+
+# User-uploaded runtime files
+app/static/uploads/
+!app/static/uploads/.gitkeep
+
+# Frontend dependencies / build output
+node_modules/
+dist/
+build/
+coverage/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
