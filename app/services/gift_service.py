@@ -3,8 +3,11 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from app.extensions import db
 from app.models.gift import Gift, GiftOrder
-from app.models.user import User
 from app.models.finance import BalanceLog, CommissionLog
+from app.services.frozen_balance_service import (
+    adjust_legacy_frozen_cache,
+    get_user_frozen_breakdown,
+)
 from app.services.log_service import log_operation
 
 
@@ -93,8 +96,9 @@ def send_gift(boss, player, gift, quantity, staff=None):
 
     # 发放陪玩佣金
     if gift.gift_type == 'crown':
-        # 冠名礼物: 佣金冻结
-        player.m_bean_frozen += player_earning
+        # 冠名礼物: 真实冻结来源以后续 gift_order 明细为准；
+        # m_bean_frozen 仅同步维护为 legacy cache，避免旧逻辑完全失真。
+        adjust_legacy_frozen_cache(player, player_earning)
     else:
         # 标准礼物: 直接到账
         player.m_bean += player_earning
@@ -172,12 +176,14 @@ def unfreeze_gift_order(gift_order, operator_id=None):
 
     gift_order.freeze_status = 'normal'
 
-    # 如果是冠名礼物且佣金还在冻结中, 将冻结佣金转为可用
     player = gift_order.player
-    earning = gift_order.player_earning
-    if player.m_bean_frozen >= earning:
-        player.m_bean_frozen -= earning
-        player.m_bean += earning
+    earning = _quantize_money(gift_order.player_earning)
+    is_crown = bool(gift_order.gift and gift_order.gift.gift_type == 'crown')
+
+    # 只有冠名礼物的收益最初在冻结态；标准礼物即使被人工标记冻结，也不能重复到账。
+    if is_crown and earning > 0:
+        adjust_legacy_frozen_cache(player, -earning)
+        player.m_bean = _quantize_money(player.m_bean) + earning
         commission_log = CommissionLog(
             user_id=player.id,
             change_type='gift_income',
@@ -199,12 +205,13 @@ def refund_gift_order(gift_order, operator_id=None):
 
     boss = gift_order.boss
     player = gift_order.player
-    total_price = gift_order.total_price
-    player_earning = gift_order.player_earning
+    total_price = _quantize_money(gift_order.total_price)
+    player_earning = _quantize_money(gift_order.player_earning)
     is_crown = bool(gift_order.gift and gift_order.gift.gift_type == 'crown')
 
     # 先校验可扣佣金，避免出现"老板已退款但陪玩仅被清零"的账务不一致
-    available_frozen = _quantize_money(player.m_bean_frozen)
+    frozen_breakdown = get_user_frozen_breakdown(player)
+    available_frozen = frozen_breakdown['earning_frozen']
     available_bean = _quantize_money(player.m_bean)
     if is_crown:
         total_available = available_frozen + available_bean
@@ -237,14 +244,15 @@ def refund_gift_order(gift_order, operator_id=None):
     # 扣回陪玩佣金
     # 冠名礼物: 优先扣冻结余额，不足再扣可用余额
     if is_crown:
-        frozen_deduct = min(_quantize_money(player.m_bean_frozen), player_earning)
-        player.m_bean_frozen -= frozen_deduct
+        frozen_deduct = min(available_frozen, player_earning)
+        if frozen_deduct > 0:
+            adjust_legacy_frozen_cache(player, -frozen_deduct)
         remaining = player_earning - frozen_deduct
         if remaining > 0:
-            player.m_bean -= remaining
+            player.m_bean = _quantize_money(player.m_bean) - remaining
     else:
         # 标准礼物: 仅扣可用余额
-        player.m_bean -= player_earning
+        player.m_bean = _quantize_money(player.m_bean) - player_earning
 
     commission_log = CommissionLog(
         user_id=player.id,

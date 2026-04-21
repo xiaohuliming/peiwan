@@ -13,6 +13,10 @@ from app.models.user import User
 from app.models.order import Order
 from app.models.gift import GiftOrder
 from app.models.finance import WithdrawRequest
+from app.services.frozen_balance_service import (
+    get_user_frozen_breakdown,
+    get_users_frozen_breakdown,
+)
 
 SILICONFLOW_API_URL = 'https://api.siliconflow.cn/v1/chat/completions'
 SILICONFLOW_API_KEY = 'sk-obelmguwyjrhsifohvmryzgsknvmkaodwcclznhyqnyecqwi'
@@ -181,6 +185,7 @@ def _get_platform_context(user):
         try:
             all_users = User.query.order_by(User.id).all()
             if all_users:
+                frozen_map = get_users_frozen_breakdown(all_users[:50])
                 user_lines = []
                 for u in all_users[:50]:
                     nick = u.nickname or u.username or '无昵称'
@@ -190,7 +195,8 @@ def _get_platform_context(user):
                     if u.is_god:
                         balance_info = f'嗯呢币:{u.m_coin} 赠金:{u.m_coin_gift}'
                     elif u.is_player:
-                        balance_info = f'小猪粮:{u.m_bean} 冻结:{u.m_bean_frozen}'
+                        frozen_total = frozen_map.get(u.id, {}).get('total', 0)
+                        balance_info = f'小猪粮:{u.m_bean} 冻结:{frozen_total}'
                     user_lines.append(f'  · ID:{u.id} | {nick} | 编号:{code} | 角色:{role_str} | {balance_info}')
                 context_parts.append('👥 用户列表:\n' + '\n'.join(user_lines))
         except Exception as e:
@@ -211,9 +217,10 @@ def _get_platform_context(user):
     elif user.is_player:
         try:
             my_orders = Order.query.filter_by(player_id=user.id, status='paid').count()
+            frozen_breakdown = get_user_frozen_breakdown(user)
             context_parts.append(f"""💰 你的账户信息:
 - 小猪粮: {user.m_bean}
-- 冻结小猪粮: {user.m_bean_frozen}
+- 冻结小猪粮: {frozen_breakdown['total']}
 - 已完成订单数: {my_orders}""")
         except Exception as e:
             current_app.logger.warning(f'[Assistant] 陪玩数据失败: {e}')

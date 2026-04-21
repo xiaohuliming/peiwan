@@ -7,6 +7,7 @@ from datetime import datetime, date, time
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
+from app.services.frozen_balance_service import get_users_frozen_breakdown
 from app.utils.time_utils import fmt_dt
 
 try:
@@ -90,7 +91,9 @@ def export_users(query=None):
     _style_header(ws, headers)
 
     users = query.all() if query else User.query.all()
+    frozen_map = get_users_frozen_breakdown(users)
     for i, u in enumerate(users, 2):
+        frozen_breakdown = frozen_map.get(u.id, {})
         ws.cell(row=i, column=1, value=u.id)
         ws.cell(row=i, column=2, value=u.username)
         ws.cell(row=i, column=3, value=u.nickname)
@@ -100,7 +103,7 @@ def export_users(query=None):
         ws.cell(row=i, column=7, value=float(u.m_coin))
         ws.cell(row=i, column=8, value=float(u.m_coin_gift))
         ws.cell(row=i, column=9, value=float(u.m_bean))
-        ws.cell(row=i, column=10, value=float(u.m_bean_frozen))
+        ws.cell(row=i, column=10, value=float(frozen_breakdown.get('total', 0)))
         ws.cell(row=i, column=11, value=u.experience)
         ws.cell(row=i, column=12, value=u.vip_level)
         ws.cell(row=i, column=13, value=u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '')
@@ -452,8 +455,10 @@ def export_all_tables_workbook(include_sections=None, date_from=None, date_to=No
         .all()
     )
 
+    frozen_map = get_users_frozen_breakdown(users)
     user_rows = []
     for u in users:
+        frozen_breakdown = frozen_map.get(u.id, {})
         user_rows.append([
             u.id,
             _display_name(u),
@@ -467,7 +472,7 @@ def export_all_tables_workbook(include_sections=None, date_from=None, date_to=No
             _to_float(u.m_coin),
             _to_float(u.m_coin_gift),
             _to_float(u.m_bean),
-            _to_float(u.m_bean_frozen),
+            _to_float(frozen_breakdown.get('total')),
             u.vip_level or '',
             _to_float(u.vip_discount),
             u.experience or 0,

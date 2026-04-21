@@ -27,32 +27,30 @@
         <p class="text-xs text-slate-400">赠金: {{ "%.2f"|format(user.m_coin_gift) }}</p>
       </div>
     </div>
+
     <div class="glass-card p-5 flex items-center gap-4">
       <div class="p-3 rounded-2xl bg-green-500/10 text-green-500"><i data-lucide="coins" width="24" height="24"></i></div>
-      <div class="min-w-0 flex-1">
+      <div>
         <p class="text-sm text-slate-500 dark:text-slate-400">小猪粮佣金</p>
         <p class="text-2xl font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(user.m_bean) }}</p>
-        {% if frozen_breakdown.total > 0 or frozen_breakdown.has_other %}
-        <div class="mt-2 text-xs">
-          <p class="text-amber-600 dark:text-amber-400 font-medium">冻结: {{ "%.2f"|format(frozen_breakdown.total) }}</p>
-          <div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-slate-500 dark:text-slate-400">
-            <span>提现审核中</span>
-            <span class="text-right text-slate-700 dark:text-slate-200">{{ "%.2f"|format(frozen_breakdown.pending_withdraw) }}</span>
-            <span>订单冻结</span>
-            <span class="text-right text-slate-700 dark:text-slate-200">{{ "%.2f"|format(frozen_breakdown.order) }}</span>
-            <span>礼物冻结</span>
-            <span class="text-right text-slate-700 dark:text-slate-200">{{ "%.2f"|format(frozen_breakdown.gift) }}</span>
-            {% if frozen_breakdown.has_other %}
-            <span>其他/历史差异</span>
-            <span class="text-right {% if frozen_breakdown.other < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-700 dark:text-slate-200{% endif %}">{{ "%.2f"|format(frozen_breakdown.other) }}</span>
-            {% endif %}
-          </div>
-        </div>
-        {% else %}
-        <p class="text-xs text-slate-400">冻结: 0.00</p>
-        {% endif %}
+        <p class="text-xs text-slate-400">
+          冻结: {{ "%.2f"|format(frozen_breakdown.total) }}
+          {% if frozen_breakdown.total > 0 or frozen_breakdown.has_legacy_diff %}
+          <button
+            type="button"
+            class="ml-2 text-amber-500 hover:text-amber-400 transition-colors"
+            onclick="toggleFrozenBreakdown()"
+            aria-expanded="false"
+            aria-controls="frozen-breakdown-panel"
+            id="frozen-breakdown-toggle"
+          >
+            <span id="frozen-breakdown-caret">详情</span>
+          </button>
+          {% endif %}
+        </p>
       </div>
     </div>
+
     <div class="glass-card p-5 flex items-center gap-4">
       <div class="p-3 rounded-2xl bg-purple-500/10 text-purple-500"><i data-lucide="star" width="24" height="24"></i></div>
       <div>
@@ -62,6 +60,49 @@
       </div>
     </div>
   </div>
+
+  {% if frozen_breakdown.total > 0 or frozen_breakdown.has_legacy_diff %}
+  <div id="frozen-breakdown-panel" class="hidden glass-card p-4 border border-amber-200/50 dark:border-amber-900/30">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <div>
+        <h3 class="text-sm font-bold text-slate-800 dark:text-white">冻结明细</h3>
+        <p class="text-xs text-slate-400 mt-0.5">用于核对总冻结是否来自提现、订单或礼物。</p>
+      </div>
+      <span class="text-sm font-bold text-amber-600 dark:text-amber-300">{{ "%.2f"|format(frozen_breakdown.total) }} 豆</span>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+      <div class="rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3">
+        <div class="text-slate-500 dark:text-slate-400">提现审核中</div>
+        <div class="mt-1 text-lg font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(frozen_breakdown.pending_withdraw) }}</div>
+      </div>
+      <div class="rounded-xl bg-orange-50 dark:bg-orange-900/20 p-3">
+        <div class="text-slate-500 dark:text-slate-400">订单冻结</div>
+        <div class="mt-1 text-lg font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(frozen_breakdown.order) }}</div>
+      </div>
+      <div class="rounded-xl bg-pink-50 dark:bg-pink-900/20 p-3">
+        <div class="text-slate-500 dark:text-slate-400">礼物冻结</div>
+        <div class="mt-1 text-lg font-bold text-slate-800 dark:text-white">{{ "%.2f"|format(frozen_breakdown.gift) }}</div>
+      </div>
+      <div class="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3">
+        <div class="text-slate-500 dark:text-slate-400">其他/历史差异</div>
+        <div class="mt-1 text-lg font-bold {% if frozen_breakdown.legacy_diff < 0 %}text-red-600 dark:text-red-400{% else %}text-slate-800 dark:text-white{% endif %}">{{ "%.2f"|format(frozen_breakdown.legacy_diff) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  function toggleFrozenBreakdown() {
+    const panel = document.getElementById('frozen-breakdown-panel');
+    const toggle = document.getElementById('frozen-breakdown-toggle');
+    const caret = document.getElementById('frozen-breakdown-caret');
+    if (!panel || !toggle || !caret) return;
+    const willOpen = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willOpen);
+    toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    caret.textContent = willOpen ? '收起' : '详情';
+  }
+  </script>
+  {% endif %}
 
   {# 标签导航 #}
   <div class="flex gap-2 flex-wrap">

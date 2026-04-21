@@ -1851,8 +1851,11 @@ def push_boss_consume_notice(user, amount, reason='', operator=''):
 
 
 def _withdraw_notice_common_vars(withdraw_request, status_text, operator='', remark=''):
+    from app.services.frozen_balance_service import get_user_frozen_breakdown
+
     user = withdraw_request.user
     display_name = _fallback_display_name(user, prefer_player_name=True)
+    frozen_breakdown = get_user_frozen_breakdown(user) if user else {'total': 0}
     return {
         'user': display_name or '-',
         'request_id': str(withdraw_request.id or '-'),
@@ -1861,7 +1864,7 @@ def _withdraw_notice_common_vars(withdraw_request, status_text, operator='', rem
         'operator': operator or '系统',
         'remark': remark or '-',
         'balance': str(getattr(user, 'm_bean', 0) or 0),
-        'frozen': str(getattr(user, 'm_bean_frozen', 0) or 0),
+        'frozen': str(frozen_breakdown.get('total', 0) or 0),
     }
 
 

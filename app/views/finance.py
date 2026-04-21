@@ -4,6 +4,10 @@ from app.models.finance import WithdrawRequest, CommissionLog, BalanceLog
 from app.models.user import User
 from app.extensions import db
 from app.utils.permissions import admin_required
+from app.services.frozen_balance_service import (
+    adjust_legacy_frozen_cache,
+    get_user_frozen_breakdown,
+)
 from app.utils.time_utils import BJ_TZ
 from app.services.log_service import log_operation
 from datetime import datetime, timedelta, timezone
@@ -370,47 +374,7 @@ def my_wallet():
     # Transaction history (Withdrawals + Commission Logs)
     withdrawals = WithdrawRequest.query.filter_by(user_id=current_user.id).order_by(WithdrawRequest.created_at.desc()).all()
     commission_logs = CommissionLog.query.filter_by(user_id=current_user.id).order_by(CommissionLog.created_at.desc()).limit(20).all()
-
-    from app.models.gift import GiftOrder
-    from app.models.order import Order
-
-    pending_withdraw_frozen = _q_money(
-        db.session.query(func.coalesce(func.sum(WithdrawRequest.amount), 0))
-        .filter(
-            WithdrawRequest.user_id == current_user.id,
-            WithdrawRequest.status == 'pending',
-        )
-        .scalar()
-    )
-    order_frozen = _q_money(
-        db.session.query(func.coalesce(func.sum(Order.player_earning), 0))
-        .filter(
-            Order.player_id == current_user.id,
-            Order.status == 'paid',
-            Order.freeze_status == 'frozen',
-        )
-        .scalar()
-    )
-    gift_frozen = _q_money(
-        db.session.query(func.coalesce(func.sum(GiftOrder.player_earning), 0))
-        .filter(
-            GiftOrder.player_id == current_user.id,
-            GiftOrder.status == 'paid',
-            GiftOrder.freeze_status == 'frozen',
-        )
-        .scalar()
-    )
-    total_frozen = _q_money(current_user.m_bean_frozen)
-    known_frozen = pending_withdraw_frozen + order_frozen + gift_frozen
-    other_frozen = _q_money(total_frozen - known_frozen)
-    frozen_breakdown = {
-        'total': total_frozen,
-        'pending_withdraw': pending_withdraw_frozen,
-        'order': order_frozen,
-        'gift': gift_frozen,
-        'other': other_frozen,
-        'has_other': other_frozen != Decimal('0.00'),
-    }
+    frozen_breakdown = get_user_frozen_breakdown(current_user)
 
     return render_template(
         'finance/wallet.html',
@@ -524,9 +488,10 @@ def withdraw():
         )
 
         # Deduct balance immediately (freeze it)
-        # Assuming model handles types correctly (Numeric -> Decimal)
         current_user.m_bean -= amount
-        current_user.m_bean_frozen += amount
+        # 兼容历史字段：m_bean_frozen 只保留为 legacy cache，
+        # 真实冻结金额统一由 WithdrawRequest / Order / GiftOrder 实时聚合。
+        adjust_legacy_frozen_cache(current_user, amount)
         
         db.session.add(wr)
         db.session.flush()
@@ -889,10 +854,9 @@ def audit_withdraw(request_id):
         if action == 'approve':
             wr.status = 'paid'
             wr.paid_at = datetime.utcnow()
-            
-            # Unfreeze (reduce frozen amount, with lower bound protection)
-            # Money was already deducted from m_bean when requesting
-            wr.user.m_bean_frozen = max(Decimal('0'), wr.user.m_bean_frozen - wr.amount)
+
+            # 兼容历史字段：同步更新 legacy cache，但页面/业务不再依赖该字段判断真实冻结。
+            adjust_legacy_frozen_cache(wr.user, -wr.amount)
 
             log_operation(
                 current_user.id,
@@ -905,10 +869,10 @@ def audit_withdraw(request_id):
             
         elif action == 'reject':
             wr.status = 'rejected'
-            
-            # Refund balance (with lower bound protection on frozen)
+
+            # 真实冻结来源以明细实时聚合为准；legacy cache 仅做兼容同步。
             wr.user.m_bean += wr.amount
-            wr.user.m_bean_frozen = max(Decimal('0'), wr.user.m_bean_frozen - wr.amount)
+            adjust_legacy_frozen_cache(wr.user, -wr.amount)
             db.session.add(CommissionLog(
                 user_id=wr.user_id,
                 change_type='withdraw_return',

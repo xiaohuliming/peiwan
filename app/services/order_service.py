@@ -5,9 +5,11 @@ import string
 
 from app.extensions import db
 from app.models.order import Order
-from app.models.project import ProjectItem
-from app.models.user import User
 from app.models.finance import BalanceLog, CommissionLog
+from app.services.frozen_balance_service import (
+    adjust_legacy_frozen_cache,
+    get_user_frozen_breakdown,
+)
 from app.services.log_service import log_operation
 from flask_login import current_user
 
@@ -324,18 +326,21 @@ def deduct_player_earning(player, amount, order):
 
 
 def deduct_player_earning_frozen_first(player, amount, order):
-    """退款扣回陪玩收益: 优先扣冻结小猪粮, 不足再扣可用小猪粮"""
-    amount = Decimal(str(amount))
+    """退款扣回陪玩收益: 优先扣实时冻结收益(订单/礼物), 不足再扣可用小猪粮"""
+    amount = _quantize_money(amount)
     if amount <= 0:
         return Decimal('0'), Decimal('0')
 
+    frozen_breakdown = get_user_frozen_breakdown(player)
     remaining = amount
-    frozen_deduct = min(player.m_bean_frozen, remaining)
-    player.m_bean_frozen -= frozen_deduct
+    frozen_deduct = min(frozen_breakdown['earning_frozen'], remaining)
+    if frozen_deduct > 0:
+        # 兼容历史字段：仅同步 legacy cache，真实冻结金额以后续明细实时聚合为准。
+        adjust_legacy_frozen_cache(player, -frozen_deduct)
     remaining -= frozen_deduct
 
-    bean_deduct = min(player.m_bean, remaining)
-    player.m_bean -= bean_deduct
+    bean_deduct = min(_quantize_money(player.m_bean), remaining)
+    player.m_bean = _quantize_money(player.m_bean) - bean_deduct
     remaining -= bean_deduct
 
     total_deduct = frozen_deduct + bean_deduct
@@ -470,8 +475,8 @@ def create_escort_order(boss, player, project_item, price_tier, staff,
     order.boss_hold_coin = coin_deducted
     order.boss_hold_gift = gift_deducted
 
-    # 冻结陪玩佣金
-    player.m_bean_frozen += player_earning
+    # 护航/代练冻结以后续订单明细实时聚合为准；这里仅兼容同步 legacy cache。
+    adjust_legacy_frozen_cache(player, player_earning)
 
     # 护航/代练创建后直接结算并冻结（不经过报单）
     ok, err = settle_escort_order(order)
@@ -632,7 +637,7 @@ def confirm_order(order, operator_id=None):
 def settle_escort_order(order):
     """
     结算护航/代练订单:
-    状态 → paid，自动冻结订单，佣金保持在 m_bean_frozen 中等待手动解冻
+    状态 → paid，自动冻结订单，佣金以后续订单明细实时聚合为准，等待手动解冻
     """
     if order.status != 'pending_pay':
         return False, '订单状态不正确，仅待结算订单可结算'
@@ -643,7 +648,7 @@ def settle_escort_order(order):
     if order.is_frozen:
         return False, '订单已冻结，请先解冻后再结算'
 
-    # 佣金保留在 m_bean_frozen 中，不转为可用；等待客服手动解冻
+    # 佣金真实冻结来源以后续订单明细为准，不直接转为可用；等待客服手动解冻。
     order.status = 'paid'
     order.freeze_status = 'frozen'
     order.confirm_time = datetime.utcnow()
@@ -666,7 +671,7 @@ def refund_order(order):
     boss = order.boss
     player = order.player
     player_earning = _quantize_money(order.player_earning)
-    available_frozen = _quantize_money(player.m_bean_frozen)
+    available_frozen = get_user_frozen_breakdown(player)['earning_frozen']
     available_bean = _quantize_money(player.m_bean)
     player_total_available = available_frozen + available_bean
 
@@ -720,7 +725,7 @@ def unfreeze_order(order):
     # 已结算订单解冻时，释放冻结的佣金
     if order.status == 'paid' and order.player_earning > 0:
         player = order.player
-        earning = order.player_earning
+        earning = _quantize_money(order.player_earning)
 
         already_awarded = CommissionLog.query.filter_by(
             order_id=order.id,
@@ -728,11 +733,7 @@ def unfreeze_order(order):
         ).first()
 
         if not already_awarded:
-            if player.m_bean_frozen >= earning:
-                player.m_bean_frozen -= earning
-            else:
-                player.m_bean_frozen = Decimal('0')
-
+            adjust_legacy_frozen_cache(player, -earning)
             award_player_earning(player, earning, order)
             log_operation(_get_operator_id(), 'order_unfreeze', 'order', order.id,
                           f'解冻订单 {order.order_no}, 佣金 {earning} 已发放')

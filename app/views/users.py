@@ -7,60 +7,18 @@ from types import SimpleNamespace
 
 from app.models.user import User
 from app.models.order import Order
-from app.models.finance import BalanceLog, CommissionLog, WithdrawRequest
+from app.models.finance import BalanceLog, CommissionLog
 from app.models.gift import GiftOrder
 from app.models.intimacy import Intimacy
 from app.extensions import db
 from app.services import balance_service
+from app.services.frozen_balance_service import get_user_frozen_breakdown
 from app.services.log_service import log_operation
 from app.utils.permissions import staff_required, admin_required
 
 users_bp = Blueprint('users', __name__)
 
 _BIRTHDAY_STORE_YEAR = 2000
-
-
-def _q_money(value):
-    return Decimal(str(value or 0)).quantize(Decimal('0.01'))
-
-
-def _build_frozen_breakdown(user_id, total_frozen):
-    pending_withdraw_frozen = _q_money(
-        db.session.query(func.coalesce(func.sum(WithdrawRequest.amount), 0))
-        .filter(
-            WithdrawRequest.user_id == user_id,
-            WithdrawRequest.status == 'pending',
-        )
-        .scalar()
-    )
-    order_frozen = _q_money(
-        db.session.query(func.coalesce(func.sum(Order.player_earning), 0))
-        .filter(
-            Order.player_id == user_id,
-            Order.status == 'paid',
-            Order.freeze_status == 'frozen',
-        )
-        .scalar()
-    )
-    gift_frozen = _q_money(
-        db.session.query(func.coalesce(func.sum(GiftOrder.player_earning), 0))
-        .filter(
-            GiftOrder.player_id == user_id,
-            GiftOrder.status == 'paid',
-            GiftOrder.freeze_status == 'frozen',
-        )
-        .scalar()
-    )
-    total = _q_money(total_frozen)
-    other = _q_money(total - pending_withdraw_frozen - order_frozen - gift_frozen)
-    return {
-        'total': total,
-        'pending_withdraw': pending_withdraw_frozen,
-        'order': order_frozen,
-        'gift': gift_frozen,
-        'other': other,
-        'has_other': other != Decimal('0.00'),
-    }
 
 
 def _paginate_list(items, page=1, per_page=15):
@@ -246,7 +204,7 @@ def detail(user_id):
         'tab': tab,
         'date_from': date_from,
         'date_to': date_to,
-        'frozen_breakdown': _build_frozen_breakdown(user.id, user.m_bean_frozen),
+        'frozen_breakdown': get_user_frozen_breakdown(user),
     }
     pagination_args = request.args.to_dict(flat=True)
     pagination_args.pop('page', None)
