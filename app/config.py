@@ -45,7 +45,7 @@ class Config:
     KOOK_BOT_ENABLED = os.environ.get('KOOK_BOT_ENABLED', 'false').lower() == 'true'
 
     # Site URL (用于生成 KOOK 消息中的跳转链接)
-    PUBLIC_SITE_URL = os.environ.get('PUBLIC_SITE_URL', 'http://8.153.103.197')
+    PUBLIC_SITE_URL = os.environ.get('PUBLIC_SITE_URL', 'https://www.ennb.xin')
     SITE_URL = os.environ.get('SITE_URL', PUBLIC_SITE_URL)
 
     # WeChat OAuth (网页扫码登录/注册)

@@ -82,8 +82,8 @@ SECRET_KEY=replace-me
 DATABASE_URL=mysql+pymysql://root:password@127.0.0.1:3306/peiwan_admin
 KOOK_BOT_ENABLED=true
 KOOK_TOKEN=your-kook-token
-PUBLIC_SITE_URL=http://127.0.0.1:5000
-SITE_URL=http://127.0.0.1:5000
+PUBLIC_SITE_URL=https://www.ennb.xin
+SITE_URL=https://www.ennb.xin
 ```
 
 ## 数据库迁移
@@ -195,7 +195,7 @@ gunicorn -w 2 -b 0.0.0.0:5000 run:app
 - `PUBLIC_SITE_URL`
 - `SITE_URL`
 
-为公网可访问地址（例如 `http://8.153.103.197`）。
+为公网可访问地址（例如 `https://www.ennb.xin`）。
 
 ## 数据字段说明（货币）
 
