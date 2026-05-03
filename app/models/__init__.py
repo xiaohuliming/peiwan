@@ -18,3 +18,10 @@ from .chat_stats import (
     ChatRankSettlement,
     ChatCheckinRecord,
 )
+from .story_game import (
+    StoryPlayerState,
+    StoryCharacterRelation,
+    StoryMemoryFragment,
+    StoryDirectMessage,
+    StoryTurnLog,
+)

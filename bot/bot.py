@@ -94,6 +94,16 @@ def _extract_msg_guild_id(msg: Message) -> str:
     return ''
 
 
+def _is_private_message(msg: Message) -> bool:
+    """判断是否 KOOK 私信消息。"""
+    try:
+        channel_type = getattr(msg, 'channel_type', None)
+        value = getattr(channel_type, 'value', channel_type)
+        return str(value or '').upper() == 'PERSON'
+    except Exception:
+        return False
+
+
 def get_or_create_user_by_kook(author):
     """
     根据 KOOK 作者信息直接识别用户，不再强依赖 /bind：
@@ -1225,6 +1235,7 @@ def _build_help_text():
         "`/roll 总点数 抽几个点` - 掷点/随机点数\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
         "`/结束抽奖 [抽奖ID]` - 结束互动抽奖并立即开奖\n"
+        "`/story` - 进入 AI 剧情互动游戏《灰区档案》\n"
         "`/提现 [金额]` - 申请提现(无金额会弹网页入口；需微信+支付宝收款码)\n"
         "`/取消提现` - 取消待上传收款码的提现\n"
         "`/帮助` 或 `/help` - 查看此帮助\n"
@@ -1295,6 +1306,89 @@ async def checkin_alias_cmd(msg: Message):
     await _handle_checkin(msg)
 
 
+@bot.command(name='story')
+async def story_cmd(msg: Message, action: str = '', *args: str):
+    """AI 剧情互动游戏入口。"""
+    kook_id = str(getattr(getattr(msg, 'author', None), 'id', '') or '')
+    kook_username = _kook_user_tag(getattr(msg, 'author', None))
+    channel_id = _extract_msg_channel_id(msg)
+    action_key = str(action or '').strip().lower()
+
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+
+    try:
+        with app.app_context():
+            user = get_or_create_user_by_kook(msg.author)
+            from app.services import story_game_service
+
+            if action_key in ('', 'help', 'menu', '菜单', '帮助'):
+                reply_text = story_game_service.menu_text()
+            elif action_key in ('start', '开始'):
+                world_arg = args[0] if len(args) >= 1 else ''
+                background_arg = args[1] if len(args) >= 2 else ''
+                result = story_game_service.start_story(
+                    kook_id=kook_id,
+                    kook_username=kook_username,
+                    user_id=user.id if user else None,
+                    world_arg=world_arg,
+                    background_arg=background_arg,
+                    reset=False,
+                )
+                reply_text = result.get('message') or '剧情已开始。'
+            elif action_key in ('restart', 'reset', '重开', '重新开始'):
+                world_arg = args[0] if len(args) >= 1 else ''
+                background_arg = args[1] if len(args) >= 2 else ''
+                result = story_game_service.start_story(
+                    kook_id=kook_id,
+                    kook_username=kook_username,
+                    user_id=user.id if user else None,
+                    world_arg=world_arg,
+                    background_arg=background_arg,
+                    reset=True,
+                )
+                reply_text = result.get('message') or '剧情已重开。'
+            elif action_key in ('continue', 'c', '继续'):
+                user_input = ' '.join(args).strip()
+                result = story_game_service.continue_story(
+                    kook_id=kook_id,
+                    user_id=user.id if user else None,
+                    user_input=user_input,
+                    channel_id=channel_id,
+                )
+                reply_text = result.get('message') or '剧情推进完成。'
+            elif action_key in ('profile', '档案'):
+                reply_text = story_game_service.profile_text(kook_id)
+            elif action_key in ('archive', 'archives', '记忆', '档案库'):
+                reply_text = story_game_service.archive_text(kook_id)
+            elif action_key in ('dm', 'mail', '私信'):
+                reply_text = story_game_service.dm_inbox_text(kook_id)
+            elif action_key in ('reply', '回复'):
+                character_arg = args[0] if len(args) >= 1 else ''
+                reply_body = ' '.join(args[1:]).strip() if len(args) >= 2 else ''
+                result = story_game_service.reply_dm(
+                    kook_id=kook_id,
+                    user_id=user.id if user else None,
+                    character_arg=character_arg,
+                    reply_text=reply_body,
+                    channel_id=channel_id,
+                )
+                reply_text = result.get('message') or '私信已回复。'
+            else:
+                reply_text = (
+                    '未知剧情指令。\n'
+                    '`/story` 查看菜单；`/story continue 你的行动` 推进剧情；'
+                    '`/story profile` 查看档案。'
+                )
+        await msg.reply(reply_text, type=MessageTypes.KMD)
+    except Exception as e:
+        logger.exception('/story 执行失败')
+        with app.app_context():
+            db.session.rollback()
+        await msg.reply(f'剧情系统暂时异常: {e}')
+
+
 # ─── 事件处理器 ──────────────────────────────────────────────
 
 @bot.on_message()
@@ -1314,6 +1408,26 @@ async def on_public_message(msg: Message):
 
         # 仅统计抽奖发起频道内的发言，避免跨频道误参与
         msg_channel_id = str(_extract_msg_channel_id(msg) or '')
+        if _is_private_message(msg):
+            uid = str(getattr(msg, 'author_id', '') or getattr(getattr(msg, 'author', None), 'id', '') or '')
+            if not uid:
+                return
+            try:
+                with app.app_context():
+                    user = get_or_create_user_by_kook(msg.author)
+                    from app.services.story_game_service import handle_direct_free_input
+                    result = handle_direct_free_input(
+                        kook_id=uid,
+                        user_id=user.id if user else None,
+                        content=str(getattr(msg, 'content', '') or ''),
+                        channel_id='dm',
+                    )
+                if result and result.get('message'):
+                    await msg.reply(result['message'], type=MessageTypes.KMD)
+            except Exception as e:
+                logger.warning(f'剧情私信回复处理失败: {e}')
+            return
+
         if not msg_channel_id:
             return
 

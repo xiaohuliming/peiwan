@@ -48,6 +48,13 @@ class Config:
     PUBLIC_SITE_URL = os.environ.get('PUBLIC_SITE_URL', 'https://www.ennb.xin')
     SITE_URL = os.environ.get('SITE_URL', PUBLIC_SITE_URL)
 
+    # KOOK AI 剧情游戏 LLM 配置（OpenAI-compatible Chat Completions）
+    STORY_LLM_MODEL = os.environ.get('STORY_LLM_MODEL', 'deepseek-ai/DeepSeek-V4-Flash')
+    STORY_LLM_API_URL = os.environ.get('STORY_LLM_API_URL', 'https://api.siliconflow.cn/v1/chat/completions')
+    STORY_LLM_API_KEY = os.environ.get('STORY_LLM_API_KEY', '')
+    STORY_LLM_TIMEOUT = int(os.environ.get('STORY_LLM_TIMEOUT', '45'))
+    STORY_LORE_MAX_CHARS = int(os.environ.get('STORY_LORE_MAX_CHARS', '9000'))
+
     # WeChat OAuth (网页扫码登录/注册)
     WECHAT_APP_ID = os.environ.get('WECHAT_APP_ID', '')
     WECHAT_APP_SECRET = os.environ.get('WECHAT_APP_SECRET', '')
