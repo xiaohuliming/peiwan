@@ -174,6 +174,19 @@ class StoryGameTests(unittest.TestCase):
         self.assertIn('【地图参考】训练场 / Range', prompt)
         self.assertIn('【武器参考】鬼魅 / Ghost', prompt)
 
+    def test_deepseek_base_url_and_default_model_are_normalized(self):
+        self.assertEqual(
+            story_game_service._normalize_story_api_url('https://api.deepseek.com'),
+            'https://api.deepseek.com/chat/completions',
+        )
+        self.assertEqual(
+            story_game_service._normalize_story_model(
+                'deepseek-ai/DeepSeek-V4-Flash',
+                'https://api.deepseek.com/chat/completions',
+            ),
+            'deepseek-chat',
+        )
+
     def test_dm_reply_marks_message_and_updates_relation(self):
         self.start_story()
         story_game_service.continue_story(

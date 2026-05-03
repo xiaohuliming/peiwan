@@ -1364,6 +1364,8 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
                 reply_text = story_game_service.archive_text(kook_id)
             elif action_key in ('dm', 'mail', '私信'):
                 reply_text = story_game_service.dm_inbox_text(kook_id)
+            elif action_key in ('status', '状态'):
+                reply_text = story_game_service.llm_status_text()
             elif action_key in ('reply', '回复'):
                 character_arg = args[0] if len(args) >= 1 else ''
                 reply_body = ' '.join(args[1:]).strip() if len(args) >= 2 else ''

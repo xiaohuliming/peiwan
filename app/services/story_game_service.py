@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import requests
-from flask import current_app
+from flask import current_app, has_app_context
 
 from app.extensions import db
 from app.models.story_game import (
@@ -222,6 +222,7 @@ def menu_text():
         "│ `/story profile` 查看档案\n"
         "│ `/story archive` 查看记忆\n"
         "│ `/story dm` 查看角色私信\n"
+        "│ `/story status` 查看 LLM 接入状态\n"
         "╰─ 若要重开：`/story restart 1 1`"
     )
 
@@ -515,7 +516,7 @@ def _build_lore_reference(state=None, user_input=''):
     for item in ranked_weapons[:6]:
         snippets.append(f"【武器参考】{item['title']}\n{_clean_text(item['content'], 360)}")
 
-    max_chars = int(current_app.config.get('STORY_LORE_MAX_CHARS', 9000)) if current_app else 9000
+    max_chars = int(_story_config('STORY_LORE_MAX_CHARS', 9000))
     return _clean_text('\n\n'.join(snippets), max_chars)
 
 
@@ -761,9 +762,14 @@ def _build_story_messages(state, user_input):
 
 
 def _call_story_llm(messages):
-    api_key = current_app.config.get('STORY_LLM_API_KEY') or os.environ.get('STORY_LLM_API_KEY', '')
-    api_url = current_app.config.get('STORY_LLM_API_URL') or os.environ.get('STORY_LLM_API_URL', '')
-    model = current_app.config.get('STORY_LLM_MODEL') or os.environ.get('STORY_LLM_MODEL', 'deepseek-ai/DeepSeek-V4-Flash')
+    api_key = _story_config('STORY_LLM_API_KEY', '')
+    api_url = _normalize_story_api_url(
+        _story_config('STORY_LLM_API_URL', '')
+    )
+    model = _normalize_story_model(
+        _story_config('STORY_LLM_MODEL', 'deepseek-ai/DeepSeek-V4-Flash'),
+        api_url,
+    )
     if not api_key or not api_url:
         return None
     try:
@@ -776,7 +782,7 @@ def _call_story_llm(messages):
                 'temperature': 0.85,
                 'max_tokens': 1800,
             },
-            timeout=int(current_app.config.get('STORY_LLM_TIMEOUT', 45)),
+            timeout=int(_story_config('STORY_LLM_TIMEOUT', 45)),
         )
         data = resp.json()
         if resp.status_code >= 400:
@@ -790,6 +796,53 @@ def _call_story_llm(messages):
     except Exception as e:
         current_app.logger.warning('[Story] LLM 调用异常: %s', e)
         return None
+
+
+def _story_config(name, default=''):
+    if has_app_context() and name in current_app.config:
+        return current_app.config.get(name, default)
+    return os.environ.get(name, default)
+
+
+def _normalize_story_api_url(api_url):
+    url = str(api_url or '').strip().rstrip('/')
+    if not url:
+        return ''
+    if url.endswith('/chat/completions'):
+        return url
+    if url.endswith('/v1'):
+        return f'{url}/chat/completions'
+    if url.endswith('/beta'):
+        return f'{url}/chat/completions'
+    return f'{url}/chat/completions'
+
+
+def _normalize_story_model(model, api_url=''):
+    model = str(model or '').strip()
+    api_url = str(api_url or '').lower()
+    if 'api.deepseek.com' in api_url and model in ('', 'deepseek-ai/DeepSeek-V4-Flash', 'DeepSeek-V4-Flash'):
+        return 'deepseek-chat'
+    return model or 'deepseek-chat'
+
+
+def llm_status_text():
+    api_key = _story_config('STORY_LLM_API_KEY', '')
+    raw_url = _story_config('STORY_LLM_API_URL', '')
+    api_url = _normalize_story_api_url(raw_url)
+    model = _normalize_story_model(
+        _story_config('STORY_LLM_MODEL', ''),
+        api_url,
+    )
+    status = '已配置，会调用真实 LLM' if api_key else '未配置 key，会使用本地 fallback'
+    masked = '已设置' if api_key else '未设置'
+    return (
+        "╭─ 灰区档案 / LLM 状态\n"
+        f"│ 状态：{status}\n"
+        f"│ API Key：{masked}\n"
+        f"│ API URL：{api_url or '-'}\n"
+        f"│ Model：{model or '-'}\n"
+        "╰─ 修改 .env 后需要重启 KOOK Bot 才会生效"
+    )
 
 
 def _parse_llm_json(raw):
