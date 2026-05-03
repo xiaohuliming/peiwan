@@ -24,4 +24,5 @@ from .story_game import (
     StoryMemoryFragment,
     StoryDirectMessage,
     StoryTurnLog,
+    StoryHardState,
 )

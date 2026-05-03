@@ -71,6 +71,14 @@ CREATE DATABASE peiwan_admin CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 | `KOOK_BOT_ENABLED` | 可选 | `true/false`，`true` 时 Web 进程内自动启动 Bot 线程 |
 | `PUBLIC_SITE_URL` | 建议 | 对外可访问域名，用于消息跳转链接 |
 | `SITE_URL` | 可选 | 不填默认等于 `PUBLIC_SITE_URL` |
+| `STORY_LLM_API_KEY` | 剧情AI必填 | AI 文字剧情 DeepSeek/OpenAI-compatible API Key |
+| `STORY_LLM_MIN_VISIBLE_CHARS` | 可选 | 主线剧情单次最短正文，过短会触发一次结构化修复重试 |
+| `STORY_LANGGRAPH_ENABLED` | 可选 | `true/false`，默认 `true`，启用 LangGraph 剧情流程编排 |
+| `STORY_MEMORY_ENABLED` | 可选 | `true/false`，启用 mem0 长期记忆 |
+| `STORY_MEMORY_BACKEND` | 可选 | `mem0_sdk` 或 `mem0_rest` |
+| `MEM0_EMBEDDER_PROVIDER` | 可选 | 默认 `fastembed`，本地向量模型；也可改 `openai` 等远程 embedding |
+| `MEM0_EMBEDDER_API_KEY` | 远程embedding时必填 | 向量模型 API Key；DeepSeek 只做 LLM，不负责 embedding |
+| `MEM0_QDRANT_URL` / `MEM0_QDRANT_PATH` | 可选 | Qdrant 远程地址或本地嵌入式存储路径 |
 | `SSL_CERT_FILE` | 可选 | 证书链路径（服务器证书问题时用） |
 | `REQUESTS_CA_BUNDLE` | 可选 | 同上 |
 | `SSL_CERT_DIR` | 可选 | 证书目录 |
@@ -85,6 +93,59 @@ KOOK_TOKEN=your-kook-token
 PUBLIC_SITE_URL=https://www.ennb.xin
 SITE_URL=https://www.ennb.xin
 ```
+
+## AI 剧情长期记忆（mem0，可选）
+
+剧情 Bot 的 `/story continue` 已接入 LangGraph 编排层：`prepare_context -> call_llm -> validate_payload -> persist_turn -> dispatch_side_effects`。这条链路让上下文构建、LLM 生成、JSON 校验、数据库落库、私信与记忆写入各自成为清晰节点；如果 LLM 或校验失败，本轮不会写入剧情进度。
+
+剧情 Bot 已预留 mem0 适配层，默认关闭。开启后，每轮剧情会先按 KOOK 用户召回长期记忆，并在剧情成功生成后写入 mem0；记忆层失败不会阻断主线剧情。
+
+剧情生成已加结构化校验：LLM 必须返回 `visible_text`、`state_updates`、`suggested_choices`，并可返回 `narrative_events`。如果 JSON 结构不合格、正文过短、角色 id 不合法，系统会把错误原因发回 LLM 修复一次；仍失败则本轮不推进剧情，避免污染玩家状态。
+
+剧情硬状态由数据库控制：`story_hard_states` 保存玩家当前位置、当前任务、任务进度、物品和 NPC 状态。LLM 不能只靠正文“宣布”获得道具或切换地点，必须通过 `state_updates.hard_state_updates` 提交结构化变更，后端校验通过后才会落库。
+
+Chapter 0 已加入章节状态机：Prompt 会携带 `chapter_scene_rules`，后端会校验 `current_scene`、`hard_state_updates.location`、任务 id 和章节推进。非法跳场景、跳章节或直接进入结局会被拒绝，并触发一次结构化修复重试；仍不合规则本轮不落库。
+
+轻量试点推荐 `mem0_sdk` + 本地 Qdrant path + FastEmbed。这个方案不需要 Docker，也不需要额外 embedding key，首次运行会下载本地向量模型。
+
+```bash
+pip install -r requirements.txt
+```
+
+`.env` 示例：
+
+```env
+STORY_MEMORY_ENABLED=true
+STORY_MEMORY_BACKEND=mem0_sdk
+MEM0_LLM_PROVIDER=deepseek
+MEM0_LLM_MODEL=deepseek-v4-flash
+MEM0_LLM_BASE_URL=https://api.deepseek.com
+MEM0_EMBEDDER_PROVIDER=fastembed
+MEM0_EMBEDDER_MODEL=BAAI/bge-small-zh-v1.5
+MEM0_EMBEDDER_DIMS=512
+MEM0_VECTOR_PROVIDER=qdrant
+MEM0_QDRANT_PATH=instance/qdrant
+MEM0_HISTORY_DB_PATH=instance/mem0_history.db
+```
+
+如果你要用独立 Qdrant 服务：
+
+```bash
+docker compose -f docker-compose.mem0.yml up -d
+```
+
+然后删除 `MEM0_QDRANT_PATH`，改用 `MEM0_QDRANT_HOST=127.0.0.1` 和 `MEM0_QDRANT_PORT=6333`。
+
+如果后续改成独立 mem0 REST 服务，把 `STORY_MEMORY_BACKEND=mem0_rest`，并配置 `MEM0_API_URL` 与 `MEM0_API_KEY` 即可。
+
+检查记忆层配置：
+
+```bash
+.venv/bin/python scripts/story_memory_check.py
+.venv/bin/python scripts/story_memory_check.py --smoke
+```
+
+Bot 内可用 `/story status` 查看 Mem0 开关状态，也可以用 `/story memory 关键词` 查询当前 KOOK 用户自己的长期记忆召回结果。
 
 ## 数据库迁移
 

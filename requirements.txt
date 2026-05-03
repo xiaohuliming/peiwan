@@ -11,3 +11,7 @@ pymysql
 APScheduler
 pytz
 Pillow
+mem0ai
+qdrant-client
+fastembed
+langgraph

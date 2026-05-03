@@ -9,6 +9,7 @@ import re
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
+from typing import Any, TypedDict
 
 import requests
 from flask import current_app, has_app_context
@@ -17,9 +18,16 @@ from app.extensions import db
 from app.models.story_game import (
     StoryCharacterRelation,
     StoryDirectMessage,
+    StoryHardState,
     StoryMemoryFragment,
     StoryPlayerState,
     StoryTurnLog,
+)
+from app.services.story_memory_service import (
+    is_memory_enabled,
+    memory_status_lines,
+    remember_story_turn,
+    search_story_memories,
 )
 
 
@@ -195,6 +203,130 @@ DEFAULT_MEMORY_07 = {
     'content': '你手腕上的编号不是名字，而是某种实验标记。广播里反复出现的“回收编号 07”，像是在确认你不是第一次醒来。',
 }
 
+CHAPTER_SCENE_RULES = {
+    'source_op': {
+        0: {
+            'chapter_name': 'Chapter 0：醒来',
+            'goal': '从封锁区醒来，与捷风建立临时协作，找到编号 07 与基地 AI 回收指令的第一条线索。',
+            'allowed_scene_ids': [
+                'sealed_training_room',
+                'escape_corridor',
+                'abandoned_comm_room',
+                'service_storage',
+                'medical_observation_room',
+            ],
+            'terminal_scene_ids': ['abandoned_comm_room', 'medical_observation_room'],
+            'completion_flags': ['chapter_0_complete', 'chapter_0_exit_clue_found'],
+            'allowed_mission_ids': ['chapter_0_escape', 'chapter_0_find_signal_source'],
+            'scenes': {
+                'sealed_training_room': {
+                    'name': '封锁区训练室',
+                    'purpose': '开局醒来、捷风持枪接触、基地 AI 回收广播。',
+                    'allowed_next': ['sealed_training_room', 'escape_corridor'],
+                },
+                'escape_corridor': {
+                    'name': '封锁走廊',
+                    'purpose': '逃离训练室、遭遇巡逻/机械锁/红色警戒，形成第一次信任考验。',
+                    'allowed_next': ['escape_corridor', 'abandoned_comm_room', 'service_storage'],
+                },
+                'abandoned_comm_room': {
+                    'name': '废弃通讯室',
+                    'purpose': '接入破碎通讯、听到有人喊出 07，发现档案被删的第一条实证。',
+                    'allowed_next': ['abandoned_comm_room', 'escape_corridor', 'service_storage', 'medical_observation_room'],
+                },
+                'service_storage': {
+                    'name': '维护储物间',
+                    'purpose': '取得临时工具/通讯器/被撕毁照片，也可能触发陷阱或警报。',
+                    'allowed_next': ['service_storage', 'escape_corridor', 'abandoned_comm_room'],
+                },
+                'medical_observation_room': {
+                    'name': '医疗观察室',
+                    'purpose': '贤者或医疗档案线索初次出现，暗示玩家曾接受过观察。',
+                    'allowed_next': ['medical_observation_room', 'abandoned_comm_room', 'escape_corridor'],
+                },
+            },
+        },
+    },
+    'grey_extract': {
+        0: {
+            'chapter_name': 'Chapter 0：撤离点失联',
+            'goal': '在灰区检查点确认失联信号来源，建立佣兵小队临时信任。',
+            'allowed_scene_ids': ['grey_zone_checkpoint', 'grey_zone_outer_road', 'field_med_tent'],
+            'terminal_scene_ids': ['grey_zone_outer_road', 'field_med_tent'],
+            'completion_flags': ['chapter_0_complete', 'first_extraction_signal_found'],
+            'allowed_mission_ids': ['chapter_0_escape', 'chapter_0_find_signal_source'],
+            'scenes': {
+                'grey_zone_checkpoint': {
+                    'name': '灰区检查点',
+                    'purpose': '开局进入撤离线，听到失联小队信号。',
+                    'allowed_next': ['grey_zone_checkpoint', 'grey_zone_outer_road', 'field_med_tent'],
+                },
+                'grey_zone_outer_road': {
+                    'name': '灰区外环道路',
+                    'purpose': '推进撤离点与失联信号调查。',
+                    'allowed_next': ['grey_zone_outer_road', 'grey_zone_checkpoint', 'field_med_tent'],
+                },
+                'field_med_tent': {
+                    'name': '战地医疗帐篷',
+                    'purpose': '处理伤情和医疗线索。',
+                    'allowed_next': ['field_med_tent', 'grey_zone_checkpoint', 'grey_zone_outer_road'],
+                },
+            },
+        },
+    },
+    'tactical_club': {
+        0: {
+            'chapter_name': 'Chapter 0：训练舱异常',
+            'goal': '确认嗯呢呗虚拟训练舱异常，发现现实频道与游戏世界开始交错。',
+            'allowed_scene_ids': ['ennb_virtual_training_room', 'ennb_command_channel', 'club_backstage'],
+            'terminal_scene_ids': ['ennb_command_channel', 'club_backstage'],
+            'completion_flags': ['chapter_0_complete', 'training_pod_anomaly_confirmed'],
+            'allowed_mission_ids': ['chapter_0_escape', 'chapter_0_find_signal_source'],
+            'scenes': {
+                'ennb_virtual_training_room': {
+                    'name': '嗯呢呗虚拟训练舱',
+                    'purpose': '开局从俱乐部训练舱异常醒来。',
+                    'allowed_next': ['ennb_virtual_training_room', 'ennb_command_channel', 'club_backstage'],
+                },
+                'ennb_command_channel': {
+                    'name': '嗯呢呗指挥频道',
+                    'purpose': '现实 KOOK 频道与剧情系统交错。',
+                    'allowed_next': ['ennb_command_channel', 'ennb_virtual_training_room', 'club_backstage'],
+                },
+                'club_backstage': {
+                    'name': '俱乐部后台走廊',
+                    'purpose': '调查 Bot 与现实运营后台异常。',
+                    'allowed_next': ['club_backstage', 'ennb_command_channel', 'ennb_virtual_training_room'],
+                },
+            },
+        },
+    },
+}
+
+
+class StoryContinueGraphState(TypedDict, total=False):
+    """LangGraph 主线推进共享状态。"""
+    kook_id: str
+    user_id: Any
+    user_input: str
+    resolved_input: str
+    channel_id: str
+    story_state: Any
+    messages: list
+    raw_output: str
+    repair_raw_output: str
+    validation_errors: list
+    payload: dict
+    visible_text: str
+    choices: list
+    updates: dict
+    created_dms: list
+    ok: bool
+    message: str
+    llm_used: bool
+    graph_trace: list
+    orchestrator: str
+
 
 def _option_by_order(options):
     return sorted(options.items(), key=lambda item: item[1]['order'])
@@ -222,6 +354,7 @@ def menu_text():
         "│ `/story profile` 查看档案\n"
         "│ `/story archive` 查看记忆\n"
         "│ `/story dm` 查看角色私信\n"
+        "│ `/story memory 关键词` 查看自己的长期记忆召回\n"
         "│ `/story status` 查看 LLM 接入状态\n"
         "╰─ 若要重开：`/story restart 1 1`"
     )
@@ -357,6 +490,107 @@ def _ensure_relations(kook_id, user_id=None):
     return existing
 
 
+def _ensure_hard_state(kook_id, user_id=None, state=None):
+    row = StoryHardState.query.filter_by(kook_id=kook_id).first()
+    if row:
+        if user_id and row.user_id != user_id:
+            row.user_id = user_id
+        return row
+
+    location_id = getattr(state, 'current_scene', None) or 'sealed_training_room'
+    row = StoryHardState(
+        kook_id=kook_id,
+        user_id=user_id,
+        location_id=location_id,
+        location_name=_scene_display_name(location_id),
+        mission_id='chapter_0_escape',
+        mission_name='逃离封锁区',
+        mission_status='active',
+        mission_progress=0,
+    )
+    row.inventory_map = {}
+    row.npc_state_map = {
+        'jett': {
+            'alive': True,
+            'status': '警戒接触',
+            'location_id': location_id,
+            'disposition': '警惕',
+        }
+    }
+    db.session.add(row)
+    return row
+
+
+def _scene_display_name(scene_id):
+    return {
+        'sealed_training_room': '封锁区训练室',
+        'escape_corridor': '封锁走廊',
+        'abandoned_comm_room': '废弃通讯室',
+        'service_storage': '维护储物间',
+        'medical_observation_room': '医疗观察室',
+        'grey_zone_checkpoint': '灰区检查点',
+        'grey_zone_outer_road': '灰区外环道路',
+        'field_med_tent': '战地医疗帐篷',
+        'ennb_virtual_training_room': '嗯呢呗虚拟训练舱',
+        'ennb_command_channel': '嗯呢呗指挥频道',
+        'club_backstage': '俱乐部后台走廊',
+    }.get(str(scene_id or '').strip(), str(scene_id or '').strip() or '未知地点')
+
+
+def _hard_state_context(kook_id, user_id=None, state=None):
+    hard = _ensure_hard_state(kook_id, user_id, state)
+    return {
+        'location': {
+            'id': hard.location_id,
+            'name': hard.location_name,
+        },
+        'mission': {
+            'id': hard.mission_id,
+            'name': hard.mission_name,
+            'status': hard.mission_status,
+            'progress': hard.mission_progress,
+        },
+        'inventory': hard.inventory_map,
+        'npc_states': hard.npc_state_map,
+    }
+
+
+def _chapter_scene_rule_for_state(state):
+    if not state:
+        return None
+    world_rules = CHAPTER_SCENE_RULES.get(getattr(state, 'story_world', '') or '')
+    if not world_rules:
+        return None
+    return world_rules.get(int(getattr(state, 'chapter', 0) or 0))
+
+
+def _chapter_scene_rule_context(state):
+    rule = _chapter_scene_rule_for_state(state)
+    if not rule:
+        return {}
+    current_scene = getattr(state, 'current_scene', '') or ''
+    current_rule = (rule.get('scenes') or {}).get(current_scene, {})
+    return {
+        'chapter_name': rule.get('chapter_name'),
+        'goal': rule.get('goal'),
+        'current_scene': current_scene,
+        'current_scene_name': current_rule.get('name') or _scene_display_name(current_scene),
+        'allowed_next_scene_ids': current_rule.get('allowed_next') or [current_scene],
+        'allowed_scenes': [
+            {
+                'id': scene_id,
+                'name': scene.get('name') or _scene_display_name(scene_id),
+                'purpose': scene.get('purpose') or '',
+                'allowed_next': scene.get('allowed_next') or [],
+            }
+            for scene_id, scene in (rule.get('scenes') or {}).items()
+        ],
+        'allowed_mission_ids': rule.get('allowed_mission_ids') or [],
+        'terminal_scene_ids': rule.get('terminal_scene_ids') or [],
+        'completion_flags': rule.get('completion_flags') or [],
+    }
+
+
 def _add_memory(kook_id, user_id, memory, source_event=''):
     memory = _normalize_memory(memory)
     if not memory:
@@ -413,6 +647,7 @@ def start_story(kook_id, kook_username='', user_id=None, world_arg='', backgroun
         StoryDirectMessage.query.filter_by(kook_id=kook_id).delete(synchronize_session=False)
         StoryMemoryFragment.query.filter_by(kook_id=kook_id).delete(synchronize_session=False)
         StoryCharacterRelation.query.filter_by(kook_id=kook_id).delete(synchronize_session=False)
+        StoryHardState.query.filter_by(kook_id=kook_id).delete(synchronize_session=False)
         StoryPlayerState.query.filter_by(kook_id=kook_id).delete(synchronize_session=False)
         db.session.flush()
 
@@ -446,6 +681,7 @@ def start_story(kook_id, kook_username='', user_id=None, world_arg='', backgroun
     state.choice_list = ['我不记得了', '你先告诉我这里是哪', '我为什么要相信你']
     db.session.add(state)
     _ensure_relations(kook_id, user_id)
+    _ensure_hard_state(kook_id, user_id, state)
     _add_memory(kook_id, user_id, DEFAULT_MEMORY_07, source_event='chapter_0_start')
     db.session.commit()
 
@@ -629,46 +865,275 @@ def _score_lore_section(item, query):
 
 
 def continue_story(kook_id, user_id=None, user_input='', channel_id=None):
-    kook_id = str(kook_id or '').strip()
-    user_input = _clean_text(user_input, 1000)
+    result = _run_story_continue_orchestrator(kook_id, user_id, user_input, channel_id)
+    if not result.get('ok'):
+        db.session.rollback()
+        return {
+            'ok': False,
+            'message': result.get('message') or _story_llm_failure_message(),
+            'llm_used': bool(result.get('llm_used')),
+            'orchestrator': result.get('orchestrator') or 'langgraph',
+            'graph_trace': result.get('graph_trace') or [],
+        }
+    return {
+        'ok': True,
+        'message': result.get('message') or '剧情推进完成。',
+        'llm_used': True,
+        'orchestrator': result.get('orchestrator') or 'langgraph',
+        'graph_trace': result.get('graph_trace') or [],
+    }
+
+
+def _story_llm_failure_message():
+    return (
+        "AI 剧情引擎没有成功返回内容，本次没有推进剧情。\n"
+        "请先确认 `/story status` 显示 API Key 已设置，并重启 KOOK Bot 后再试。"
+    )
+
+
+def _run_story_continue_orchestrator(kook_id, user_id=None, user_input='', channel_id=None):
+    initial = {
+        'kook_id': str(kook_id or '').strip(),
+        'user_id': user_id,
+        'user_input': _clean_text(user_input, 1000),
+        'channel_id': str(channel_id or ''),
+        'ok': True,
+        'llm_used': False,
+        'graph_trace': [],
+    }
+    graph = _get_story_continue_graph()
+    if graph is not None:
+        initial['orchestrator'] = 'langgraph'
+        result = graph.invoke(
+            initial,
+            {
+                'configurable': {'thread_id': f"story:{initial['kook_id'] or 'anonymous'}"},
+                'recursion_limit': 20,
+            },
+        )
+        result['orchestrator'] = 'langgraph'
+        return result
+    initial['orchestrator'] = 'sequential'
+    result = _run_story_continue_pipeline(initial)
+    result['orchestrator'] = 'sequential'
+    return result
+
+
+@lru_cache(maxsize=1)
+def _get_story_continue_graph():
+    if not _story_config_bool('STORY_LANGGRAPH_ENABLED', True):
+        return None
+    try:
+        from langgraph.graph import END, START, StateGraph
+    except Exception as e:
+        if has_app_context():
+            current_app.logger.warning('[Story] LangGraph 不可用，使用顺序编排: %s', e)
+        return None
+
+    graph = StateGraph(StoryContinueGraphState)
+    graph.add_node('prepare_context', _story_graph_prepare_context)
+    graph.add_node('call_llm', _story_graph_call_llm)
+    graph.add_node('validate_payload', _story_graph_validate_payload)
+    graph.add_node('persist_turn', _story_graph_persist_turn)
+    graph.add_node('dispatch_side_effects', _story_graph_dispatch_side_effects)
+    graph.add_edge(START, 'prepare_context')
+    graph.add_edge('prepare_context', 'call_llm')
+    graph.add_edge('call_llm', 'validate_payload')
+    graph.add_edge('validate_payload', 'persist_turn')
+    graph.add_edge('persist_turn', 'dispatch_side_effects')
+    graph.add_edge('dispatch_side_effects', END)
+    return graph.compile(name='kook_story_continue')
+
+
+def _run_story_continue_pipeline(initial):
+    graph_state = dict(initial)
+    for node in (
+        _story_graph_prepare_context,
+        _story_graph_call_llm,
+        _story_graph_validate_payload,
+        _story_graph_persist_turn,
+        _story_graph_dispatch_side_effects,
+    ):
+        updates = node(graph_state) or {}
+        graph_state.update(updates)
+    return graph_state
+
+
+def _story_graph_prepare_context(graph_state: StoryContinueGraphState):
+    trace = _append_graph_trace(graph_state, 'prepare_context')
+    kook_id = str(graph_state.get('kook_id') or '').strip()
+    user_input = _clean_text(graph_state.get('user_input'), 1000)
     if not kook_id:
-        return {'ok': False, 'message': '未获取到你的 KOOK 身份，请稍后重试。'}
+        return _graph_failure(graph_state, '未获取到你的 KOOK 身份，请稍后重试。', trace)
     if not user_input:
-        return {'ok': False, 'message': '请输入你的行动，例如：`/story continue 我举起手，说我不记得自己是谁`'}
+        return _graph_failure(
+            graph_state,
+            '请输入你的行动，例如：`/story continue 我举起手，说我不记得自己是谁`',
+            trace,
+        )
 
     state = StoryPlayerState.query.filter_by(kook_id=kook_id).first()
     if not state:
-        return {'ok': False, 'message': "你还没有剧情档案。\n\n" + menu_text()}
+        return _graph_failure(graph_state, "你还没有剧情档案。\n\n" + menu_text(), trace)
+    user_id = graph_state.get('user_id')
     if user_id and state.user_id != user_id:
         state.user_id = user_id
+    resolved_input = _expand_choice_input(state, user_input)
+    return {
+        'story_state': state,
+        'resolved_input': resolved_input,
+        'messages': _build_story_messages(state, resolved_input),
+        'graph_trace': trace,
+    }
 
-    payload = _generate_llm_story_payload(state, user_input)
-    llm_used = payload is not None
-    if not payload:
-        payload = _fallback_story_payload(state, user_input)
 
-    visible_text = _clean_text(payload.get('visible_text'), 1800)
+def _story_graph_call_llm(graph_state: StoryContinueGraphState):
+    if _graph_stopped(graph_state):
+        return {}
+    trace = _append_graph_trace(graph_state, 'call_llm')
+    raw = _call_story_llm(graph_state.get('messages') or [])
+    if not raw:
+        return _graph_failure(graph_state, _story_llm_failure_message(), trace)
+    return {'raw_output': raw, 'graph_trace': trace}
+
+
+def _story_graph_validate_payload(graph_state: StoryContinueGraphState):
+    if _graph_stopped(graph_state):
+        return {}
+    trace = _append_graph_trace(graph_state, 'validate_payload')
+    raw = graph_state.get('raw_output')
+    story_state = graph_state.get('story_state')
+    payload, errors = _parse_and_validate_story_payload(raw, story_state=story_state)
+    if payload:
+        return {'payload': payload, 'validation_errors': [], 'graph_trace': trace}
+
+    repair_raw = _call_story_llm(
+        _build_repair_messages(
+            graph_state.get('messages') or [],
+            raw,
+            errors,
+            _story_payload_contract(),
+        )
+    )
+    if not repair_raw:
+        return _graph_failure(graph_state, _story_llm_failure_message(), trace, errors)
+    payload, repair_errors = _parse_and_validate_story_payload(repair_raw, story_state=story_state)
+    if payload:
+        trace = trace + ['repair_payload']
+        return {
+            'payload': payload,
+            'repair_raw_output': repair_raw,
+            'validation_errors': [],
+            'graph_trace': trace,
+        }
+    all_errors = list(errors or []) + list(repair_errors or [])
+    current_app.logger.warning('[Story] LLM 输出校验失败: %s', '; '.join(all_errors))
+    return _graph_failure(graph_state, _story_llm_failure_message(), trace, all_errors)
+
+
+def _story_graph_persist_turn(graph_state: StoryContinueGraphState):
+    if _graph_stopped(graph_state):
+        return {}
+    trace = _append_graph_trace(graph_state, 'persist_turn')
+    payload = graph_state.get('payload')
+    state = graph_state.get('story_state')
+    if not isinstance(payload, dict) or state is None:
+        return _graph_failure(graph_state, _story_llm_failure_message(), trace)
+
+    visible_text = _clean_text(payload.get('visible_text'), int(_story_config('STORY_VISIBLE_MAX_CHARS', 3200)))
     choices = _normalize_choices(payload.get('suggested_choices'))
     updates = payload.get('state_updates') if isinstance(payload.get('state_updates'), dict) else {}
-    created_dms = _apply_state_updates(state, updates, choices, user_id=user_id)
+    narrative_events = payload.get('narrative_events') if isinstance(payload.get('narrative_events'), list) else []
+    if narrative_events:
+        updates = dict(updates)
+        updates['narrative_events'] = narrative_events
 
-    db.session.add(StoryTurnLog(
-        kook_id=kook_id,
+    user_id = graph_state.get('user_id')
+    resolved_input = graph_state.get('resolved_input') or graph_state.get('user_input') or ''
+    created_dms = _apply_state_updates(
+        state,
+        updates,
+        choices,
         user_id=user_id,
-        channel_id=str(channel_id or ''),
-        input_text=user_input,
+        user_input=resolved_input,
+        visible_text=visible_text,
+    )
+    db.session.add(StoryTurnLog(
+        kook_id=state.kook_id,
+        user_id=user_id,
+        channel_id=str(graph_state.get('channel_id') or ''),
+        input_text=resolved_input,
         visible_text=visible_text,
         state_updates=json.dumps(updates, ensure_ascii=False),
-        llm_used=llm_used,
+        llm_used=True,
     ))
     db.session.commit()
-    _send_created_dms(created_dms)
-
     return {
         'ok': True,
         'message': _format_story_response(visible_text, choices),
-        'llm_used': llm_used,
+        'llm_used': True,
+        'visible_text': visible_text,
+        'choices': choices,
+        'updates': updates,
+        'created_dms': created_dms,
+        'graph_trace': trace,
     }
+
+
+def _story_graph_dispatch_side_effects(graph_state: StoryContinueGraphState):
+    if _graph_stopped(graph_state) or not graph_state.get('llm_used'):
+        return {}
+    trace = _append_graph_trace(graph_state, 'dispatch_side_effects')
+    state = graph_state.get('story_state')
+    _send_created_dms(graph_state.get('created_dms') or [])
+    remember_story_turn(
+        graph_state.get('kook_id'),
+        user_id=graph_state.get('user_id') or getattr(state, 'user_id', None),
+        user_input=graph_state.get('resolved_input') or graph_state.get('user_input') or '',
+        visible_text=graph_state.get('visible_text') or '',
+        metadata={
+            'channel_id': str(graph_state.get('channel_id') or ''),
+            'scene': getattr(state, 'current_scene', ''),
+            'chapter': getattr(state, 'chapter', 0),
+            'orchestrator': graph_state.get('orchestrator') or 'langgraph',
+        },
+    )
+    return {'graph_trace': trace}
+
+
+def _append_graph_trace(graph_state, step):
+    trace = list(graph_state.get('graph_trace') or [])
+    trace.append(step)
+    return trace
+
+
+def _graph_stopped(graph_state):
+    return graph_state.get('ok') is False
+
+
+def _graph_failure(graph_state, message, trace=None, errors=None):
+    return {
+        'ok': False,
+        'message': message,
+        'llm_used': False,
+        'validation_errors': list(errors or graph_state.get('validation_errors') or []),
+        'graph_trace': trace if trace is not None else _append_graph_trace(graph_state, 'failed'),
+    }
+
+
+def _expand_choice_input(state, user_input):
+    text = _clean_text(user_input, 1000)
+    key = text.strip().upper()
+    choices = list(getattr(state, 'choice_list', []) or [])
+    choice_map = {'A': 0, 'B': 1, 'C': 2, 'D': None, '1': 0, '2': 1, '3': 2}
+    if key not in choice_map:
+        return text
+    idx = choice_map[key]
+    if idx is None:
+        return '自由输入'
+    if 0 <= idx < len(choices):
+        return choices[idx]
+    return text
 
 
 def _normalize_choices(choices):
@@ -676,10 +1141,17 @@ def _normalize_choices(choices):
         return []
     cleaned = []
     for choice in choices[:3]:
-        text = _clean_text(choice, 80)
+        text = _strip_choice_prefix(_clean_text(choice, 100))
         if text:
             cleaned.append(text)
     return cleaned
+
+
+def _strip_choice_prefix(text):
+    text = str(text or '').strip()
+    text = re.sub(r'^\s*(?:选项\s*)?[A-Da-d][\.、:：\)]\s*', '', text)
+    text = re.sub(r'^\s*(?:选项\s*)?\d{1,2}[\.、:：\)]\s*', '', text)
+    return text.strip()
 
 
 def _format_story_response(visible_text, choices):
@@ -693,13 +1165,73 @@ def _format_story_response(visible_text, choices):
 
 
 def _generate_llm_story_payload(state, user_input):
-    raw = _call_story_llm(_build_story_messages(state, user_input))
+    messages = _build_story_messages(state, user_input)
+    raw = _call_story_llm(messages)
     if not raw:
         return None
-    payload = _parse_llm_json(raw)
-    if not isinstance(payload, dict) or not _clean_text(payload.get('visible_text')):
+    payload, errors = _parse_and_validate_story_payload(raw, story_state=state)
+    if payload:
+        return payload
+
+    repair_raw = _call_story_llm(_build_repair_messages(messages, raw, errors, _story_payload_contract()))
+    if not repair_raw:
         return None
-    return payload
+    payload, errors = _parse_and_validate_story_payload(repair_raw, story_state=state)
+    if payload:
+        return payload
+    current_app.logger.warning('[Story] LLM 输出校验失败: %s', '; '.join(errors))
+    return None
+
+
+def _load_story_history(kook_id):
+    max_turns = _story_config_int('STORY_HISTORY_MAX_TURNS', 300)
+    max_chars = _story_config_int('STORY_HISTORY_MAX_CHARS', 600000)
+    total_turns = StoryTurnLog.query.filter_by(kook_id=kook_id).count()
+    if max_turns <= 0 or max_chars <= 0 or total_turns <= 0:
+        return [], {
+            'included_turns': 0,
+            'available_turns': total_turns,
+            'max_turns': max_turns,
+            'max_chars': max_chars,
+            'truncated': total_turns > 0,
+        }
+
+    newest_first = (
+        StoryTurnLog.query
+        .filter_by(kook_id=kook_id)
+        .order_by(StoryTurnLog.created_at.desc(), StoryTurnLog.id.desc())
+        .limit(max_turns)
+        .all()
+    )
+
+    selected = []
+    used_chars = 0
+    truncated_by_chars = False
+    for turn in newest_first:
+        item = {
+            'player_input': _clean_text(turn.input_text, 1200),
+            'visible_text': _clean_text(turn.visible_text, 3200),
+        }
+        item_chars = len(item['player_input']) + len(item['visible_text']) + 80
+        if selected and used_chars + item_chars > max_chars:
+            truncated_by_chars = True
+            break
+        if not selected and item_chars > max_chars:
+            room = max(600, max_chars - len(item['player_input']) - 80)
+            item['visible_text'] = _clean_text(turn.visible_text, room)
+            item_chars = len(item['player_input']) + len(item['visible_text']) + 80
+        selected.append(item)
+        used_chars += item_chars
+
+    selected.reverse()
+    included = len(selected)
+    return selected, {
+        'included_turns': included,
+        'available_turns': total_turns,
+        'max_turns': max_turns,
+        'max_chars': max_chars,
+        'truncated': included < total_turns or truncated_by_chars,
+    }
 
 
 def _build_story_messages(state, user_input):
@@ -711,15 +1243,26 @@ def _build_story_messages(state, user_input):
         .limit(8)
         .all()
     )
+    story_history, history_meta = _load_story_history(state.kook_id)
+    long_term_memories = _load_long_term_memories(state, user_input)
+    hard_state = _hard_state_context(state.kook_id, state.user_id, state)
     context = {
         'story_world': _world_name(state.story_world),
         'background': _background_name(state.background),
         'chapter': state.chapter,
         'current_scene': state.current_scene,
+        'hard_state': hard_state,
         'status_label': state.status_label,
         'last_npc': _character_name(state.last_npc),
+        'opening_context': _opening_text(state),
         'flags': state.flag_list[-20:],
         'summary': state.summary,
+        'resolved_player_input': user_input,
+        'current_choices': state.choice_list,
+        'history_meta': history_meta,
+        'story_history': story_history,
+        'long_term_memories': long_term_memories,
+        'chapter_scene_rules': _chapter_scene_rule_context(state),
         'relations': [
             {
                 'character_id': rel.character_id,
@@ -739,16 +1282,22 @@ def _build_story_messages(state, user_input):
         "这是 KOOK 内的 AI 沉浸式剧情互动游戏，不是战斗数值模拟器。\n"
         "所有给玩家看的角色名必须使用中文：捷风、贤者、幽影、奇乐、猎枭；不要输出英文角色名。\n"
         "lore_reference 是可参考的角色、地图、武器资料库片段；资料库角色可以作为背景、支线或路人出现，但只有 character_cards 中的核心角色能写入长期关系、羁绊和私信。\n"
+        "long_term_memories 是 mem0 召回的玩家长期记忆，可能来自更早会话；它可补充玩家偏好、承诺、角色称呼、关键选择，但不能覆盖 story_history 里明确发生的最新剧情。\n"
+        "hard_state 是数据库权威硬状态，包含当前位置、任务、物品、NPC 生死/状态；剧情正文不能与它冲突。若要改变地点、任务、物品或 NPC 状态，只能通过 state_updates.hard_state_updates 提出结构化变更。\n"
+        "chapter_scene_rules 是后端状态机规则，规定本章允许的场景、相邻转场、可用任务和完章条件；输出的 current_scene、hard_state_updates.location、chapter、mission 必须遵守它。\n"
+        "连续性铁律：story_history 是后端保存的旧剧情，按时间从早到晚排列；必须紧接 story_history 最后一轮继续写。若 story_history 为空，则从 opening_context 继续。不能回滚到更早场景，不能切到另一个选项分支，不能重复已经发生过的段落。玩家输入数字或字母时，按 resolved_player_input 代表的选项执行。若 history_meta.truncated 为 true，要优先相信 summary、flags、memories 和 story_history 中最新几轮。\n"
         "写作规则：\n"
         "1. 用第二人称“你”描述玩家经历。\n"
-        "2. 保持电影感、悬疑感和角色羁绊，不要写成说明书。\n"
-        "3. 单次 visible_text 控制在 1000 个中文字符以内。\n"
+        "2. visible_text 写 1200-2200 个中文字符，关键剧情至少 6 段，包含环境、动作、对话、心理压迫、关系变化暗示和一个明确悬念。\n"
+        "3. 开新章或新场景时先补足背景和场景信息；非新场景时不要重新介绍开头，直接承接上一轮。\n"
         "4. 必须推进剧情，但不要让玩家一句话解决主线冲突。\n"
         "5. 玩家若试图毁灭基地、杀死所有人、控制 NPC 或直接通关，要用剧情后果修正，而不是照做。\n"
         "6. 不直接暴露数值变化，用剧情语言暗示关系变化。\n"
         "7. 可以有暧昧、陪伴、牵绊和乙游感，但必须保持安全、非露骨成人内容。\n"
-        "8. 输出必须是 JSON，不要 Markdown，不要代码块，不要额外解释。\n"
-        "JSON 结构：{\"visible_text\":\"...\",\"state_updates\":{\"chapter\":0,\"current_scene\":\"...\",\"status_label\":\"...\",\"last_npc\":\"jett\",\"relationship_changes\":{\"jett\":{\"trust_delta\":2,\"bond_event\":\"temporary_alliance\"}},\"new_flags\":[\"...\"],\"new_memories\":[{\"memory_id\":\"...\",\"title\":\"...\",\"content\":\"...\"}],\"trigger_dm\":[{\"character_id\":\"jett\",\"content\":\"...\",\"trigger_event\":\"...\"}]},\"suggested_choices\":[\"...\",\"...\",\"...\"]}"
+        "8. suggested_choices 只返回选项正文，不要带 1.、2.、A. 这类编号。\n"
+        "9. 输出必须是 JSON，不要 Markdown，不要代码块，不要额外解释。\n"
+        "JSON 结构必须符合：\n"
+        f"{json.dumps(_story_payload_contract(), ensure_ascii=False)}"
     )
     user_prompt = (
         "当前结构化上下文：\n"
@@ -780,7 +1329,7 @@ def _call_story_llm(messages):
                 'model': model,
                 'messages': messages,
                 'temperature': 0.85,
-                'max_tokens': 1800,
+                'max_tokens': int(_story_config('STORY_LLM_MAX_TOKENS', 3500)),
             },
             timeout=int(_story_config('STORY_LLM_TIMEOUT', 45)),
         )
@@ -804,6 +1353,46 @@ def _story_config(name, default=''):
     return os.environ.get(name, default)
 
 
+def _story_config_int(name, default=0):
+    try:
+        return int(_story_config(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _story_config_bool(name, default=False):
+    value = _story_config(name, default)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _load_long_term_memories(state, user_input):
+    query = ' '.join([
+        str(user_input or ''),
+        str(getattr(state, 'summary', '') or ''),
+        str(getattr(state, 'status_label', '') or ''),
+        _character_name(getattr(state, 'last_npc', '')),
+    ])
+    memories = search_story_memories(
+        state.kook_id,
+        query,
+        limit=_story_config_int('STORY_MEMORY_LIMIT', 8),
+    )
+    max_chars = _story_config_int('STORY_MEMORY_MAX_CHARS', 2400)
+    selected = []
+    used = 0
+    for memory in memories:
+        text = _clean_text(memory, 600)
+        if not text:
+            continue
+        if selected and used + len(text) > max_chars:
+            break
+        selected.append(text)
+        used += len(text)
+    return selected
+
+
 def _normalize_story_api_url(api_url):
     url = str(api_url or '').strip().rstrip('/')
     if not url:
@@ -820,9 +1409,14 @@ def _normalize_story_api_url(api_url):
 def _normalize_story_model(model, api_url=''):
     model = str(model or '').strip()
     api_url = str(api_url or '').lower()
-    if 'api.deepseek.com' in api_url and model in ('', 'deepseek-ai/DeepSeek-V4-Flash', 'DeepSeek-V4-Flash'):
-        return 'deepseek-chat'
-    return model or 'deepseek-chat'
+    if 'api.deepseek.com' in api_url and model in (
+        '',
+        'deepseek-ai/DeepSeek-V4-Flash',
+        'DeepSeek-V4-Flash',
+        'deepseek-chat',
+    ):
+        return 'deepseek-v4-flash'
+    return model or 'deepseek-v4-flash'
 
 
 def llm_status_text():
@@ -833,7 +1427,11 @@ def llm_status_text():
         _story_config('STORY_LLM_MODEL', ''),
         api_url,
     )
-    status = '已配置，会调用真实 LLM' if api_key else '未配置 key，会使用本地 fallback'
+    langgraph_enabled = _story_config_bool('STORY_LANGGRAPH_ENABLED', True)
+    langgraph_status = '已启用' if langgraph_enabled and _langgraph_installed() else '未启用'
+    if langgraph_enabled and not _langgraph_installed():
+        langgraph_status = '已配置但未安装依赖'
+    status = '已配置，会调用真实 LLM' if api_key else '未配置 key，不会生成剧情'
     masked = '已设置' if api_key else '未设置'
     return (
         "╭─ 灰区档案 / LLM 状态\n"
@@ -841,8 +1439,54 @@ def llm_status_text():
         f"│ API Key：{masked}\n"
         f"│ API URL：{api_url or '-'}\n"
         f"│ Model：{model or '-'}\n"
-        "╰─ 修改 .env 后需要重启 KOOK Bot 才会生效"
+        f"│ LangGraph 编排：{langgraph_status}\n"
+        f"│ 历史上下文：最多 {_story_config_int('STORY_HISTORY_MAX_TURNS', 300)} 轮 / {_story_config_int('STORY_HISTORY_MAX_CHARS', 600000)} 字符\n"
+        + '\n'.join(memory_status_lines()) + "\n"
+        "╰─ 修改 .env 后必须重启 KOOK Bot 才会生效"
     )
+
+
+def memory_text(kook_id, query=''):
+    query = str(query or '').strip()
+    if not is_memory_enabled():
+        return (
+            "╭─ 灰区档案 / 长期记忆\n"
+            + '\n'.join(memory_status_lines()) + "\n"
+            "╰─ 当前未开启；开启后才会按玩家维度召回长期记忆"
+        )
+    if not query:
+        return (
+            "╭─ 灰区档案 / 长期记忆\n"
+            + '\n'.join(memory_status_lines()) + "\n"
+            "├─ 查询方式\n"
+            "│ `/story memory 捷风是否还记得我说过什么`\n"
+            "╰─ 只会查询你自己的剧情记忆"
+        )
+    memories = search_story_memories(kook_id, query, limit=_story_config_int('STORY_MEMORY_LIMIT', 8))
+    if not memories:
+        return (
+            "╭─ 灰区档案 / 长期记忆\n"
+            f"│ 查询：{query}\n"
+            "│ 没有召回到相关记忆。\n"
+            "╰─ 继续推进剧情后，系统会逐步沉淀可召回内容"
+        )
+    lines = [
+        "╭─ 灰区档案 / 长期记忆",
+        f"│ 查询：{query}",
+        "├─ 召回结果",
+    ]
+    for index, memory in enumerate(memories, start=1):
+        lines.append(f"│ {index}. {_clean_text(memory, 180)}")
+    lines.append("╰─ 这些内容会作为后续 LLM 的软记忆参考")
+    return '\n'.join(lines)
+
+
+def _langgraph_installed():
+    try:
+        import importlib.util
+        return importlib.util.find_spec('langgraph') is not None
+    except Exception:
+        return False
 
 
 def _parse_llm_json(raw):
@@ -863,67 +1507,568 @@ def _parse_llm_json(raw):
         return None
 
 
-def _fallback_story_payload(state, user_input):
-    reckless = bool(re.search(r'(杀死所有|摧毁|毁灭|直接通关|控制所有|游戏结束)', user_input))
-    if reckless:
-        return {
-            'visible_text': (
-                "你冲向控制台的瞬间，封锁门比你更快落下。红色警报覆盖整条训练走廊，"
-                "基地 AI 的声音忽然变得平静：“异常目标攻击意图确认。”\n\n"
-                "捷风从侧面拽住你的衣领，把你按回掩体后方。她的语气比枪口更冷。\n\n"
-                "“你是想活下去，还是想让这里所有人陪你一起死？”\n\n"
-                "你的冲动没有解决问题，反而让基地进入更高级别戒备。可也正因为这一瞬间，"
-                "你看见控制台闪过一行被删除的记录：编号 07，回收失败次数：6。"
-            ),
-            'state_updates': {
-                'chapter': state.chapter,
-                'current_scene': 'escape_corridor_alert',
-                'status_label': '高危异常目标',
-                'last_npc': 'jett',
-                'relationship_changes': {'jett': {'trust_delta': -2, 'bond_event': 'reckless_alert'}},
-                'new_flags': ['reckless_alert_raised', 'memory_07_failed_recovery_seen'],
-                'new_memories': [{
-                    'memory_id': 'memory_02_failed_recovery',
-                    'title': '第七次回收',
-                    'content': '控制台短暂闪过记录：编号 07 并不是第一次被回收，前六次都以失败告终。',
-                }],
-                'trigger_dm': [],
-            },
-            'suggested_choices': ['向捷风道歉并冷静下来', '询问回收失败次数是什么意思', '寻找另一条离开训练室的路'],
-        }
-
-    dm_needed = 'jett_training_invite_sent' not in state.flag_list
-    trigger_dm = []
-    if dm_needed:
-        trigger_dm.append({
-            'character_id': 'jett',
-            'content': '明天训练室，别迟到。\n还有，今天那一下不算你赢。我还有很多问题要问你。',
-            'trigger_event': 'chapter_0_training_invite',
-        })
+def _story_payload_contract():
     return {
-        'visible_text': (
-            "你没有放下手，但也没有后退。\n\n"
-            "“我不记得自己是谁。”你听见自己的声音在训练室里发哑，“但我记得有人告诉我，不要相信这里的 AI。”\n\n"
-            "捷风的枪口没有移开，指节却明显收紧了一下。广播仍在倒计时，门外有机械锁逐层解开的声音。"
-            "她盯着你，像是在判断你是陷阱、幸存者，还是某个她不愿承认的旧答案。\n\n"
-            "“很好。”她低声说，“那你最好现在就证明自己不是麻烦。”\n\n"
-            "她一把扯开侧门，把一只备用通讯器丢给你。走廊尽头的红灯亮起，基地 AI 正在重新计算你的位置。"
-        ),
+        'visible_text': 'string，必填，玩家可见剧情正文；推荐 1200-2200 中文字符。',
+        'narrative_events': [
+            {
+                'type': 'scene_transition|dialogue|relationship_signal|clue|risk|choice_offer',
+                'summary': 'string，结构化叙事事件摘要',
+                'actor': '可选，角色 id，如 jett/sage/omen/killjoy/sova',
+                'target': '可选，事件目标',
+            }
+        ],
         'state_updates': {
-            'chapter': 0,
-            'current_scene': 'escape_corridor',
-            'status_label': '临时合作观察对象',
-            'last_npc': 'jett',
-            'relationship_changes': {'jett': {'trust_delta': 3, 'bond_event': 'temporary_alliance'}},
-            'new_flags': ['told_jett_ai_warning', 'jett_temporarily_sides_with_player', 'jett_training_invite_sent'],
-            'new_memories': [DEFAULT_MEMORY_07],
-            'trigger_dm': trigger_dm,
+            'chapter': '可选 integer，0-10',
+            'current_scene': '可选 string，稳定场景 id',
+            'status_label': '可选 string，玩家剧情状态',
+            'last_npc': '可选角色 id：jett/sage/omen/killjoy/sova',
+            'summary': 'string，1-3 句记录本轮关键进展',
+            'hard_state_updates': {
+                'location': {'id': '稳定地点 id', 'name': '玩家可见地点名'},
+                'mission': {'id': '任务 id', 'name': '任务名', 'status': 'active|completed|failed|paused', 'progress': '0-100 或 progress_delta'},
+                'inventory': [{'op': 'add|remove|set', 'item_id': '物品 id', 'name': '物品名', 'quantity': 'integer >= 0', 'status': '可选状态'}],
+                'npc_states': [{'character_id': 'jett', 'alive': 'boolean', 'status': '可选状态', 'location_id': '可选地点 id', 'disposition': '可选态度'}],
+            },
+            'relationship_changes': {
+                'jett': {'trust_delta': 'integer，-10 到 10', 'bond_event': '可选 string'}
+            },
+            'new_flags': ['string，新增剧情 flag'],
+            'new_memories': [{'memory_id': 'string', 'title': 'string', 'content': 'string'}],
+            'trigger_dm': [{'character_id': 'jett', 'content': 'string', 'trigger_event': 'string'}],
         },
-        'suggested_choices': ['跟随捷风离开训练室', '追问她是否认识你', '尝试监听基地 AI 的频道'],
+        'suggested_choices': ['string，最多 3 个，只写选项正文，不带编号'],
     }
 
 
-def _apply_state_updates(state, updates, choices, user_id=None):
+def _dm_payload_contract(character_id='jett'):
+    return {
+        'visible_text': 'string，必填，角色给玩家看的私信回复。',
+        'state_updates': {
+            'relationship_changes': {
+                character_id: {'trust_delta': 'integer，-10 到 10', 'bond_event': '可选 string'}
+            },
+            'new_flags': ['string'],
+        },
+        'suggested_choices': ['string，可为空数组'],
+    }
+
+
+def _parse_and_validate_story_payload(raw, story_state=None):
+    payload = _parse_llm_json(raw)
+    if not isinstance(payload, dict):
+        return None, ['输出不是 JSON object']
+    return _validate_payload(
+        payload,
+        min_chars=_story_config_int('STORY_LLM_MIN_VISIBLE_CHARS', 240),
+        require_choices=True,
+        story_state=story_state,
+    )
+
+
+def _parse_and_validate_dm_payload(raw, character_id):
+    payload = _parse_llm_json(raw)
+    if not isinstance(payload, dict):
+        return None, ['输出不是 JSON object']
+    return _validate_payload(payload, min_chars=_story_config_int('STORY_DM_MIN_VISIBLE_CHARS', 8), require_choices=False, dm_character_id=character_id)
+
+
+def _validate_payload(payload, min_chars=1, require_choices=True, dm_character_id=None, story_state=None):
+    errors = []
+    visible_text = _clean_text(payload.get('visible_text'), int(_story_config('STORY_VISIBLE_MAX_CHARS', 3200)))
+    if not visible_text:
+        errors.append('visible_text 缺失或为空')
+    elif len(visible_text) < max(1, int(min_chars)):
+        errors.append(f'visible_text 过短，至少需要 {min_chars} 字符')
+
+    raw_updates = payload.get('state_updates')
+    if raw_updates is None:
+        raw_updates = {}
+    if not isinstance(raw_updates, dict):
+        errors.append('state_updates 必须是 object')
+        raw_updates = {}
+
+    updates = _sanitize_state_updates(raw_updates, errors, dm_character_id=dm_character_id, story_state=story_state)
+    choices = _sanitize_choices(payload.get('suggested_choices'), errors, require_choices=require_choices)
+    narrative_events = _sanitize_narrative_events(payload.get('narrative_events', []), errors)
+
+    if errors:
+        return None, errors
+    return {
+        'visible_text': visible_text,
+        'state_updates': updates,
+        'suggested_choices': choices,
+        'narrative_events': narrative_events,
+    }, []
+
+
+def _sanitize_state_updates(raw_updates, errors, dm_character_id=None, story_state=None):
+    updates = {}
+    if 'chapter' in raw_updates:
+        chapter = _coerce_int(raw_updates.get('chapter'), 'chapter', errors)
+        if chapter is not None:
+            if 0 <= chapter <= 10:
+                updates['chapter'] = chapter
+            else:
+                errors.append('chapter 必须在 0-10 之间')
+    for key, limit in (
+        ('current_scene', 120),
+        ('status_label', 120),
+        ('summary', 1400),
+    ):
+        if raw_updates.get(key):
+            updates[key] = _clean_text(raw_updates.get(key), limit)
+    if raw_updates.get('last_npc'):
+        npc = _normalize_character_id(raw_updates.get('last_npc'))
+        if npc:
+            updates['last_npc'] = npc
+        else:
+            errors.append('last_npc 必须是有效角色 id')
+
+    hard_state_updates = _sanitize_hard_state_updates(raw_updates.get('hard_state_updates'), errors)
+    if hard_state_updates:
+        updates['hard_state_updates'] = hard_state_updates
+
+    relationship_changes = raw_updates.get('relationship_changes') or {}
+    if relationship_changes:
+        if not isinstance(relationship_changes, dict):
+            errors.append('relationship_changes 必须是 object')
+        else:
+            changes = {}
+            for raw_character_id, change in relationship_changes.items():
+                character_id = _normalize_character_id(raw_character_id)
+                if not character_id:
+                    errors.append(f'relationship_changes 包含未知角色：{raw_character_id}')
+                    continue
+                if dm_character_id and character_id != dm_character_id:
+                    errors.append(f'私信回复只能更新当前角色关系：{dm_character_id}')
+                    continue
+                if not isinstance(change, dict):
+                    errors.append(f'{character_id}.relationship_change 必须是 object')
+                    continue
+                delta = _coerce_int(change.get('trust_delta', 0), f'{character_id}.trust_delta', errors)
+                if delta is None:
+                    continue
+                item = {'trust_delta': _clamp(delta, -10, 10)}
+                if change.get('bond_event'):
+                    item['bond_event'] = _clean_text(change.get('bond_event'), 100)
+                changes[character_id] = item
+            if changes:
+                updates['relationship_changes'] = changes
+
+    flags = _sanitize_string_list(raw_updates.get('new_flags'), 'new_flags', errors, item_limit=100, max_items=20)
+    if flags:
+        updates['new_flags'] = flags
+
+    memories = _sanitize_memories(raw_updates.get('new_memories'), errors)
+    if memories:
+        updates['new_memories'] = memories
+
+    dms = _sanitize_trigger_dms(raw_updates.get('trigger_dm'), errors)
+    if dms:
+        updates['trigger_dm'] = dms
+    _validate_and_sync_scene_rules(updates, story_state, errors)
+    return updates
+
+
+def _validate_and_sync_scene_rules(updates, story_state, errors):
+    if not story_state:
+        return
+    rule = _chapter_scene_rule_for_state(story_state)
+    if not rule:
+        return
+
+    current_chapter = int(getattr(story_state, 'chapter', 0) or 0)
+    current_scene = getattr(story_state, 'current_scene', '') or ''
+    scenes = rule.get('scenes') or {}
+    current_rule = scenes.get(current_scene)
+    if not current_rule:
+        errors.append(f'当前场景 {current_scene} 不在 {rule.get("chapter_name", "当前章节")} 状态机内')
+        return
+
+    hard_updates = updates.get('hard_state_updates') if isinstance(updates.get('hard_state_updates'), dict) else {}
+    location = hard_updates.get('location') if isinstance(hard_updates.get('location'), dict) else {}
+    target_scene = updates.get('current_scene') or location.get('id') or current_scene
+    if updates.get('current_scene') and location.get('id') and updates.get('current_scene') != location.get('id'):
+        errors.append('current_scene 必须与 hard_state_updates.location.id 保持一致')
+        return
+
+    allowed_next = set(current_rule.get('allowed_next') or [])
+    allowed_next.add(current_scene)
+    if target_scene not in allowed_next:
+        allowed_text = '、'.join(sorted(allowed_next))
+        errors.append(f'{rule.get("chapter_name", "当前章节")} 不允许从 {current_scene} 直接转场到 {target_scene}，可选：{allowed_text}')
+        return
+
+    if target_scene and target_scene not in scenes:
+        errors.append(f'{rule.get("chapter_name", "当前章节")} 未定义场景：{target_scene}')
+        return
+
+    if updates.get('current_scene') and not location:
+        hard_updates = dict(hard_updates or {})
+        hard_updates['location'] = {'id': target_scene, 'name': _scene_display_name(target_scene)}
+        updates['hard_state_updates'] = hard_updates
+
+    mission = hard_updates.get('mission') if isinstance(hard_updates.get('mission'), dict) else {}
+    mission_id = mission.get('id')
+    if mission_id and mission_id not in set(rule.get('allowed_mission_ids') or []):
+        errors.append(f'{rule.get("chapter_name", "当前章节")} 不允许写入任务：{mission_id}')
+
+    if 'chapter' in updates and updates.get('chapter') != current_chapter:
+        _validate_chapter_advance(updates, current_chapter, target_scene, rule, errors)
+
+
+def _validate_chapter_advance(updates, current_chapter, target_scene, rule, errors):
+    next_chapter = updates.get('chapter')
+    if next_chapter != current_chapter + 1:
+        errors.append(f'章节只能从 Chapter {current_chapter} 推进到 Chapter {current_chapter + 1}，不能跳到 Chapter {next_chapter}')
+        return
+
+    flags = set(updates.get('new_flags') or [])
+    completion_flags = set(rule.get('completion_flags') or [])
+    hard_updates = updates.get('hard_state_updates') if isinstance(updates.get('hard_state_updates'), dict) else {}
+    mission = hard_updates.get('mission') if isinstance(hard_updates.get('mission'), dict) else {}
+    mission_done = mission.get('status') == 'completed' or mission.get('progress') == 100
+    target_is_terminal = target_scene in set(rule.get('terminal_scene_ids') or [])
+    has_completion_flag = bool(flags & completion_flags)
+
+    if not target_is_terminal:
+        errors.append(f'进入下一章前必须先到达本章终端场景：{"、".join(rule.get("terminal_scene_ids") or [])}')
+    if not (mission_done or has_completion_flag):
+        errors.append(f'进入下一章必须设置完成标记 {sorted(completion_flags)}，或将当前任务标记为 completed/100%')
+
+
+def _sanitize_choices(raw_choices, errors, require_choices=True):
+    if raw_choices is None:
+        return []
+    if not isinstance(raw_choices, list):
+        errors.append('suggested_choices 必须是 array')
+        return []
+    choices = _normalize_choices(raw_choices)
+    if require_choices and raw_choices and not choices:
+        errors.append('suggested_choices 不能全为空')
+    return choices
+
+
+def _sanitize_hard_state_updates(raw_updates, errors):
+    if not raw_updates:
+        return {}
+    if not isinstance(raw_updates, dict):
+        errors.append('hard_state_updates 必须是 object')
+        return {}
+    updates = {}
+
+    location = raw_updates.get('location')
+    if location:
+        if not isinstance(location, dict):
+            errors.append('hard_state_updates.location 必须是 object')
+        else:
+            location_id = _stable_id(location.get('id') or location.get('location_id'), 120)
+            name = _clean_text(location.get('name') or location.get('location_name') or _scene_display_name(location_id), 120)
+            if not location_id:
+                errors.append('hard_state_updates.location.id 不能为空')
+            else:
+                updates['location'] = {'id': location_id, 'name': name or _scene_display_name(location_id)}
+
+    mission = raw_updates.get('mission')
+    if mission:
+        if not isinstance(mission, dict):
+            errors.append('hard_state_updates.mission 必须是 object')
+        else:
+            item = {}
+            if mission.get('id') or mission.get('mission_id'):
+                item['id'] = _stable_id(mission.get('id') or mission.get('mission_id'), 120)
+            if mission.get('name') or mission.get('mission_name'):
+                item['name'] = _clean_text(mission.get('name') or mission.get('mission_name'), 120)
+            if mission.get('status') or mission.get('mission_status'):
+                status = _clean_text(mission.get('status') or mission.get('mission_status'), 50)
+                if status not in ('active', 'completed', 'failed', 'paused'):
+                    errors.append('hard_state_updates.mission.status 必须是 active/completed/failed/paused')
+                else:
+                    item['status'] = status
+            if 'progress' in mission:
+                progress = _coerce_int(mission.get('progress'), 'hard_state_updates.mission.progress', errors)
+                if progress is not None:
+                    item['progress'] = _clamp(progress, 0, 100)
+            if 'progress_delta' in mission:
+                delta = _coerce_int(mission.get('progress_delta'), 'hard_state_updates.mission.progress_delta', errors)
+                if delta is not None:
+                    item['progress_delta'] = _clamp(delta, -100, 100)
+            if item:
+                updates['mission'] = item
+
+    inventory = raw_updates.get('inventory')
+    if inventory:
+        if not isinstance(inventory, list):
+            errors.append('hard_state_updates.inventory 必须是 array')
+        else:
+            items = []
+            for idx, raw_item in enumerate(inventory[:12]):
+                if not isinstance(raw_item, dict):
+                    errors.append(f'hard_state_updates.inventory[{idx}] 必须是 object')
+                    continue
+                op = _clean_text(raw_item.get('op') or 'add', 20)
+                if op not in ('add', 'remove', 'set'):
+                    errors.append(f'hard_state_updates.inventory[{idx}].op 必须是 add/remove/set')
+                    continue
+                item_id = _stable_id(raw_item.get('item_id') or raw_item.get('id'), 120)
+                if not item_id:
+                    errors.append(f'hard_state_updates.inventory[{idx}].item_id 不能为空')
+                    continue
+                quantity = _coerce_int(raw_item.get('quantity', 1), f'hard_state_updates.inventory[{idx}].quantity', errors)
+                if quantity is None:
+                    continue
+                if quantity < 0:
+                    errors.append(f'hard_state_updates.inventory[{idx}].quantity 不能小于 0')
+                    continue
+                items.append({
+                    'op': op,
+                    'item_id': item_id,
+                    'name': _clean_text(raw_item.get('name') or item_id, 120),
+                    'quantity': quantity,
+                    'status': _clean_text(raw_item.get('status'), 120),
+                })
+            if items:
+                updates['inventory'] = items
+
+    npc_states = raw_updates.get('npc_states')
+    if npc_states:
+        if not isinstance(npc_states, list):
+            errors.append('hard_state_updates.npc_states 必须是 array')
+        else:
+            items = []
+            for idx, raw_item in enumerate(npc_states[:12]):
+                if not isinstance(raw_item, dict):
+                    errors.append(f'hard_state_updates.npc_states[{idx}] 必须是 object')
+                    continue
+                character_id = _normalize_character_id(raw_item.get('character_id'))
+                if not character_id:
+                    errors.append(f'hard_state_updates.npc_states[{idx}].character_id 不合法')
+                    continue
+                item = {'character_id': character_id}
+                if 'alive' in raw_item:
+                    item['alive'] = bool(raw_item.get('alive'))
+                if raw_item.get('status'):
+                    item['status'] = _clean_text(raw_item.get('status'), 120)
+                if raw_item.get('location_id'):
+                    item['location_id'] = _stable_id(raw_item.get('location_id'), 120)
+                if raw_item.get('disposition'):
+                    item['disposition'] = _clean_text(raw_item.get('disposition'), 120)
+                items.append(item)
+            if items:
+                updates['npc_states'] = items
+    return updates
+
+
+def _sanitize_narrative_events(raw_events, errors):
+    if not raw_events:
+        return []
+    if not isinstance(raw_events, list):
+        errors.append('narrative_events 必须是 array')
+        return []
+    allowed = {'scene_transition', 'dialogue', 'relationship_signal', 'clue', 'risk', 'choice_offer'}
+    events = []
+    for idx, event in enumerate(raw_events[:12]):
+        if not isinstance(event, dict):
+            errors.append(f'narrative_events[{idx}] 必须是 object')
+            continue
+        event_type = _clean_text(event.get('type'), 50)
+        summary = _clean_text(event.get('summary'), 240)
+        if event_type not in allowed:
+            errors.append(f'narrative_events[{idx}].type 不合法')
+            continue
+        if not summary:
+            errors.append(f'narrative_events[{idx}].summary 不能为空')
+            continue
+        item = {'type': event_type, 'summary': summary}
+        actor = _normalize_character_id(event.get('actor'))
+        if actor:
+            item['actor'] = actor
+        target = _clean_text(event.get('target'), 80)
+        if target:
+            item['target'] = target
+        events.append(item)
+    return events
+
+
+def _sanitize_memories(raw_memories, errors):
+    if not raw_memories:
+        return []
+    if not isinstance(raw_memories, list):
+        errors.append('new_memories 必须是 array')
+        return []
+    memories = []
+    for idx, memory in enumerate(raw_memories[:5]):
+        normalized = _normalize_memory(memory)
+        if not normalized:
+            errors.append(f'new_memories[{idx}] 格式不合法')
+            continue
+        if not normalized.get('title') or not normalized.get('content'):
+            errors.append(f'new_memories[{idx}] 必须包含 title/content')
+            continue
+        memories.append(normalized)
+    return memories
+
+
+def _sanitize_trigger_dms(raw_dms, errors):
+    if not raw_dms:
+        return []
+    if not isinstance(raw_dms, list):
+        errors.append('trigger_dm 必须是 array')
+        return []
+    dms = []
+    for idx, dm_data in enumerate(raw_dms[:3]):
+        if not isinstance(dm_data, dict):
+            errors.append(f'trigger_dm[{idx}] 必须是 object')
+            continue
+        character_id = _normalize_character_id(dm_data.get('character_id'))
+        content = _clean_text(dm_data.get('content'), 1000)
+        if not character_id:
+            errors.append(f'trigger_dm[{idx}].character_id 不合法')
+            continue
+        if not content:
+            errors.append(f'trigger_dm[{idx}].content 不能为空')
+            continue
+        dms.append({
+            'character_id': character_id,
+            'content': content,
+            'trigger_event': _clean_text(dm_data.get('trigger_event') or dm_data.get('dm_type'), 120),
+        })
+    return dms
+
+
+def _sanitize_string_list(raw_items, field_name, errors, item_limit=100, max_items=20):
+    if not raw_items:
+        return []
+    if not isinstance(raw_items, list):
+        errors.append(f'{field_name} 必须是 array')
+        return []
+    cleaned = []
+    for item in raw_items[:max_items]:
+        text = _clean_text(item, item_limit)
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
+def _normalize_character_id(value):
+    key = str(value or '').strip()
+    if not key:
+        return None
+    return CHARACTER_ALIASES.get(key.lower()) or CHARACTER_ALIASES.get(key) or (key if key in CHARACTER_CARDS else None)
+
+
+def _stable_id(value, max_len=120):
+    text = str(value or '').strip()
+    text = re.sub(r'[^a-zA-Z0-9_\-:]+', '_', text)
+    return text[:max_len].strip('_')
+
+
+def _coerce_int(value, field_name, errors):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        errors.append(f'{field_name} 必须是 integer')
+        return None
+
+
+def _build_repair_messages(messages, raw_output, errors, contract):
+    return list(messages) + [
+        {'role': 'assistant', 'content': _clean_text(raw_output, 6000)},
+        {
+            'role': 'user',
+            'content': (
+                "上一次输出不符合结构化协议，不能推进剧情。\n"
+                f"错误列表：{'; '.join(errors or ['未知错误'])}\n"
+                "请只输出修正后的 JSON，不要 Markdown，不要解释，不要代码块。\n"
+                "必须符合以下结构：\n"
+                f"{json.dumps(contract, ensure_ascii=False)}"
+            ),
+        },
+    ]
+
+
+def _apply_hard_state_updates(state, updates, user_id=None):
+    hard = _ensure_hard_state(state.kook_id, user_id, state)
+    if not isinstance(updates, dict) or not updates:
+        return hard
+
+    location = updates.get('location') or {}
+    if isinstance(location, dict) and location.get('id'):
+        hard.location_id = _clean_text(location.get('id'), 120)
+        hard.location_name = _clean_text(location.get('name') or _scene_display_name(hard.location_id), 120)
+        state.current_scene = hard.location_id
+
+    mission = updates.get('mission') or {}
+    if isinstance(mission, dict):
+        if mission.get('id'):
+            hard.mission_id = _clean_text(mission.get('id'), 120)
+        if mission.get('name'):
+            hard.mission_name = _clean_text(mission.get('name'), 120)
+        if mission.get('status'):
+            hard.mission_status = _clean_text(mission.get('status'), 50)
+        if 'progress' in mission:
+            hard.mission_progress = _clamp(mission.get('progress'), 0, 100)
+        elif 'progress_delta' in mission:
+            hard.mission_progress = _clamp(hard.mission_progress + int(mission.get('progress_delta') or 0), 0, 100)
+
+    inventory = hard.inventory_map
+    for item in updates.get('inventory') or []:
+        if not isinstance(item, dict):
+            continue
+        item_id = _clean_text(item.get('item_id'), 120)
+        if not item_id:
+            continue
+        op = item.get('op') or 'add'
+        quantity = max(0, int(item.get('quantity') or 0))
+        current = dict(inventory.get(item_id) or {})
+        if op == 'remove':
+            next_quantity = int(current.get('quantity') or 0) - quantity
+            if next_quantity <= 0:
+                inventory.pop(item_id, None)
+            else:
+                current['quantity'] = next_quantity
+                inventory[item_id] = current
+            continue
+        if op == 'set':
+            next_quantity = quantity
+        else:
+            next_quantity = int(current.get('quantity') or 0) + quantity
+        if next_quantity <= 0:
+            inventory.pop(item_id, None)
+            continue
+        current.update({
+            'name': _clean_text(item.get('name') or current.get('name') or item_id, 120),
+            'quantity': next_quantity,
+        })
+        if item.get('status'):
+            current['status'] = _clean_text(item.get('status'), 120)
+        inventory[item_id] = current
+    hard.inventory_map = inventory
+
+    npc_states = hard.npc_state_map
+    for item in updates.get('npc_states') or []:
+        if not isinstance(item, dict):
+            continue
+        character_id = _normalize_character_id(item.get('character_id'))
+        if not character_id:
+            continue
+        current = dict(npc_states.get(character_id) or {})
+        if 'alive' in item:
+            current['alive'] = bool(item.get('alive'))
+        if item.get('status'):
+            current['status'] = _clean_text(item.get('status'), 120)
+        if item.get('location_id'):
+            current['location_id'] = _clean_text(item.get('location_id'), 120)
+        if item.get('disposition'):
+            current['disposition'] = _clean_text(item.get('disposition'), 120)
+        npc_states[character_id] = current
+    hard.npc_state_map = npc_states
+    hard.updated_at = datetime.utcnow()
+    return hard
+
+
+def _apply_state_updates(state, updates, choices, user_id=None, user_input='', visible_text=''):
     created_dms = []
     if not isinstance(updates, dict):
         updates = {}
@@ -943,6 +2088,7 @@ def _apply_state_updates(state, updates, choices, user_id=None):
         npc = CHARACTER_ALIASES.get(str(updates.get('last_npc')).strip().lower()) or str(updates.get('last_npc')).strip()
         if npc in CHARACTER_CARDS:
             state.last_npc = npc
+    _apply_hard_state_updates(state, updates.get('hard_state_updates'), user_id or state.user_id)
 
     relations = _ensure_relations(state.kook_id, user_id or state.user_id)
     relation_changes = updates.get('relationship_changes') or {}
@@ -987,7 +2133,7 @@ def _apply_state_updates(state, updates, choices, user_id=None):
         ).first()
         if existing:
             continue
-        content = _clean_text(dm_data.get('content') or _default_dm_content(character_id, trigger_event), 1000)
+        content = _clean_text(dm_data.get('content'), 1000)
         if not content:
             continue
         row = StoryDirectMessage(
@@ -1004,27 +2150,17 @@ def _apply_state_updates(state, updates, choices, user_id=None):
 
     if choices:
         state.choice_list = choices
-    summary = _clean_text(updates.get('summary'), 1200)
+    summary = _clean_text(updates.get('summary'), 1400)
     if summary:
         state.summary = summary
     else:
-        state.summary = _clean_text(f"{state.summary or ''}\n最新进展：{state.status_label}，场景转入 {state.current_scene}。", 1500)
+        progress = (
+            f"玩家行动：{_clean_text(user_input, 160)}\n"
+            f"本轮剧情：{_clean_text(visible_text, 520)}"
+        )
+        state.summary = _clean_text(f"{state.summary or ''}\n{progress}", 2200)
     state.updated_at = datetime.utcnow()
     return created_dms
-
-
-def _default_dm_content(character_id, trigger_event):
-    if character_id == 'jett':
-        return '明天训练室，别迟到。\n还有，别以为今天那一下算你赢。'
-    if character_id == 'sage':
-        return '你今天看起来很累。如果又做噩梦，可以来医疗室。我会留一盏灯。'
-    if character_id == 'omen':
-        return '他们删除了你的名字。但影子记得。'
-    if character_id == 'killjoy':
-        return '我查了一下你的档案。好消息：你确实存在。坏消息：系统不承认你存在。'
-    if character_id == 'sova':
-        return '不要急着相信任何结论。痕迹不会说谎，人会。'
-    return ''
 
 
 def _send_created_dms(rows):
@@ -1069,14 +2205,24 @@ def profile_text(kook_id):
         for rel in relations
     ) or '│ 暂无角色关系'
     memory_lines = '\n'.join(f"│ {m.title}" for m in memories) or '│ 暂无记忆碎片'
+    hard = _ensure_hard_state(state.kook_id, state.user_id, state)
+    inventory = hard.inventory_map
+    inventory_lines = '\n'.join(
+        f"│ {item.get('name') or item_id} x{item.get('quantity', 1)}"
+        for item_id, item in inventory.items()
+    ) or '│ 暂无物品'
     return (
         "╭─ 玩家档案\n"
         f"│ 世界线：{_world_name(state.story_world)}\n"
         f"│ 身份：{_background_name(state.background)}\n"
         f"│ 当前章节：Chapter {state.chapter}\n"
         f"│ 当前状态：{state.status_label or '未知'}\n"
+        f"│ 当前位置：{hard.location_name}\n"
+        f"│ 当前任务：{hard.mission_name} / {hard.mission_status} / {hard.mission_progress}%\n"
         "├─ 角色关系\n"
         f"{relation_lines}\n"
+        "├─ 物品\n"
+        f"{inventory_lines}\n"
         "├─ 已解锁记忆\n"
         f"{memory_lines}\n"
         "╰─ 继续：`/story continue 你的行动`"
@@ -1149,12 +2295,28 @@ def reply_dm(kook_id, user_id=None, character_arg='', reply_text='', channel_id=
     if not latest:
         return {'ok': False, 'message': f'目前没有来自{_character_name(character_id)}的待回复私信。'}
 
-    payload = _generate_llm_dm_payload(state, latest, reply_text) or _fallback_dm_payload(character_id, reply_text)
-    llm_used = 'fallback' not in payload
-    visible_text = _clean_text(payload.get('visible_text'), 1000)
+    payload = _generate_llm_dm_payload(state, latest, reply_text)
+    if not payload:
+        db.session.rollback()
+        return {
+            'ok': False,
+            'message': (
+                "AI 私信引擎没有成功返回内容，本次没有记录回复。\n"
+                "请先确认 `/story status` 显示 API Key 已设置，并重启 KOOK Bot 后再试。"
+            ),
+            'llm_used': False,
+        }
+    visible_text = _clean_text(payload.get('visible_text'), 1600)
     choices = _normalize_choices(payload.get('suggested_choices'))
     updates = payload.get('state_updates') if isinstance(payload.get('state_updates'), dict) else {}
-    _apply_state_updates(state, updates, choices, user_id=user_id)
+    _apply_state_updates(
+        state,
+        updates,
+        choices,
+        user_id=user_id,
+        user_input=f'回复{_character_name(character_id)}：{reply_text}',
+        visible_text=visible_text,
+    )
 
     latest.is_read = True
     latest.replied_at = datetime.utcnow()
@@ -1174,9 +2336,16 @@ def reply_dm(kook_id, user_id=None, character_arg='', reply_text='', channel_id=
         input_text=f'回复{_character_name(character_id)}：{reply_text}',
         visible_text=visible_text,
         state_updates=json.dumps(updates, ensure_ascii=False),
-        llm_used=llm_used,
+        llm_used=True,
     ))
     db.session.commit()
+    remember_story_turn(
+        kook_id,
+        user_id=user_id or state.user_id,
+        user_input=f'回复{_character_name(character_id)}：{reply_text}',
+        visible_text=visible_text,
+        metadata={'channel_id': str(channel_id or 'dm'), 'scene': state.current_scene, 'chapter': state.chapter, 'dm_character': character_id},
+    )
     return {
         'ok': True,
         'message': (
@@ -1184,7 +2353,7 @@ def reply_dm(kook_id, user_id=None, character_arg='', reply_text='', channel_id=
             f"{visible_text}\n"
             "╰─ 继续回复可直接使用同一命令，或回到主线：`/story continue 你的行动`"
         ),
-        'llm_used': llm_used,
+        'llm_used': True,
     }
 
 
@@ -1193,7 +2362,8 @@ def _generate_llm_dm_payload(state, latest_dm, reply_text):
     system_prompt = (
         f"你正在扮演 KOOK 剧情游戏里的角色：{latest_dm.character_name}。\n"
         f"角色卡：{json.dumps(card, ensure_ascii=False)}\n"
-        "只输出 JSON：{\"visible_text\":\"角色给玩家的回复\",\"state_updates\":{\"relationship_changes\":{\"角色id\":{\"trust_delta\":1,\"bond_event\":\"...\"}},\"new_flags\":[]},\"suggested_choices\":[]}\n"
+        "只输出 JSON，不要 Markdown，不要代码块，不要解释。\n"
+        f"JSON 结构必须符合：{json.dumps(_dm_payload_contract(latest_dm.character_id), ensure_ascii=False)}\n"
         "用户可见角色名必须中文。保持角色语气，可以有暧昧与关心，但不要露骨成人内容。"
     )
     user_prompt = (
@@ -1201,46 +2371,25 @@ def _generate_llm_dm_payload(state, latest_dm, reply_text):
         f"上一条私信：{latest_dm.content}\n"
         f"玩家回复：{reply_text}"
     )
-    raw = _call_story_llm([
+    messages = [
         {'role': 'system', 'content': system_prompt},
         {'role': 'user', 'content': user_prompt},
-    ])
+    ]
+    raw = _call_story_llm(messages)
     if not raw:
         return None
-    payload = _parse_llm_json(raw)
-    if not isinstance(payload, dict) or not _clean_text(payload.get('visible_text')):
+    payload, errors = _parse_and_validate_dm_payload(raw, latest_dm.character_id)
+    if payload:
+        return payload
+
+    repair_raw = _call_story_llm(_build_repair_messages(messages, raw, errors, _dm_payload_contract(latest_dm.character_id)))
+    if not repair_raw:
         return None
-    return payload
-
-
-def _fallback_dm_payload(character_id, reply_text):
-    if character_id == 'jett':
-        visible = (
-            "想多了。\n"
-            "我只是懒得再给新人收拾烂摊子。\n\n"
-            "……不过你要是真不来，我会去找你。别误会，是训练计划不能被你拖慢。"
-        )
-    elif character_id == 'sage':
-        visible = "谢谢你愿意告诉我这些。你不需要一直表现得很坚强，至少在这里不用。"
-    elif character_id == 'omen':
-        visible = "你的声音穿过阴影。它没有回答所有问题，却证明你仍在这里。记住这一点。"
-    elif character_id == 'killjoy':
-        visible = "我把你的回复和异常日志对上了。好消息：你没疯。坏消息：系统可能真的在装作没听见。"
-    elif character_id == 'sova':
-        visible = "你做得不错。不是因为你没有害怕，而是因为你害怕了，还是继续走下去了。"
-    else:
-        visible = "对方短暂沉默了一会儿，像是在重新判断你们之间的距离。"
-    return {
-        'visible_text': visible,
-        'state_updates': {
-            'relationship_changes': {
-                character_id: {'trust_delta': 2, 'bond_event': 'dm_reply_accepted'},
-            },
-            'new_flags': [f'{character_id}_dm_replied'],
-        },
-        'suggested_choices': [],
-        'fallback': True,
-    }
+    payload, errors = _parse_and_validate_dm_payload(repair_raw, latest_dm.character_id)
+    if payload:
+        return payload
+    current_app.logger.warning('[Story] DM LLM 输出校验失败: %s', '; '.join(errors))
+    return None
 
 
 def handle_direct_free_input(kook_id, user_id=None, content='', channel_id=None):

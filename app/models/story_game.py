@@ -167,3 +167,53 @@ class StoryTurnLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='story_turn_logs')
+
+
+class StoryHardState(db.Model):
+    """玩家剧情硬状态：地点、任务、物品、NPC 状态等数据库权威信息。"""
+    __tablename__ = 'story_hard_states'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kook_id = db.Column(db.String(50), nullable=False, unique=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    location_id = db.Column(db.String(120), default='sealed_training_room', nullable=False)
+    location_name = db.Column(db.String(120), default='封锁区训练室', nullable=False)
+    mission_id = db.Column(db.String(120), default='chapter_0_escape', nullable=False)
+    mission_name = db.Column(db.String(120), default='逃离封锁区', nullable=False)
+    mission_status = db.Column(db.String(50), default='active', nullable=False)
+    mission_progress = db.Column(db.Integer, default=0, nullable=False)
+    inventory = db.Column(db.Text)
+    npc_states = db.Column(db.Text)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref='story_hard_states')
+
+    @property
+    def inventory_map(self):
+        data = _load_json(self.inventory, dict)
+        return data if isinstance(data, dict) else {}
+
+    @inventory_map.setter
+    def inventory_map(self, value):
+        cleaned = {}
+        for item_id, item in (value or {}).items():
+            key = str(item_id).strip()
+            if not key or not isinstance(item, dict):
+                continue
+            cleaned[key] = item
+        self.inventory = json.dumps(cleaned, ensure_ascii=False)
+
+    @property
+    def npc_state_map(self):
+        data = _load_json(self.npc_states, dict)
+        return data if isinstance(data, dict) else {}
+
+    @npc_state_map.setter
+    def npc_state_map(self, value):
+        cleaned = {}
+        for character_id, item in (value or {}).items():
+            key = str(character_id).strip()
+            if not key or not isinstance(item, dict):
+                continue
+            cleaned[key] = item
+        self.npc_states = json.dumps(cleaned, ensure_ascii=False)

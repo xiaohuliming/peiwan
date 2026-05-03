@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+
+{% block header_title %}剧情观测{% endblock %}
+
+{% block styles %}
+<style>
+  .story-game-page .glass-card {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(148, 163, 184, 0.24);
+  }
+
+  .dark .story-game-page .glass-card {
+    background: rgba(15, 23, 42, 0.88);
+    border-color: rgba(148, 163, 184, 0.22);
+  }
+
+  .story-game-page input,
+  .story-game-page select {
+    background: rgba(248, 250, 252, 0.96) !important;
+    border: 1px solid rgba(100, 116, 139, 0.28) !important;
+    color: #0f172a !important;
+    color-scheme: light;
+  }
+
+  .story-game-page input::placeholder {
+    color: #64748b !important;
+    opacity: 0.78;
+  }
+
+  .story-game-page input:focus,
+  .story-game-page select:focus {
+    outline: none;
+    background: #ffffff !important;
+    border-color: var(--theme-primary-border) !important;
+    box-shadow: 0 0 0 3px var(--theme-primary-soft-strong);
+  }
+
+  .dark .story-game-page input,
+  .dark .story-game-page select {
+    background: rgba(2, 6, 23, 0.64) !important;
+    border-color: rgba(148, 163, 184, 0.34) !important;
+    color: #e2e8f0 !important;
+    color-scheme: dark;
+  }
+
+  .dark .story-game-page input::placeholder {
+    color: #94a3b8 !important;
+    opacity: 0.86;
+  }
+
+  .dark .story-game-page input:focus,
+  .dark .story-game-page select:focus {
+    background: rgba(15, 23, 42, 0.96) !important;
+    border-color: var(--theme-primary-border) !important;
+    box-shadow: 0 0 0 3px var(--theme-primary-soft-dark);
+  }
+
+  .story-observe-panel {
+    background: rgba(248, 250, 252, 0.72);
+    border-color: rgba(100, 116, 139, 0.20);
+  }
+
+  .dark .story-observe-panel {
+    background: rgba(2, 6, 23, 0.32);
+    border-color: rgba(148, 163, 184, 0.20);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="story-game-page space-y-6">
+  <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <div>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-white">KOOK AI 文字乙游观测台</h2>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">玩家档案、回合日志、记忆碎片、角色私信和硬状态</p>
+    </div>
+    <form method="get" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 xl:min-w-[720px]">
+      <input type="text" name="q" value="{{ q }}" placeholder="KOOK ID / 昵称 / 状态" class="h-10 rounded-xl px-3 text-sm">
+      <select name="world" class="h-10 rounded-xl px-3 text-sm">
+        <option value="">全部世界线</option>
+        {% for key, label in world_labels.items() %}
+        <option value="{{ key }}" {% if world == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" min="0" name="chapter" value="{{ chapter if chapter is not none else '' }}" placeholder="章节" class="h-10 rounded-xl px-3 text-sm">
+      <button type="submit" class="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors flex items-center justify-center gap-2">
+        <i data-lucide="search" width="16" height="16"></i> 筛选
+      </button>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">剧情玩家</p>
+      <p class="mt-2 text-2xl font-bold text-slate-800 dark:text-white">{{ stats.players }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">24小时回合</p>
+      <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-300">{{ stats.active_24h }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">总回合日志</p>
+      <p class="mt-2 text-2xl font-bold text-sky-600 dark:text-sky-300">{{ stats.turns }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">记忆碎片</p>
+      <p class="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-300">{{ stats.memories }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">待回复私信</p>
+      <p class="mt-2 text-2xl font-bold text-rose-600 dark:text-rose-300">{{ stats.pending_dms }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">长期记忆</p>
+      <p class="mt-2 text-2xl font-bold {% if memory_health.ready %}text-emerald-600 dark:text-emerald-300{% elif memory_health.enabled %}text-amber-600 dark:text-amber-300{% else %}text-slate-500 dark:text-slate-400{% endif %}">
+        {% if memory_health.ready %}就绪{% elif memory_health.enabled %}待配置{% else %}关闭{% endif %}
+      </p>
+      <p class="mt-1 text-xs text-slate-400">{{ memory_health.backend }}</p>
+    </div>
+  </div>
+
+  {% if memory_health.issues %}
+  <div class="glass-card p-4 flex flex-col gap-2 text-sm text-slate-600 dark:text-slate-300">
+    <div class="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+      <i data-lucide="database-zap" width="17" height="17" class="text-amber-500"></i> Mem0 记忆层
+    </div>
+    {% for issue in memory_health.issues[:3] %}
+    <p class="text-xs text-slate-500 dark:text-slate-400">{{ issue }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_520px] gap-6 items-start">
+    <div class="glass-card overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between gap-3">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="users" width="18" height="18" class="text-purple-500"></i> 玩家列表
+        </h3>
+        <span class="text-xs text-slate-400">共 {{ states.total }} 条</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-left text-xs uppercase tracking-wide text-slate-400 bg-slate-50/70 dark:bg-slate-950/30">
+            <tr>
+              <th class="px-5 py-3 font-semibold">玩家</th>
+              <th class="px-5 py-3 font-semibold">世界线</th>
+              <th class="px-5 py-3 font-semibold">进度</th>
+              <th class="px-5 py-3 font-semibold">数据</th>
+              <th class="px-5 py-3 font-semibold">更新时间</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200/70 dark:divide-slate-700/60">
+            {% for state in states.items %}
+            {% set active = detail and detail.state.kook_id == state.kook_id %}
+            <tr class="{% if active %}bg-purple-50/70 dark:bg-purple-950/20{% else %}hover:bg-white/50 dark:hover:bg-slate-900/30{% endif %}">
+              <td class="px-5 py-4">
+                <a href="{{ url_for('story_game_admin.index', q=q, world=world, chapter=chapter if chapter is not none else '', page=states.page, kook_id=state.kook_id) }}" class="font-semibold text-slate-800 dark:text-slate-100 hover:text-purple-600 dark:hover:text-purple-300">
+                  {{ state.kook_username or state.kook_id }}
+                </a>
+                <div class="mt-1 text-xs text-slate-400 font-mono">{{ state.kook_id }}</div>
+                {% if state.user %}
+                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ state.user.nickname or state.user.username }}</div>
+                {% endif %}
+              </td>
+              <td class="px-5 py-4">
+                <div class="text-slate-700 dark:text-slate-200">{{ world_labels.get(state.story_world, state.story_world) }}</div>
+                <div class="mt-1 text-xs text-slate-400">{{ background_labels.get(state.background, state.background) }}</div>
+              </td>
+              <td class="px-5 py-4">
+                <div class="font-medium text-slate-700 dark:text-slate-200">Chapter {{ state.chapter }}</div>
+                <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ state.current_scene }}</div>
+                <div class="mt-1 text-xs text-slate-400">{{ state.status_label or '未设置状态' }}</div>
+              </td>
+              <td class="px-5 py-4">
+                <div class="flex flex-wrap gap-2">
+                  <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">回合 {{ counts['turns'].get(state.kook_id, 0) }}</span>
+                  <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">记忆 {{ counts['memories'].get(state.kook_id, 0) }}</span>
+                  <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">私信 {{ counts['dms'].get(state.kook_id, 0) }}</span>
+                </div>
+              </td>
+              <td class="px-5 py-4 text-slate-500 dark:text-slate-400 whitespace-nowrap">{{ state.updated_at|bj }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5" class="px-5 py-12 text-center text-sm text-slate-400">暂无剧情玩家数据</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if states.pages > 1 %}
+      <div class="px-5 py-4 border-t border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between text-sm">
+        <span class="text-slate-400">第 {{ states.page }} / {{ states.pages }} 页</span>
+        <div class="flex items-center gap-2">
+          {% if states.has_prev %}
+          <a href="{{ url_for('story_game_admin.index', q=q, world=world, chapter=chapter if chapter is not none else '', page=states.prev_num, kook_id=detail.state.kook_id if detail else '') }}" class="px-3 py-2 rounded-xl bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/60">上一页</a>
+          {% endif %}
+          {% if states.has_next %}
+          <a href="{{ url_for('story_game_admin.index', q=q, world=world, chapter=chapter if chapter is not none else '', page=states.next_num, kook_id=detail.state.kook_id if detail else '') }}" class="px-3 py-2 rounded-xl bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/60">下一页</a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="space-y-6">
+      {% if detail %}
+      <div class="glass-card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-800 dark:text-white">{{ detail.state.kook_username or detail.state.kook_id }}</h3>
+            <p class="mt-1 text-xs text-slate-400 font-mono">{{ detail.state.kook_id }}</p>
+          </div>
+          <span class="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-950/40 text-xs font-medium text-purple-700 dark:text-purple-300">Chapter {{ detail.state.chapter }}</span>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div class="story-observe-panel rounded-xl border p-3">
+            <p class="text-xs text-slate-400">世界线</p>
+            <p class="mt-1 font-semibold text-slate-700 dark:text-slate-200">{{ detail.world_label }}</p>
+          </div>
+          <div class="story-observe-panel rounded-xl border p-3">
+            <p class="text-xs text-slate-400">身份</p>
+            <p class="mt-1 font-semibold text-slate-700 dark:text-slate-200">{{ detail.background_label }}</p>
+          </div>
+          <div class="story-observe-panel rounded-xl border p-3">
+            <p class="text-xs text-slate-400">当前场景</p>
+            <p class="mt-1 font-semibold text-slate-700 dark:text-slate-200">{{ detail.state.current_scene }}</p>
+          </div>
+          <div class="story-observe-panel rounded-xl border p-3">
+            <p class="text-xs text-slate-400">最后 NPC</p>
+            <p class="mt-1 font-semibold text-slate-700 dark:text-slate-200">{{ detail.state.last_npc or '未知' }}</p>
+          </div>
+        </div>
+        {% if detail.state.summary %}
+        <p class="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ detail.state.summary }}</p>
+        {% endif %}
+      </div>
+
+      <div class="glass-card p-5">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="map" width="18" height="18" class="text-sky-500"></i> 硬状态
+        </h3>
+        {% if detail.hard_state %}
+        <div class="mt-4 space-y-3 text-sm">
+          <div class="story-observe-panel rounded-xl border p-3">
+            <div class="flex items-center justify-between gap-3">
+              <span class="font-semibold text-slate-700 dark:text-slate-200">{{ detail.hard_state.location_name }}</span>
+              <span class="text-xs text-slate-400 font-mono">{{ detail.hard_state.location_id }}</span>
+            </div>
+            <div class="mt-3 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+              <div class="h-full bg-sky-500" style="width: {{ detail.hard_state.mission_progress }}%"></div>
+            </div>
+            <div class="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>{{ detail.hard_state.mission_name }} · {{ detail.mission_status_label }}</span>
+              <span>{{ detail.hard_state.mission_progress }}%</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">物品</p>
+            <div class="flex flex-wrap gap-2">
+              {% for item_id, item in detail.inventory.items() %}
+              <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300">{{ item.get('name', item_id) }} x{{ item.get('quantity', 1) }}</span>
+              {% else %}
+              <span class="text-xs text-slate-400">暂无物品</span>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div>
+            <p class="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">NPC 状态</p>
+            <div class="space-y-2">
+              {% for character_id, npc in detail.npc_states.items() %}
+              <div class="story-observe-panel rounded-xl border px-3 py-2">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-medium text-slate-700 dark:text-slate-200">{{ character_id }}</span>
+                  <span class="text-xs text-slate-400">{{ npc.get('location_id', '') }}</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ npc.get('status', '状态未记录') }}</p>
+              </div>
+              {% else %}
+              <p class="text-xs text-slate-400">暂无 NPC 状态</p>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="mt-4 text-sm text-slate-400">尚未写入硬状态</p>
+        {% endif %}
+      </div>
+
+      <div class="glass-card p-5">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="heart-handshake" width="18" height="18" class="text-rose-500"></i> 角色关系
+        </h3>
+        <div class="mt-4 space-y-3">
+          {% for relation in detail.relations %}
+          <div>
+            <div class="flex items-center justify-between text-sm">
+              <span class="font-semibold text-slate-700 dark:text-slate-200">{{ relation.character_name }}</span>
+              <span class="text-xs text-slate-400">羁绊 {{ relation.bond_level }}</span>
+            </div>
+            <div class="mt-2 h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+              <div class="h-full bg-rose-500" style="width: {{ relation.trust }}%"></div>
+            </div>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ relation.relationship_status or '关系状态未记录' }}</p>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-400">暂无关系数据</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="glass-card p-5">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="bookmark" width="18" height="18" class="text-amber-500"></i> 记忆碎片
+        </h3>
+        <div class="mt-4 space-y-3">
+          {% for memory in detail.memories %}
+          <div class="story-observe-panel rounded-xl border p-3">
+            <div class="flex items-center justify-between gap-3">
+              <p class="font-semibold text-sm text-slate-700 dark:text-slate-200">{{ memory.title }}</p>
+              <span class="text-xs text-slate-400 whitespace-nowrap">{{ memory.unlocked_at|bj }}</span>
+            </div>
+            <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ memory.content }}</p>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-400">暂无记忆碎片</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="glass-card p-5">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="mail" width="18" height="18" class="text-emerald-500"></i> 角色私信
+        </h3>
+        <div class="mt-4 space-y-3">
+          {% for dm in detail.dms %}
+          <div class="story-observe-panel rounded-xl border p-3">
+            <div class="flex items-center justify-between gap-3">
+              <p class="font-semibold text-sm text-slate-700 dark:text-slate-200">{{ dm.character_name }}</p>
+              <span class="text-xs {% if dm.replied_at %}text-emerald-500{% else %}text-rose-500{% endif %}">{{ '已回复' if dm.replied_at else '待回复' }}</span>
+            </div>
+            <p class="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ dm.content }}</p>
+            <p class="mt-2 text-xs text-slate-400">{{ dm.created_at|bj }} · {{ dm.trigger_event or '无触发标记' }}</p>
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-400">暂无角色私信</p>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="glass-card p-5">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="square-terminal" width="18" height="18" class="text-slate-500"></i> 最近回合
+        </h3>
+        <div class="mt-4 space-y-4">
+          {% for item in detail.turns %}
+          {% set turn = item.row %}
+          <div class="story-observe-panel rounded-xl border p-3">
+            <div class="flex items-center justify-between gap-3 text-xs text-slate-400">
+              <span>{{ turn.created_at|bj }}</span>
+              <span>{{ 'LLM' if turn.llm_used else '本地' }}</span>
+            </div>
+            <p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">玩家输入</p>
+            <p class="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{{ turn.input_text or '无' }}</p>
+            <p class="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">剧情输出</p>
+            <p class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{{ turn.visible_text or '无' }}</p>
+            {% if item.updates_pretty %}
+            <details class="mt-3">
+              <summary class="cursor-pointer text-xs font-semibold text-purple-600 dark:text-purple-300">state_updates</summary>
+              <pre class="mt-2 max-h-72 overflow-auto rounded-xl bg-slate-950 text-slate-100 p-3 text-xs whitespace-pre-wrap">{{ item.updates_pretty }}</pre>
+            </details>
+            {% endif %}
+          </div>
+          {% else %}
+          <p class="text-sm text-slate-400">暂无回合日志</p>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="glass-card p-8 text-center text-sm text-slate-400">
+        选择一个玩家后查看剧情详情
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
