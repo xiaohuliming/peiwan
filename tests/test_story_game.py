@@ -99,6 +99,13 @@ class StoryGameTests(unittest.TestCase):
         self.assertIsNotNone(memory)
         self.assertEqual(memory.title, '编号 07')
 
+    def test_choice_feedback_text_resolves_button_choice(self):
+        self.start_story()
+
+        text = story_game_service.choice_feedback_text('story-1', '2')
+
+        self.assertEqual(text, 'B. 你先告诉我这里是哪')
+
     def test_continue_without_llm_key_does_not_advance_story(self):
         self.start_story()
 

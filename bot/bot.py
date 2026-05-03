@@ -228,17 +228,15 @@ def _withdraw_gui_url() -> str:
     return f'{site}/finance/withdraw'
 
 
-def _truncate_button_label(text: str, max_len: int = 28) -> str:
-    text = str(text or '').strip()
-    if len(text) <= max_len:
-        return text
-    return text[:max_len - 1].rstrip() + '…'
-
-
 def _build_story_choice_card(text: str, choices=None, owner_id: str = ''):
     choices = [str(choice or '').strip() for choice in (choices or []) if str(choice or '').strip()]
     if not choices:
         return None
+    labels = ('A', 'B', 'C')
+    choice_lines = [
+        f"{labels[index]}. {choice}"
+        for index, choice in enumerate(choices[:3])
+    ]
 
     modules = [
         {"type": "header", "text": {"type": "plain-text", "content": "灰区档案"}},
@@ -248,6 +246,10 @@ def _build_story_choice_card(text: str, choices=None, owner_id: str = ''):
         },
         {"type": "divider"},
         {
+            "type": "section",
+            "text": {"type": "kmarkdown", "content": "**可选行动**\n" + "\n".join(choice_lines)},
+        },
+        {
             "type": "context",
             "elements": [
                 {"type": "kmarkdown", "content": "点击选项可直接推进剧情；自由输入请使用 `/story continue 你的行动`。"}
@@ -256,15 +258,14 @@ def _build_story_choice_card(text: str, choices=None, owner_id: str = ''):
     ]
 
     elements = []
-    labels = ('A', 'B', 'C')
-    for index, choice in enumerate(choices[:3], start=1):
+    for index, _choice in enumerate(choices[:3], start=1):
         label = labels[index - 1]
         elements.append({
             "type": "button",
-            "theme": "primary" if index == 1 else "secondary",
+            "theme": "secondary",
             "value": f"{STORY_BUTTON_PREFIX}|{owner_id}|{index}",
             "click": "return-val",
-            "text": {"type": "plain-text", "content": f"{label}. {_truncate_button_label(choice)}"},
+            "text": {"type": "plain-text", "content": label},
         })
     modules.append({"type": "action-group", "elements": elements})
     return [{"type": "card", "theme": "secondary", "size": "lg", "modules": modules}]
@@ -1612,9 +1613,23 @@ async def on_story_choice_button(bot_obj: Bot, event: Event):
                 .order_by(User.kook_bound.desc(), User.id.asc())
                 .first()
             )
+            user_id = user.id if user else None
+            choice_text = story_game_service.choice_feedback_text(kook_id, parsed['choice'])
+
+        if choice_text:
+            await _send_story_event_message(
+                bot_obj,
+                event,
+                f'你选择了 **{choice_text}**\n剧情引擎正在读取你的行动，请稍等...',
+                owner_id=kook_id,
+            )
+
+        with app.app_context():
+            from app.services import story_game_service
+
             result = story_game_service.continue_story(
                 kook_id=kook_id,
-                user_id=user.id if user else None,
+                user_id=user_id,
                 user_input=parsed['choice'],
                 channel_id=target_id,
             )

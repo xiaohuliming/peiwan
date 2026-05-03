@@ -1149,6 +1149,23 @@ def _expand_choice_input(state, user_input):
     return text
 
 
+def choice_feedback_text(kook_id, user_input):
+    state = StoryPlayerState.query.filter_by(kook_id=str(kook_id or '').strip()).first()
+    if not state:
+        return ''
+
+    text = _clean_text(user_input, 1000)
+    key = text.strip().upper()
+    label_map = {'A': 'A', 'B': 'B', 'C': 'C', '1': 'A', '2': 'B', '3': 'C'}
+    label = label_map.get(key)
+    expanded = _expand_choice_input(state, text)
+    if not expanded or expanded == '自由输入':
+        return ''
+    if label and expanded != text:
+        return f'{label}. {expanded}'
+    return expanded
+
+
 def _normalize_choices(choices):
     if not isinstance(choices, list):
         return []
