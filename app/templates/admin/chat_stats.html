@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block header_title %}发言统计机器人{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-white">KOOK 发言统计机器人</h2>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">每日/每周排行、内部白名单、签到和称号奖章</p>
+    </div>
+    <form method="get" class="flex flex-wrap items-center gap-2">
+      <input type="date" name="date" value="{{ selected_date.isoformat() }}" class="h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm text-slate-700 dark:text-slate-200">
+      <button type="submit" class="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors flex items-center gap-2">
+        <i data-lucide="search" width="16" height="16"></i> 查看
+      </button>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">当日总发言</p>
+      <p class="mt-2 text-2xl font-bold text-slate-800 dark:text-white">{{ daily_totals.total_count }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">有效计入</p>
+      <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-300">{{ daily_totals.valid_count }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">过滤发言</p>
+      <p class="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-300">{{ daily_totals.filtered_count }}</p>
+    </div>
+  </div>
+
+  <div class="glass-card p-6">
+    <form method="post" action="{{ url_for('chat_stats_admin.save_config') }}" class="space-y-6">
+      <input type="hidden" name="selected_date" value="{{ selected_date.isoformat() }}">
+      <div class="flex items-center justify-between gap-4">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="sliders-horizontal" width="18" height="18" class="text-purple-500"></i> 机器人配置
+        </h3>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input type="checkbox" name="enabled" class="rounded border-slate-300 text-purple-600 focus:ring-purple-500" {% if cfg.enabled %}checked{% endif %}>
+          启用
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">统计频道 ID</span>
+          <textarea name="channel_ids" rows="6" class="w-full rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 font-mono" placeholder="每行一个频道ID">{{ channel_text }}</textarea>
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">手动白名单 KOOK ID</span>
+          <textarea name="whitelist_kook_ids" rows="6" class="w-full rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 font-mono" placeholder="每行一个 KOOK ID">{{ whitelist_text }}</textarea>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">重复计入次数</span>
+          <input type="number" min="0" max="20" name="duplicate_limit" value="{{ cfg.duplicate_limit }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm">
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">排行人数</span>
+          <input type="number" min="1" max="50" name="rank_limit" value="{{ cfg.rank_limit }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm">
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">每日称号</span>
+          <input type="text" name="daily_title" value="{{ cfg.daily_title }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm">
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">每周称号</span>
+          <input type="text" name="weekly_title" value="{{ cfg.weekly_title }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm">
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">每日排行播报频道</span>
+          <input type="text" name="daily_broadcast_channel_id" value="{{ cfg.daily_broadcast_channel_id or '' }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm font-mono">
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">每周排行播报频道</span>
+          <input type="text" name="weekly_broadcast_channel_id" value="{{ cfg.weekly_broadcast_channel_id or '' }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm font-mono">
+        </label>
+        <label class="block">
+          <span class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">签到播报频道</span>
+          <input type="text" name="checkin_broadcast_channel_id" value="{{ cfg.checkin_broadcast_channel_id or '' }}" class="w-full h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm font-mono">
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input type="checkbox" name="rank_broadcast_enabled" class="rounded border-slate-300 text-purple-600 focus:ring-purple-500" {% if cfg.rank_broadcast_enabled %}checked{% endif %}>
+          排行结算后播报
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input type="checkbox" name="checkin_broadcast_enabled" class="rounded border-slate-300 text-purple-600 focus:ring-purple-500" {% if cfg.checkin_broadcast_enabled %}checked{% endif %}>
+          签到播报
+        </label>
+      </div>
+
+      <div>
+        <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">签到里程碑</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {% for day in [10, 30, 60, 100] %}
+          {% set reward = milestone_rewards.get(day, {}) %}
+          <div class="rounded-2xl bg-white/45 dark:bg-slate-900/35 border border-white/50 dark:border-slate-700/50 p-4">
+            <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3">{{ day }} 天</p>
+            <input type="text" name="milestone_{{ day }}_title" value="{{ reward.get('title', '') }}" class="w-full h-9 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/70 px-3 text-sm mb-2" placeholder="称号">
+            <input type="text" name="milestone_{{ day }}_badge" value="{{ reward.get('badge', '') }}" class="w-full h-9 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/70 px-3 text-sm" placeholder="奖章">
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <div class="text-xs text-slate-400">修仙文字小游戏：后续规划</div>
+        <button type="submit" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors flex items-center gap-2">
+          <i data-lucide="save" width="16" height="16"></i> 保存配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div class="glass-card p-6">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="calendar-days" width="18" height="18" class="text-emerald-500"></i> 每日排行
+        </h3>
+        <form method="post" action="{{ url_for('chat_stats_admin.settle') }}" class="flex items-center gap-2">
+          <input type="hidden" name="period" value="daily">
+          <input type="hidden" name="selected_date" value="{{ selected_date.isoformat() }}">
+          <label class="text-xs text-slate-400 inline-flex items-center gap-1"><input type="checkbox" name="force" class="rounded"> 覆盖</label>
+          <button type="submit" class="px-3 py-1.5 rounded-lg bg-white/60 dark:bg-slate-900/60 text-xs text-slate-600 dark:text-slate-300 hover:text-purple-600 transition-colors">结算</button>
+        </form>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+              <th class="pb-3 font-medium">排名</th>
+              <th class="pb-3 font-medium">用户</th>
+              <th class="pb-3 font-medium">有效发言</th>
+              <th class="pb-3 font-medium">称号</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in daily_ranking %}
+            <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+              <td class="py-3 font-semibold text-slate-700 dark:text-slate-200">#{{ r.rank_no }}</td>
+              <td class="py-3">
+                <div class="font-medium text-slate-800 dark:text-white">{{ r.display_name }}</div>
+                <div class="text-xs text-slate-400 font-mono">{{ r.kook_id }}</div>
+              </td>
+              <td class="py-3 font-bold text-emerald-600 dark:text-emerald-300">{{ r.valid_count }}</td>
+              <td class="py-3 text-xs text-slate-500 dark:text-slate-400">{{ r.title or r.badge or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="py-6 text-center text-slate-400 text-sm">暂无排行数据</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="glass-card p-6">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+          <i data-lucide="calendar-range" width="18" height="18" class="text-blue-500"></i> 每周排行
+        </h3>
+        <form method="post" action="{{ url_for('chat_stats_admin.settle') }}" class="flex items-center gap-2">
+          <input type="hidden" name="period" value="weekly">
+          <input type="hidden" name="selected_date" value="{{ selected_date.isoformat() }}">
+          <label class="text-xs text-slate-400 inline-flex items-center gap-1"><input type="checkbox" name="force" class="rounded"> 覆盖</label>
+          <button type="submit" class="px-3 py-1.5 rounded-lg bg-white/60 dark:bg-slate-900/60 text-xs text-slate-600 dark:text-slate-300 hover:text-purple-600 transition-colors">结算</button>
+        </form>
+      </div>
+      <p class="text-xs text-slate-400 mb-3">{{ week_start.isoformat() }} ~ {{ week_end.isoformat() }}</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+              <th class="pb-3 font-medium">排名</th>
+              <th class="pb-3 font-medium">用户</th>
+              <th class="pb-3 font-medium">有效发言</th>
+              <th class="pb-3 font-medium">称号</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in weekly_ranking %}
+            <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+              <td class="py-3 font-semibold text-slate-700 dark:text-slate-200">#{{ r.rank_no }}</td>
+              <td class="py-3">
+                <div class="font-medium text-slate-800 dark:text-white">{{ r.display_name }}</div>
+                <div class="text-xs text-slate-400 font-mono">{{ r.kook_id }}</div>
+              </td>
+              <td class="py-3 font-bold text-blue-600 dark:text-blue-300">{{ r.valid_count }}</td>
+              <td class="py-3 text-xs text-slate-500 dark:text-slate-400">{{ r.title or r.badge or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="py-6 text-center text-slate-400 text-sm">暂无排行数据</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div class="glass-card p-6">
+      <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+        <i data-lucide="award" width="18" height="18" class="text-amber-500"></i> 已结算记录
+      </h3>
+      <div class="space-y-4">
+        <div>
+          <p class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">每日 {{ selected_date.isoformat() }}</p>
+          <div class="space-y-2">
+            {% for r in daily_settlements %}
+            <div class="flex items-center justify-between rounded-xl bg-white/45 dark:bg-slate-900/35 px-3 py-2 text-sm">
+              <span class="text-slate-700 dark:text-slate-200">#{{ r.rank_no }} {{ r.display_name }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ r.valid_count }} · {{ r.title or r.badge or '-' }}</span>
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-400">暂无每日结算</p>
+            {% endfor %}
+          </div>
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">每周 {{ week_start.isoformat() }} ~ {{ week_end.isoformat() }}</p>
+          <div class="space-y-2">
+            {% for r in weekly_settlements %}
+            <div class="flex items-center justify-between rounded-xl bg-white/45 dark:bg-slate-900/35 px-3 py-2 text-sm">
+              <span class="text-slate-700 dark:text-slate-200">#{{ r.rank_no }} {{ r.display_name }}</span>
+              <span class="text-slate-500 dark:text-slate-400">{{ r.valid_count }} · {{ r.title or r.badge or '-' }}</span>
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-400">暂无每周结算</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card p-6">
+      <h3 class="text-base font-bold text-slate-700 dark:text-slate-200 mb-4 flex items-center gap-2">
+        <i data-lucide="badge-check" width="18" height="18" class="text-pink-500"></i> 最近签到
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-sm text-slate-400 border-b border-white/40 dark:border-slate-700/50">
+              <th class="pb-3 font-medium">日期</th>
+              <th class="pb-3 font-medium">用户</th>
+              <th class="pb-3 font-medium">连续</th>
+              <th class="pb-3 font-medium">奖励</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in recent_checkins %}
+            <tr class="border-b border-white/20 dark:border-slate-700/50 text-sm">
+              <td class="py-3 text-slate-500 dark:text-slate-400">{{ r.checkin_date.isoformat() }}</td>
+              <td class="py-3">
+                <div class="font-medium text-slate-800 dark:text-white">{{ r.display_name }}</div>
+                <div class="text-xs text-slate-400 font-mono">{{ r.kook_id }}</div>
+              </td>
+              <td class="py-3 font-semibold text-slate-700 dark:text-slate-200">{{ r.streak_after }} 天</td>
+              <td class="py-3 text-xs text-slate-500 dark:text-slate-400">{{ r.reward_title or r.reward_badge or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="py-6 text-center text-slate-400 text-sm">暂无签到记录</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

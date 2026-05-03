@@ -10,3 +10,11 @@ from .broadcast import BroadcastConfig
 from .vip import VipLevel, UpgradeRecord
 from .lottery import Lottery, LotteryParticipant, LotteryWinner
 from .identity_tag import IdentityTag
+from .chat_stats import (
+    ChatStatConfig,
+    ChatBotProfile,
+    ChatDailyUserStat,
+    ChatDailyContentStat,
+    ChatRankSettlement,
+    ChatCheckinRecord,
+)

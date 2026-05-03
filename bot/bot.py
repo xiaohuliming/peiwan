@@ -1218,6 +1218,7 @@ def _build_help_text():
         "---\n"
         "`/bind` - 查看当前自动识别的账号\n"
         "`/钱包` - 查看钱包信息\n"
+        "`/签到` 或 `/打卡` - 每日签到并累计连续天数\n"
         "`/转换 金额` - 将小猪金(小猪粮)按1:1转换为嗯呢币\n"
         "`/结单 订单号 时长` - 结单申报(仅支持整数或0.5小时)\n"
         "`/确认 订单号` - 确认订单(老板)\n"
@@ -1258,6 +1259,42 @@ async def cancel_withdraw_cmd(msg: Message):
         await msg.reply('当前没有待上传收款码的提现申请。')
 
 
+async def _handle_checkin(msg: Message):
+    channel_id = _extract_msg_channel_id(msg)
+    kook_id = str(getattr(getattr(msg, 'author', None), 'id', '') or '')
+    kook_username = _kook_user_tag(getattr(msg, 'author', None))
+    if not kook_id:
+        await msg.reply('未获取到你的KOOK身份，请重试')
+        return
+
+    try:
+        with app.app_context():
+            user = get_or_create_user_by_kook(msg.author)
+            from app.services.chat_stats_service import perform_checkin
+            result = perform_checkin(
+                channel_id=channel_id,
+                kook_id=kook_id,
+                kook_username=kook_username,
+                user_id=user.id if user else None,
+            )
+        await msg.reply(result.get('message') or '打卡完成')
+    except Exception as e:
+        logger.exception('/签到 执行失败')
+        await msg.reply(f'打卡失败: {e}')
+
+
+@bot.command(name='签到')
+async def checkin_cmd(msg: Message):
+    """每日签到。"""
+    await _handle_checkin(msg)
+
+
+@bot.command(name='打卡')
+async def checkin_alias_cmd(msg: Message):
+    """每日打卡。"""
+    await _handle_checkin(msg)
+
+
 # ─── 事件处理器 ──────────────────────────────────────────────
 
 @bot.on_message()
@@ -1292,6 +1329,18 @@ async def on_public_message(msg: Message):
                 .order_by(User.kook_bound.desc(), User.id.asc())
                 .first()
             )
+            try:
+                from app.services.chat_stats_service import record_message
+                record_message(
+                    channel_id=msg_channel_id,
+                    kook_id=uid,
+                    kook_username=kook_username,
+                    content=str(getattr(msg, 'content', '') or ''),
+                    user_id=bound_user.id if bound_user else None,
+                )
+            except Exception as e:
+                logger.warning(f'发言统计记录失败: {e}')
+
             from app.services.lottery_service import record_interactive_participation
             record_interactive_participation(
                 channel_id=msg_channel_id,

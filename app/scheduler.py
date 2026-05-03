@@ -160,6 +160,22 @@ def init_scheduler(app):
             from app.services.lottery_service import update_all_published_lottery_counts
             update_all_published_lottery_counts()
 
+    def settle_chat_daily_rankings():
+        """每日发言排行榜结算（北京时间 00:05 结算前一天）。"""
+        with app.app_context():
+            from app.services.chat_stats_service import settle_daily
+            count, _ = settle_daily()
+            if count > 0:
+                app.logger.info(f'[Scheduler] 每日发言排行结算 {count} 人')
+
+    def settle_chat_weekly_rankings():
+        """每周发言排行榜结算（周一北京时间 00:10 结算上一周）。"""
+        with app.app_context():
+            from app.services.chat_stats_service import settle_weekly
+            count, _ = settle_weekly()
+            if count > 0:
+                app.logger.info(f'[Scheduler] 每周发言排行结算 {count} 人')
+
     scheduler.add_job(
         auto_settle_escort_orders,
         trigger=IntervalTrigger(minutes=5),
@@ -181,6 +197,28 @@ def init_scheduler(app):
         trigger=IntervalTrigger(seconds=60),
         id='update_lottery_counts',
         name='更新抽奖参与人数',
+        replace_existing=True
+    )
+
+    try:
+        import pytz
+        bj_tz = pytz.timezone('Asia/Shanghai')
+    except ImportError:
+        from datetime import timezone, timedelta
+        bj_tz = timezone(timedelta(hours=8), name='Asia/Shanghai')
+    scheduler.add_job(
+        settle_chat_daily_rankings,
+        trigger=CronTrigger(hour=0, minute=5, timezone=bj_tz),
+        id='settle_chat_daily_rankings',
+        name='每日发言排行榜结算',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        settle_chat_weekly_rankings,
+        trigger=CronTrigger(day_of_week=0, hour=0, minute=10, timezone=bj_tz),
+        id='settle_chat_weekly_rankings',
+        name='每周发言排行榜结算',
         replace_existing=True
     )
 
@@ -223,9 +261,12 @@ def sync_weekly_reminder_jobs(app=None):
 
     with app.app_context():
         from app.models.broadcast import BroadcastConfig
-        import pytz
-
-        BJ_TZ = pytz.timezone('Asia/Shanghai')
+        try:
+            import pytz
+            BJ_TZ = pytz.timezone('Asia/Shanghai')
+        except ImportError:
+            from datetime import timezone, timedelta
+            BJ_TZ = timezone(timedelta(hours=8), name='Asia/Shanghai')
 
         # 1. 清理所有旧的 weekly_reminder cron job
         existing_jobs = scheduler.get_jobs()

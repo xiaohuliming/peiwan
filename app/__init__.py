@@ -129,6 +129,9 @@ def create_app(config_class=Config, start_background_tasks=True):
     from app.views.lottery_admin import lottery_admin_bp
     app.register_blueprint(lottery_admin_bp, url_prefix='/admin/lottery')
 
+    from app.views.chat_stats_admin import chat_stats_admin_bp
+    app.register_blueprint(chat_stats_admin_bp, url_prefix='/admin/chat-stats')
+
     from app.views.assistant import assistant_bp
     app.register_blueprint(assistant_bp, url_prefix='/assistant')
 
