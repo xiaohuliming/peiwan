@@ -87,6 +87,8 @@ class StoryGameTests(unittest.TestCase):
 
         self.assertTrue(result['ok'])
         self.assertIn('Chapter 0', result['message'])
+        self.assertIn('Chapter 0', result['visible_text'])
+        self.assertEqual(result['choices'], ['我不记得了', '你先告诉我这里是哪', '我为什么要相信你'])
         self.assertEqual(StoryPlayerState.query.count(), 1)
         self.assertEqual(StoryCharacterRelation.query.count(), 5)
         hard = StoryHardState.query.filter_by(kook_id='story-1').first()
@@ -226,6 +228,7 @@ class StoryGameTests(unittest.TestCase):
         self.assertNotIn('trust', profile.lower())
         self.assertNotIn('24', profile)
         self.assertIn('捷风', profile)
+        self.assertEqual(result['choices'], ['跟上捷风', '追问她'])
         self.assertEqual(StoryPlayerState.query.filter_by(kook_id='story-1').first().choice_list[0], '跟上捷风')
 
     def test_continue_story_runs_through_orchestrator_nodes(self):

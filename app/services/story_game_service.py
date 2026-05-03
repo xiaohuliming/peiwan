@@ -685,10 +685,15 @@ def start_story(kook_id, kook_username='', user_id=None, world_arg='', backgroun
     _add_memory(kook_id, user_id, DEFAULT_MEMORY_07, source_event='chapter_0_start')
     db.session.commit()
 
-    return {'ok': True, 'message': _opening_text(state)}
+    return {
+        'ok': True,
+        'message': _opening_text(state),
+        'choices': state.choice_list,
+        'visible_text': _opening_visible_text(state),
+    }
 
 
-def _opening_text(state):
+def _opening_visible_text(state):
     world = _world_name(state.story_world)
     background = _background_name(state.background)
     return (
@@ -702,6 +707,12 @@ def _opening_text(state):
         "下一秒，训练室的门被风压撞开。捷风闯进来，枪口稳稳指向你。\n\n"
         "“别动。告诉我，你是谁？”\n\n"
         "你脑海里只剩下一句话：不要相信基地里的 AI。\n"
+    )
+
+
+def _opening_text(state):
+    return (
+        _opening_visible_text(state) +
         "├─ 可选行动\n"
         "A. 我不记得了\n"
         "B. 你先告诉我这里是哪\n"
@@ -881,6 +892,8 @@ def continue_story(kook_id, user_id=None, user_input='', channel_id=None):
         'llm_used': True,
         'orchestrator': result.get('orchestrator') or 'langgraph',
         'graph_trace': result.get('graph_trace') or [],
+        'visible_text': result.get('visible_text') or '',
+        'choices': result.get('choices') or [],
     }
 
 

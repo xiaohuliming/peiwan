@@ -12,6 +12,8 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 import requests
 from khl import Bot, Message, MessageTypes, EventTypes, Event
+from khl.channel import PublicTextChannel
+from khl.user import User as KhlUser
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -32,6 +34,8 @@ app = create_app(start_background_tasks=False)
 
 # Initialize KOOK Bot
 bot = Bot(token=app.config.get('KOOK_TOKEN', ''))
+
+STORY_BUTTON_PREFIX = 'story_continue'
 
 
 def _kook_user_tag(author):
@@ -222,6 +226,171 @@ def _withdraw_gui_url() -> str:
     if not site:
         site = 'http://127.0.0.1:5000'
     return f'{site}/finance/withdraw'
+
+
+def _truncate_button_label(text: str, max_len: int = 28) -> str:
+    text = str(text or '').strip()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len - 1].rstrip() + '…'
+
+
+def _build_story_choice_card(text: str, choices=None, owner_id: str = ''):
+    choices = [str(choice or '').strip() for choice in (choices or []) if str(choice or '').strip()]
+    if not choices:
+        return None
+
+    modules = [
+        {"type": "header", "text": {"type": "plain-text", "content": "灰区档案"}},
+        {
+            "type": "section",
+            "text": {"type": "kmarkdown", "content": str(text or '').strip() or "剧情正在等待你的行动。"},
+        },
+        {"type": "divider"},
+        {
+            "type": "context",
+            "elements": [
+                {"type": "kmarkdown", "content": "点击选项可直接推进剧情；自由输入请使用 `/story continue 你的行动`。"}
+            ],
+        },
+    ]
+
+    elements = []
+    labels = ('A', 'B', 'C')
+    for index, choice in enumerate(choices[:3], start=1):
+        label = labels[index - 1]
+        elements.append({
+            "type": "button",
+            "theme": "primary" if index == 1 else "secondary",
+            "value": f"{STORY_BUTTON_PREFIX}|{owner_id}|{index}",
+            "click": "return-val",
+            "text": {"type": "plain-text", "content": f"{label}. {_truncate_button_label(choice)}"},
+        })
+    modules.append({"type": "action-group", "elements": elements})
+    return [{"type": "card", "theme": "secondary", "size": "lg", "modules": modules}]
+
+
+async def _reply_story_result(msg: Message, result_or_text, owner_id: str):
+    if isinstance(result_or_text, dict):
+        choices = result_or_text.get('choices') or []
+        text = (result_or_text.get('visible_text') if choices else None) or result_or_text.get('message') or ''
+    else:
+        text = str(result_or_text or '')
+        choices = []
+
+    card = _build_story_choice_card(text, choices, owner_id)
+    if card:
+        try:
+            await msg.reply(json.dumps(card, ensure_ascii=False), type=MessageTypes.CARD)
+            return
+        except Exception:
+            logger.exception('剧情选项卡片发送失败，降级 KMD')
+    await msg.reply(text, type=MessageTypes.KMD)
+
+
+def _event_body_value(body, *keys):
+    if not isinstance(body, dict):
+        return ''
+    for key in keys:
+        value = body.get(key)
+        if value not in (None, ''):
+            return value
+    return ''
+
+
+def _nested_event_body_value(body, outer_key, inner_key):
+    if not isinstance(body, dict):
+        return ''
+    item = body.get(outer_key)
+    if isinstance(item, dict):
+        return item.get(inner_key) or ''
+    return ''
+
+
+def _parse_story_button_value(value):
+    parts = str(value or '').split('|')
+    if len(parts) != 3 or parts[0] != STORY_BUTTON_PREFIX:
+        return None
+    owner_id = parts[1].strip()
+    choice_index = parts[2].strip()
+    if not choice_index.isdigit():
+        return None
+    return {'owner_id': owner_id, 'choice': choice_index}
+
+
+def _button_event_user_id(event: Event) -> str:
+    body = getattr(event, 'body', {}) or {}
+    return str(
+        _event_body_value(body, 'user_id', 'author_id')
+        or _nested_event_body_value(body, 'user', 'id')
+        or _nested_event_body_value(body, 'user_info', 'id')
+        or getattr(event, 'author_id', '')
+        or ''
+    )
+
+
+def _button_event_target_id(event: Event) -> str:
+    body = getattr(event, 'body', {}) or {}
+    return str(
+        _event_body_value(body, 'target_id', 'channel_id')
+        or getattr(event, 'target_id', '')
+        or ''
+    )
+
+
+def _button_event_channel_type(event: Event) -> str:
+    body = getattr(event, 'body', {}) or {}
+    return str(
+        _event_body_value(body, 'channel_type', 'channel_type_name')
+        or getattr(event, '_channel_type', '')
+        or ''
+    ).upper()
+
+
+async def _send_story_event_message(
+    bot_obj: Bot,
+    event: Event,
+    result_or_text,
+    owner_id: str = '',
+    temp_target_id: str = '',
+):
+    if isinstance(result_or_text, dict):
+        choices = result_or_text.get('choices') or []
+        text = (result_or_text.get('visible_text') if choices else None) or result_or_text.get('message') or ''
+    else:
+        choices = []
+        text = str(result_or_text or '')
+
+    card = _build_story_choice_card(text, choices, owner_id)
+    channel_type = _button_event_channel_type(event)
+    target_id = _button_event_target_id(event)
+
+    try:
+        if channel_type == 'PERSON':
+            target_user = KhlUser(id=owner_id or temp_target_id or _button_event_user_id(event), _gate_=bot_obj.client.gate)
+            if card:
+                await target_user.send(json.dumps(card, ensure_ascii=False), type=MessageTypes.CARD)
+            else:
+                await target_user.send(text, type=MessageTypes.KMD)
+            return
+
+        if target_id:
+            channel = PublicTextChannel(id=target_id, _gate_=bot_obj.client.gate)
+            if card:
+                await channel.send(json.dumps(card, ensure_ascii=False), type=MessageTypes.CARD, temp_target_id=temp_target_id)
+            else:
+                await channel.send(text, type=MessageTypes.KMD, temp_target_id=temp_target_id)
+            return
+
+        fallback_user_id = temp_target_id or owner_id or _button_event_user_id(event)
+        if fallback_user_id:
+            target_user = KhlUser(id=fallback_user_id, _gate_=bot_obj.client.gate)
+            if card:
+                await target_user.send(json.dumps(card, ensure_ascii=False), type=MessageTypes.CARD)
+            else:
+                await target_user.send(text, type=MessageTypes.KMD)
+    except Exception:
+        logger.exception('剧情按钮事件回复失败')
 
 
 async def _reply_withdraw_prompt(msg: Message, text: str):
@@ -1322,6 +1491,7 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
         with app.app_context():
             user = get_or_create_user_by_kook(msg.author)
             from app.services import story_game_service
+            reply_payload = None
 
             if action_key in ('', 'help', 'menu', '菜单', '帮助'):
                 reply_text = story_game_service.menu_text()
@@ -1336,6 +1506,7 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
                     background_arg=background_arg,
                     reset=False,
                 )
+                reply_payload = result if result.get('ok') else None
                 reply_text = result.get('message') or '剧情已开始。'
             elif action_key in ('restart', 'reset', '重开', '重新开始'):
                 world_arg = args[0] if len(args) >= 1 else ''
@@ -1348,6 +1519,7 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
                     background_arg=background_arg,
                     reset=True,
                 )
+                reply_payload = result if result.get('ok') else None
                 reply_text = result.get('message') or '剧情已重开。'
             elif action_key in ('continue', 'c', '继续'):
                 user_input = ' '.join(args).strip()
@@ -1357,6 +1529,7 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
                     user_input=user_input,
                     channel_id=channel_id,
                 )
+                reply_payload = result if result.get('ok') else None
                 reply_text = result.get('message') or '剧情推进完成。'
             elif action_key in ('profile', '档案'):
                 reply_text = story_game_service.profile_text(kook_id)
@@ -1386,7 +1559,10 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
                     '`/story` 查看菜单；`/story continue 你的行动` 推进剧情；'
                     '`/story profile` 查看档案。'
                 )
-        await msg.reply(reply_text, type=MessageTypes.KMD)
+        if reply_payload is not None:
+            await _reply_story_result(msg, reply_payload, owner_id=kook_id)
+        else:
+            await msg.reply(reply_text, type=MessageTypes.KMD)
     except Exception as e:
         logger.exception('/story 执行失败')
         with app.app_context():
@@ -1395,6 +1571,61 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
 
 
 # ─── 事件处理器 ──────────────────────────────────────────────
+
+@bot.on_event(EventTypes.MESSAGE_BTN_CLICK)
+async def on_story_choice_button(bot_obj: Bot, event: Event):
+    """处理剧情卡片上的选项按钮。"""
+    try:
+        body = getattr(event, 'body', {}) or {}
+        value = (
+            _event_body_value(body, 'value')
+            or _nested_event_body_value(body, 'data', 'value')
+            or _nested_event_body_value(body, 'extra', 'value')
+        )
+        parsed = _parse_story_button_value(value)
+        if not parsed:
+            return
+
+        click_user_id = _button_event_user_id(event)
+        owner_id = parsed['owner_id']
+        if owner_id and click_user_id and owner_id != click_user_id:
+            await _send_story_event_message(
+                bot_obj,
+                event,
+                '这张剧情卡属于另一位玩家，请使用 `/story` 开始自己的剧情。',
+                owner_id=click_user_id,
+                temp_target_id=click_user_id,
+            )
+            return
+
+        kook_id = click_user_id or owner_id
+        if not kook_id:
+            logger.warning('剧情按钮事件缺少用户 ID: %s', body)
+            return
+
+        target_id = _button_event_target_id(event)
+        with app.app_context():
+            from app.services import story_game_service
+
+            user = (
+                User.query.filter_by(kook_id=kook_id)
+                .order_by(User.kook_bound.desc(), User.id.asc())
+                .first()
+            )
+            result = story_game_service.continue_story(
+                kook_id=kook_id,
+                user_id=user.id if user else None,
+                user_input=parsed['choice'],
+                channel_id=target_id,
+            )
+
+        await _send_story_event_message(bot_obj, event, result, owner_id=kook_id)
+    except Exception as e:
+        logger.exception('剧情按钮事件处理失败')
+        with app.app_context():
+            db.session.rollback()
+        await _send_story_event_message(bot_obj, event, f'剧情按钮处理失败: {e}')
+
 
 @bot.on_message()
 async def on_public_message(msg: Message):
