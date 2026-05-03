@@ -151,11 +151,13 @@ class ValorantWikiClient:
 def compact_spaces(text: str) -> str:
     text = text.replace("\xa0", " ")
     text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    text = re.sub(r"\s+([,.;:!?)])", r"\1", text)
+    text = re.sub(r"([(])\s+", r"\1", text)
     text = re.sub(r"\n{2,}", "\n", text)
     return text.strip(" \n")
 
 
-def clean_text(node: Tag | None, separator: str = " | ") -> str:
+def clean_text(node: Tag | None, separator: str = " ") -> str:
     if node is None:
         return ""
 
@@ -165,6 +167,8 @@ def clean_text(node: Tag | None, separator: str = " | ") -> str:
 
     for br in clone.find_all("br"):
         br.replace_with("\n")
+    for li in clone.find_all("li"):
+        li.append("\n")
 
     text = clone.get_text(separator=separator)
     lines = [compact_spaces(line) for line in text.splitlines()]
@@ -208,10 +212,7 @@ def split_multi_value(value: str) -> list[str]:
         line = compact_spaces(line)
         if not line:
             continue
-        if " | " in line:
-            parts.extend(part.strip() for part in line.split(" | "))
-        else:
-            parts.append(line)
+        parts.append(line)
     return unique_values(parts)
 
 
@@ -309,9 +310,18 @@ def parse_display_title(soup: BeautifulSoup, fallback: str) -> str:
 
 
 def parse_lead(soup: BeautifulSoup, display_title: str) -> str:
-    content = soup.select_one(".mw-parser-output")
+    content_node = soup.select_one(".mw-parser-output")
+    if not content_node:
+        return ""
+
+    content = BeautifulSoup(str(content_node), "html.parser").select_one(".mw-parser-output")
     if not content:
         return ""
+
+    for removable in content.select(
+        "aside.portable-infobox, table.themebg, #toc, .toc, .mw-editsection"
+    ):
+        removable.decompose()
 
     for paragraph in content.find_all("p", recursive=False):
         text = clean_text(paragraph, separator=" ")
