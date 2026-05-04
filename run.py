@@ -3,7 +3,7 @@ from app.models import (
     User, Order, BalanceLog, CommissionLog, WithdrawRequest,
     Project, ProjectItem, ClockRecord,
     Gift, GiftOrder, Intimacy, OperationLog, BroadcastConfig,
-    VipLevel, UpgradeRecord
+    VipLevel, UpgradeRecord, MiniGameRecord
 )
 
 app = create_app()
@@ -20,6 +20,7 @@ def make_shell_context():
         'Intimacy': Intimacy, 'OperationLog': OperationLog,
         'BroadcastConfig': BroadcastConfig,
         'VipLevel': VipLevel, 'UpgradeRecord': UpgradeRecord,
+        'MiniGameRecord': MiniGameRecord,
     }
 
 if __name__ == '__main__':

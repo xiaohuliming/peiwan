@@ -18,6 +18,7 @@ from .chat_stats import (
     ChatRankSettlement,
     ChatCheckinRecord,
 )
+from .minigame import MiniGameRecord
 from .story_game import (
     StoryPlayerState,
     StoryCharacterRelation,

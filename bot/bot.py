@@ -1403,6 +1403,10 @@ def _build_help_text():
         "`/结单 订单号 时长` - 结单申报(仅支持整数或0.5小时)\n"
         "`/确认 订单号` - 确认订单(老板)\n"
         "`/roll 总点数 抽几个点` - 掷点/随机点数\n"
+        "`/游戏` - KOOK 小游戏厅（猜词/乱序词/密码色/21点/四子棋）\n"
+        "`/猜 内容` - 小游戏猜测输入；21点使用 `/要牌`、`/停牌`\n"
+        "`/四子棋 @玩家` - 双人四子棋；`/落子 1-7` 下棋\n"
+        "`/小游戏排行 [游戏名]` - 查看小游戏排行榜\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
         "`/结束抽奖 [抽奖ID]` - 结束互动抽奖并立即开奖\n"
         "`/story` - 进入 AI 剧情互动游戏《灰区档案》\n"
@@ -1414,6 +1418,132 @@ def _build_help_text():
     return content
 
 
+def _minigame_channel_id(msg: Message) -> str:
+    channel_id = _extract_msg_channel_id(msg)
+    if channel_id:
+        return channel_id
+    return 'dm' if _is_private_message(msg) else 'unknown'
+
+
+def _minigame_user_id(msg: Message) -> str:
+    return str(getattr(getattr(msg, 'author', None), 'id', '') or getattr(msg, 'author_id', '') or '')
+
+
+async def _reply_minigame_result(msg: Message, result):
+    await msg.reply((result or {}).get('message') or '小游戏暂无响应。', type=MessageTypes.KMD)
+    await _persist_minigame_record(msg, result)
+
+
+async def _persist_minigame_record(msg: Message, result):
+    record_payload = (result or {}).get('record')
+    if not record_payload:
+        return
+    try:
+        with app.app_context():
+            try:
+                if getattr(msg, 'author', None):
+                    get_or_create_user_by_kook(msg.author)
+            except Exception:
+                logger.exception('小游戏玩家账号自动识别失败')
+                db.session.rollback()
+            from app.services import minigame_service
+            minigame_service.record_minigame_result(record_payload)
+    except Exception:
+        logger.exception('小游戏战绩记录失败')
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+
+
+def _minigame_leaderboard_message(game_key: str = '') -> str:
+    from app.services import minigame_service
+
+    try:
+        with app.app_context():
+            return minigame_service.format_leaderboard(game_key)
+    except Exception:
+        logger.exception('小游戏排行榜读取失败')
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return '小游戏排行榜读取失败，请确认已经执行 `flask db upgrade`。'
+
+
+async def _start_minigame(msg: Message, game_key: str):
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    result = minigame_service.start_game(
+        channel_id=_minigame_channel_id(msg),
+        kook_id=kook_id,
+        player_name=_kook_user_tag(getattr(msg, 'author', None)),
+        game_key=game_key,
+    )
+    await _reply_minigame_result(msg, result)
+
+
+def _extract_kook_id_from_text(text: str) -> str:
+    raw = str(text or '').strip()
+    patterns = (
+        r'\(met\)(\d+)\(met\)',
+        r'<@!?(\d+)>',
+        r'\b(\d{4,})\b',
+    )
+    for pattern in patterns:
+        m = re.search(pattern, raw)
+        if m:
+            return m.group(1)
+    return ''
+
+
+async def _handle_connect4_command(msg: Message, action: str = '', *args: str):
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+
+    channel_id = _minigame_channel_id(msg)
+    action_raw = str(action or '').strip()
+    action_key = action_raw.lower()
+    rest = ' '.join(args).strip()
+
+    if action_key in ('', 'help', '帮助', '菜单'):
+        result = {
+            'message': (
+                '**四子棋**\n'
+                '`/四子棋 @玩家` 开局\n'
+                '`/落子 1-7` 轮流下棋\n'
+                '`/四子棋 状态` 查看棋盘\n'
+                '`/四子棋 退出` 结束本频道对局\n'
+                '`/小游戏排行 四子棋` 查看排行榜'
+            )
+        }
+    elif action_key in ('状态', 'status'):
+        result = minigame_service.get_status(channel_id, kook_id)
+    elif action_key in ('退出', '结束', 'quit', 'stop', 'cancel'):
+        result = minigame_service.quit_game(channel_id, kook_id)
+    elif action_key in ('落子', 'move', 'drop', '下'):
+        result = minigame_service.handle_connect4_move(channel_id, kook_id, rest)
+    else:
+        opponent_text = ' '.join([part for part in [action_raw, rest] if part]).strip()
+        result = minigame_service.start_connect4(
+            channel_id=channel_id,
+            starter_id=kook_id,
+            starter_name=_kook_user_tag(getattr(msg, 'author', None)),
+            opponent_id=_extract_kook_id_from_text(opponent_text),
+            opponent_name='',
+        )
+
+    await _reply_minigame_result(msg, result)
+
+
 @bot.command(name='帮助')
 async def help_cmd(msg: Message):
     """帮助命令（中文）"""
@@ -1422,8 +1552,152 @@ async def help_cmd(msg: Message):
 
 @bot.command(name='help')
 async def help_en_cmd(msg: Message):
-    """帮助命令（英文）"""
+    """帮助命令别名。"""
     await msg.reply(_build_help_text())
+
+
+@bot.command(name='游戏')
+async def minigame_cmd(msg: Message, action: str = '', *args: str):
+    """KOOK 小游戏厅。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+
+    channel_id = _minigame_channel_id(msg)
+    action_raw = str(action or '').strip()
+    action_key = action_raw.lower()
+    rest = ' '.join(args).strip()
+
+    if action_key in ('', 'help', '菜单', '帮助'):
+        result = {'message': minigame_service.menu_text()}
+    elif action_key in ('退出', '结束', 'quit', 'stop', 'cancel'):
+        result = minigame_service.quit_game(channel_id, kook_id)
+    elif action_key in ('状态', 'status'):
+        result = minigame_service.get_status(channel_id, kook_id)
+    elif action_key in ('猜', 'guess', 'g'):
+        result = minigame_service.handle_guess(channel_id, kook_id, rest)
+    elif action_key in ('四子棋', 'connect4', '连四'):
+        result = minigame_service.start_connect4(
+            channel_id=channel_id,
+            starter_id=kook_id,
+            starter_name=_kook_user_tag(getattr(msg, 'author', None)),
+            opponent_id=_extract_kook_id_from_text(rest),
+            opponent_name='',
+        )
+    elif action_key in ('落子', 'move', 'drop', '下'):
+        result = minigame_service.handle_connect4_move(channel_id, kook_id, rest)
+    elif action_key in ('要牌', 'hit', 'h', '拿牌', '停牌', 'stand', 's', '不要', '开牌'):
+        result = minigame_service.handle_blackjack_action(channel_id, kook_id, action_key)
+    elif minigame_service.normalize_game_key(action_key):
+        result = minigame_service.start_game(
+            channel_id=channel_id,
+            kook_id=kook_id,
+            player_name=_kook_user_tag(getattr(msg, 'author', None)),
+            game_key=action_key,
+        )
+    else:
+        # 让 `/游戏 红 蓝 绿 黄`、`/游戏 陪玩店` 这类输入也能直接喂给当前局。
+        guess_text = ' '.join([part for part in [action_raw, rest] if part]).strip()
+        result = minigame_service.handle_guess(channel_id, kook_id, guess_text)
+
+    await _reply_minigame_result(msg, result)
+
+
+@bot.command(name='猜词')
+async def hangman_game_cmd(msg: Message):
+    """快速开始猜词。"""
+    await _start_minigame(msg, '猜词')
+
+
+@bot.command(name='乱序')
+async def scramble_game_cmd(msg: Message):
+    """快速开始乱序词。"""
+    await _start_minigame(msg, '乱序')
+
+
+@bot.command(name='密码')
+async def mastermind_game_cmd(msg: Message):
+    """快速开始密码色。"""
+    await _start_minigame(msg, '密码')
+
+
+@bot.command(name='21点')
+async def blackjack_game_cmd(msg: Message):
+    """快速开始 21 点。"""
+    await _start_minigame(msg, '21点')
+
+
+@bot.command(name='四子棋')
+async def connect4_game_cmd(msg: Message, action: str = '', *args: str):
+    """双人四子棋。"""
+    await _handle_connect4_command(msg, action, *args)
+
+
+@bot.command(name='connect4')
+async def connect4_en_game_cmd(msg: Message, action: str = '', *args: str):
+    """双人四子棋别名。"""
+    await _handle_connect4_command(msg, action, *args)
+
+
+@bot.command(name='落子')
+async def connect4_move_cmd(msg: Message, column: str = ''):
+    """四子棋落子。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    result = minigame_service.handle_connect4_move(_minigame_channel_id(msg), kook_id, column)
+    await _reply_minigame_result(msg, result)
+
+
+@bot.command(name='小游戏排行')
+async def minigame_rank_cmd(msg: Message, game_key: str = ''):
+    """查看小游戏排行榜。"""
+    await msg.reply(_minigame_leaderboard_message(game_key), type=MessageTypes.KMD)
+
+
+@bot.command(name='猜')
+async def minigame_guess_cmd(msg: Message, *parts: str):
+    """提交小游戏猜测。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    result = minigame_service.handle_guess(_minigame_channel_id(msg), kook_id, ' '.join(parts).strip())
+    await _reply_minigame_result(msg, result)
+
+
+@bot.command(name='要牌')
+async def blackjack_hit_cmd(msg: Message):
+    """21 点要牌。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    result = minigame_service.handle_blackjack_action(_minigame_channel_id(msg), kook_id, '要牌')
+    await _reply_minigame_result(msg, result)
+
+
+@bot.command(name='停牌')
+async def blackjack_stand_cmd(msg: Message):
+    """21 点停牌。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    result = minigame_service.handle_blackjack_action(_minigame_channel_id(msg), kook_id, '停牌')
+    await _reply_minigame_result(msg, result)
 
 
 @bot.command(name='取消提现')
