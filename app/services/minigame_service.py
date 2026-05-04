@@ -933,6 +933,7 @@ def _render_hangman(session, reveal=False):
     guessed = ', '.join(state['guessed']) if state['guessed'] else '-'
     missed_words = ', '.join(state['missed_words']) if state['missed_words'] else '-'
     hint = state.get('hint') or '暂无'
+    answer = f'\n答案: `{word}`' if reveal else ''
     return (
         '**猜词**\n'
         f'提示: `{hint}`\n'
@@ -941,6 +942,7 @@ def _render_hangman(session, reveal=False):
         f'词语: `{visible}`\n'
         f'已猜字符: `{guessed}`\n'
         f'猜错词语: `{missed_words}`\n'
+        f'{answer}\n'
         '操作: `/游戏 猜 内容`（可填 1 个字或完整词）'
     )
 
@@ -1176,7 +1178,7 @@ def _render_blackjack(session):
         f'你: `{player_cards}` = **{_hand_value(state["player"])}**',
     ]
     if not finished:
-        lines.append('操作: `/游戏 要牌` 或 `/游戏 停牌`')
+        lines.append('操作: 点击下方按钮，或发送 `/游戏 要牌` / `/游戏 停牌`')
     return '\n'.join(lines)
 
 

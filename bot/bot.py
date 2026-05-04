@@ -36,6 +36,7 @@ app = create_app(start_background_tasks=False)
 bot = Bot(token=app.config.get('KOOK_TOKEN', ''))
 
 STORY_BUTTON_PREFIX = 'story_continue'
+BLACKJACK_BUTTON_PREFIX = 'blackjack_action'
 
 
 def _kook_user_tag(author):
@@ -319,6 +320,18 @@ def _parse_story_button_value(value):
     return {'owner_id': owner_id, 'choice': choice_index}
 
 
+def _parse_blackjack_button_value(value):
+    parts = str(value or '').split('|')
+    if len(parts) != 4 or parts[0] != BLACKJACK_BUTTON_PREFIX:
+        return None
+    owner_id = parts[1].strip()
+    channel_id = parts[2].strip()
+    action = parts[3].strip().lower()
+    if action not in {'hit', 'stand'}:
+        return None
+    return {'owner_id': owner_id, 'channel_id': channel_id, 'action': action}
+
+
 def _button_event_user_id(event: Event) -> str:
     body = getattr(event, 'body', {}) or {}
     return str(
@@ -346,6 +359,12 @@ def _button_event_channel_type(event: Event) -> str:
         or getattr(event, '_channel_type', '')
         or ''
     ).upper()
+
+
+def _minigame_event_channel_id(event: Event, fallback_channel_id: str = '') -> str:
+    if _button_event_channel_type(event) == 'PERSON':
+        return 'dm'
+    return str(fallback_channel_id or _button_event_target_id(event) or 'unknown')
 
 
 async def _send_story_event_message(
@@ -392,6 +411,46 @@ async def _send_story_event_message(
                 await target_user.send(text, type=MessageTypes.KMD)
     except Exception:
         logger.exception('剧情按钮事件回复失败')
+
+
+async def _send_minigame_event_result(
+    bot_obj: Bot,
+    event: Event,
+    result,
+    owner_id: str = '',
+    channel_id: str = '',
+    temp_target_id: str = '',
+):
+    message = (result or {}).get('message') or '小游戏暂无响应。'
+    card = None
+    if _is_active_blackjack_result(result):
+        card = _build_blackjack_action_card(message, owner_id, channel_id)
+    channel_type = _button_event_channel_type(event)
+    target_id = _button_event_target_id(event)
+    content_type = MessageTypes.CARD if card else MessageTypes.KMD
+    content = json.dumps(card, ensure_ascii=False) if card else message
+
+    try:
+        if channel_type == 'PERSON':
+            target_user = KhlUser(id=owner_id or temp_target_id or _button_event_user_id(event), _gate_=bot_obj.client.gate)
+            await target_user.send(content, type=content_type)
+            return
+
+        send_target_id = channel_id if channel_id and channel_id not in {'dm', 'unknown'} else target_id
+        if send_target_id:
+            channel = PublicTextChannel(id=send_target_id, _gate_=bot_obj.client.gate)
+            if temp_target_id:
+                await channel.send(content, type=content_type, temp_target_id=temp_target_id)
+            else:
+                await channel.send(content, type=content_type)
+            return
+
+        fallback_user_id = temp_target_id or owner_id or _button_event_user_id(event)
+        if fallback_user_id:
+            target_user = KhlUser(id=fallback_user_id, _gate_=bot_obj.client.gate)
+            await target_user.send(content, type=content_type)
+    except Exception:
+        logger.exception('小游戏按钮事件回复失败')
 
 
 async def _reply_withdraw_prompt(msg: Message, text: str):
@@ -1425,20 +1484,80 @@ def _minigame_user_id(msg: Message) -> str:
     return str(getattr(getattr(msg, 'author', None), 'id', '') or getattr(msg, 'author_id', '') or '')
 
 
+def _is_active_blackjack_result(result) -> bool:
+    message = str((result or {}).get('message') or '')
+    return (
+        bool(result and result.get('ok', True))
+        and not bool(result.get('ended'))
+        and '**21 点**' in message
+    )
+
+
+def _build_blackjack_action_card(text: str, owner_id: str, channel_id: str):
+    owner_id = str(owner_id or '').strip()
+    channel_id = str(channel_id or '').strip() or 'unknown'
+    if not owner_id:
+        return None
+    actions = [
+        ('要牌', 'hit', 'primary'),
+        ('停牌', 'stand', 'danger'),
+    ]
+    return [{
+        "type": "card",
+        "theme": "secondary",
+        "size": "lg",
+        "modules": [
+            {
+                "type": "section",
+                "text": {"type": "kmarkdown", "content": str(text or '')},
+            },
+            {
+                "type": "action-group",
+                "elements": [
+                    {
+                        "type": "button",
+                        "theme": theme,
+                        "value": f"{BLACKJACK_BUTTON_PREFIX}|{owner_id}|{channel_id}|{action}",
+                        "click": "return-val",
+                        "text": {"type": "plain-text", "content": label},
+                    }
+                    for label, action, theme in actions
+                ],
+            },
+        ],
+    }]
+
+
 async def _reply_minigame_result(msg: Message, result):
-    await msg.reply((result or {}).get('message') or '小游戏暂无响应。', type=MessageTypes.KMD)
+    message = (result or {}).get('message') or '小游戏暂无响应。'
+    if _is_active_blackjack_result(result):
+        card = _build_blackjack_action_card(message, _minigame_user_id(msg), _minigame_channel_id(msg))
+        if card:
+            try:
+                await msg.reply(json.dumps(card, ensure_ascii=False), type=MessageTypes.CARD)
+                await _persist_minigame_record(msg, result)
+                return
+            except Exception:
+                logger.exception('21 点按钮卡片发送失败，降级 KMD')
+    await msg.reply(message, type=MessageTypes.KMD)
     await _persist_minigame_record(msg, result)
 
 
 async def _persist_minigame_record(msg: Message, result):
-    record_payload = (result or {}).get('record')
+    await _persist_minigame_record_payload(
+        (result or {}).get('record'),
+        author=getattr(msg, 'author', None),
+    )
+
+
+async def _persist_minigame_record_payload(record_payload, author=None):
     if not record_payload:
         return
     try:
         with app.app_context():
             try:
-                if getattr(msg, 'author', None):
-                    get_or_create_user_by_kook(msg.author)
+                if author:
+                    get_or_create_user_by_kook(author)
             except Exception:
                 logger.exception('小游戏玩家账号自动识别失败')
                 db.session.rollback()
@@ -1837,7 +1956,7 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
 
 @bot.on_event(EventTypes.MESSAGE_BTN_CLICK)
 async def on_story_choice_button(bot_obj: Bot, event: Event):
-    """处理剧情卡片上的选项按钮。"""
+    """处理剧情和小游戏卡片按钮。"""
     try:
         body = getattr(event, 'body', {}) or {}
         value = (
@@ -1845,6 +1964,43 @@ async def on_story_choice_button(bot_obj: Bot, event: Event):
             or _nested_event_body_value(body, 'data', 'value')
             or _nested_event_body_value(body, 'extra', 'value')
         )
+        blackjack_action = _parse_blackjack_button_value(value)
+        if blackjack_action:
+            click_user_id = _button_event_user_id(event)
+            owner_id = blackjack_action['owner_id']
+            if owner_id and click_user_id and owner_id != click_user_id:
+                await _send_minigame_event_result(
+                    bot_obj,
+                    event,
+                    {'message': '这局 21 点属于另一位玩家，请使用 `/游戏 21点` 开始自己的牌局。'},
+                    owner_id=click_user_id,
+                    channel_id=_minigame_event_channel_id(event, blackjack_action.get('channel_id')),
+                    temp_target_id=click_user_id,
+                )
+                return
+
+            kook_id = click_user_id or owner_id
+            if not kook_id:
+                logger.warning('21 点按钮事件缺少用户 ID: %s', body)
+                return
+
+            channel_id = _minigame_event_channel_id(event, blackjack_action.get('channel_id'))
+            action = '要牌' if blackjack_action['action'] == 'hit' else '停牌'
+            with app.app_context():
+                from app.services import minigame_service
+
+                result = minigame_service.handle_blackjack_action(channel_id, kook_id, action)
+
+            await _send_minigame_event_result(
+                bot_obj,
+                event,
+                result,
+                owner_id=kook_id,
+                channel_id=channel_id,
+            )
+            await _persist_minigame_record_payload((result or {}).get('record'))
+            return
+
         parsed = _parse_story_button_value(value)
         if not parsed:
             return
@@ -1898,10 +2054,18 @@ async def on_story_choice_button(bot_obj: Bot, event: Event):
 
         await _send_story_event_message(bot_obj, event, result, owner_id=kook_id)
     except Exception as e:
-        logger.exception('剧情按钮事件处理失败')
+        logger.exception('按钮事件处理失败')
         with app.app_context():
             db.session.rollback()
-        await _send_story_event_message(bot_obj, event, f'剧情按钮处理失败: {e}')
+        click_user_id = _button_event_user_id(event)
+        await _send_minigame_event_result(
+            bot_obj,
+            event,
+            {'message': f'按钮处理失败: {e}'},
+            owner_id=click_user_id,
+            channel_id=_minigame_event_channel_id(event),
+            temp_target_id=click_user_id,
+        )
 
 
 @bot.on_message()

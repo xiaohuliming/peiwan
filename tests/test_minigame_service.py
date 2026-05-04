@@ -30,6 +30,17 @@ class MiniGameServiceTests(unittest.TestCase):
         self.assertEqual(win['record']['result'], 'win')
         self.assertNotIn(('chan-1', 'user-1'), minigame_service._sessions)
 
+    def test_hangman_loss_reveals_answer(self):
+        minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '猜词')
+
+        result = None
+        for guess in ('啊', '吧', '吃', '的', '饿', '发', '个', '哈'):
+            result = minigame_service.handle_guess('chan-1', 'user-1', guess)
+
+        self.assertTrue(result['ended'])
+        self.assertIn('次数用完，本局结束', result['message'])
+        self.assertIn('答案: `无畏契约`', result['message'])
+
     def test_scramble_correct_answer_ends_session(self):
         start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '乱序')
         self.assertTrue(start['ok'])
@@ -96,7 +107,9 @@ class MiniGameServiceTests(unittest.TestCase):
         start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '21点')
         self.assertTrue(start['ok'])
         self.assertIn('21 点', start['message'])
-        self.assertIn('操作: `/游戏 要牌` 或 `/游戏 停牌`', start['message'])
+        self.assertIn('点击下方按钮', start['message'])
+        self.assertIn('/游戏 要牌', start['message'])
+        self.assertIn('/游戏 停牌', start['message'])
 
         result = minigame_service.handle_blackjack_action('chan-1', 'user-1', '停牌')
         self.assertTrue(result['ended'])
