@@ -19,6 +19,7 @@ class MiniGameServiceTests(unittest.TestCase):
         self.assertIn('猜词', start['message'])
         self.assertIn('提示', start['message'])
         self.assertIn('字数: **4**', start['message'])
+        self.assertIn('操作: `/游戏 猜 内容`', start['message'])
 
         letter = minigame_service.handle_guess('chan-1', 'user-1', '无')
         self.assertTrue(letter['ok'])
@@ -34,6 +35,7 @@ class MiniGameServiceTests(unittest.TestCase):
         self.assertTrue(start['ok'])
         self.assertIn('提示', start['message'])
         self.assertIn('字数: **4**', start['message'])
+        self.assertIn('操作: `/游戏 猜 内容`', start['message'])
 
         wrong = minigame_service.handle_guess('chan-1', 'user-1', '老板')
         self.assertFalse(wrong['ended'])
@@ -81,7 +83,8 @@ class MiniGameServiceTests(unittest.TestCase):
         self.assertEqual(win['record']['result'], 'win')
 
     def test_mastermind_accepts_chinese_color_guess(self):
-        minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '密码')
+        start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '密码')
+        self.assertIn('操作: `/游戏 猜 内容`', start['message'])
         session = minigame_service._sessions[('chan-1', 'user-1')]
         session.state['code'] = ['red', 'blue', 'green', 'yellow']
 

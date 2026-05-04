@@ -931,7 +931,8 @@ def _render_hangman(session, reveal=False):
         f'剩余机会: **{state["lives"]}**\n'
         f'词语: `{visible}`\n'
         f'已猜字符: `{guessed}`\n'
-        f'猜错词语: `{missed_words}`'
+        f'猜错词语: `{missed_words}`\n'
+        '操作: `/游戏 猜 内容`（可填 1 个字或完整词）'
     )
 
 
@@ -977,7 +978,8 @@ def _render_scramble(session, reveal=False):
         f'字数: **{len(state["word"])}**\n'
         f'打乱文字: `{state["scrambled"]}`\n'
         f'剩余次数: **{state["attempts"]}**\n'
-        f'最近猜测: `{history}`'
+        f'最近猜测: `{history}`\n'
+        '操作: `/游戏 猜 内容`（填写完整词）'
         f'{answer}'
     )
 
@@ -1032,7 +1034,7 @@ def _guess_mastermind(session, guess_text):
 def _parse_color_guess(raw_text):
     text = str(raw_text or '').strip().lower()
     if not text:
-        return None, '请输入 4 个颜色，例如 `/猜 红 蓝 绿 黄`。'
+        return None, '请输入 4 个颜色，例如 `/游戏 猜 红 蓝 绿 黄`。'
 
     tokens = [item for item in re.split(r'[\s,，/、;；]+', text) if item]
     if len(tokens) == 1 and len(tokens[0]) == 4 and all(ch in COLOR_ALIASES for ch in tokens[0]):
@@ -1047,7 +1049,7 @@ def _parse_color_guess(raw_text):
         colors.append(color)
 
     if len(colors) != 4:
-        return None, '需要正好 4 个颜色，例如 `/猜 红 蓝 绿 黄`。'
+        return None, '需要正好 4 个颜色，例如 `/游戏 猜 红 蓝 绿 黄`。'
     if len(set(colors)) != 4:
         return None, '同一局里每次猜测不能重复颜色。'
     return colors, None
@@ -1057,6 +1059,7 @@ def _render_mastermind(session, reveal=False):
     state = session.state
     lines = ['**密码色**', f'剩余次数: **{state["attempts"]}**']
     lines.append('可用颜色: `红 蓝 绿 黄 紫 橙`')
+    lines.append('操作: `/游戏 猜 内容`（例如 `/游戏 猜 红 蓝 绿 黄`）')
     if state['history']:
         lines.append('最近猜测:')
         for index, item in enumerate(state['history'][-6:], start=max(1, len(state['history']) - 5)):
