@@ -1511,16 +1511,7 @@ async def _handle_connect4_command(msg: Message, action: str = '', *args: str):
     rest = ' '.join(args).strip()
 
     if action_key in ('', 'help', '帮助', '菜单'):
-        result = {
-            'message': (
-                '**四子棋**\n'
-                '`/游戏 四子棋 @玩家` 开局\n'
-                '`/游戏 落子 1-7` 轮流下棋\n'
-                '`/游戏 状态` 查看棋盘\n'
-                '`/游戏 退出` 结束本频道对局\n'
-                '`/游戏 排行 四子棋` 查看排行榜'
-            )
-        }
+        result = {'message': minigame_service.connect4_menu_text()}
     elif action_key in ('状态', 'status'):
         result = minigame_service.get_status(channel_id, kook_id)
     elif action_key in ('退出', '结束', 'quit', 'stop', 'cancel'):

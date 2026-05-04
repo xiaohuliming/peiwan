@@ -96,10 +96,23 @@ class MiniGameServiceTests(unittest.TestCase):
         start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '21点')
         self.assertTrue(start['ok'])
         self.assertIn('21 点', start['message'])
+        self.assertIn('操作: `/游戏 要牌` 或 `/游戏 停牌`', start['message'])
 
         result = minigame_service.handle_blackjack_action('chan-1', 'user-1', '停牌')
         self.assertTrue(result['ended'])
         self.assertNotIn(('chan-1', 'user-1'), minigame_service._sessions)
+
+    def test_main_menu_keeps_connect4_move_in_submenu(self):
+        menu = minigame_service.menu_text()
+        self.assertIn('/游戏 四子棋', menu)
+        self.assertNotIn('/游戏 落子 1-7', menu)
+        self.assertNotIn('/游戏 猜 内容', menu)
+        self.assertNotIn('/游戏 要牌', menu)
+        self.assertNotIn('/游戏 停牌', menu)
+
+        submenu = minigame_service.connect4_menu_text()
+        self.assertIn('/游戏 四子棋 @玩家', submenu)
+        self.assertIn('/游戏 落子 1-7', submenu)
 
     def test_requires_quit_before_starting_another_game(self):
         minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '猜词')
@@ -113,6 +126,7 @@ class MiniGameServiceTests(unittest.TestCase):
     def test_connect4_requires_two_players_and_turn_order(self):
         missing = minigame_service.start_connect4('chan-1', 'user-1', 'Tester#1', '', '')
         self.assertFalse(missing['ok'])
+        self.assertIn('/游戏 落子 1-7', missing['message'])
 
         start = minigame_service.start_connect4('chan-1', 'user-1', 'Tester#1', 'user-2', 'Other#2')
         self.assertTrue(start['ok'])

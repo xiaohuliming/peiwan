@@ -236,10 +236,7 @@ def menu_text():
         '`/游戏 乱序` - 根据打乱文字猜原词\n'
         '`/游戏 密码` - 颜色密码，例: `/游戏 猜 红 蓝 绿 黄`\n'
         '`/游戏 21点` - 和机器人庄家玩 21 点\n'
-        '`/游戏 猜 内容` - 提交猜词/乱序词/密码色答案\n'
-        '`/游戏 要牌`、`/游戏 停牌` - 21 点操作\n'
-        '`/游戏 四子棋 @玩家` - 双人四子棋开局\n'
-        '`/游戏 落子 1-7` - 四子棋落子\n'
+        '`/游戏 四子棋` - 双人四子棋\n'
         '`/游戏 排行 [游戏名]` - 查看排行榜，可填 四子棋/猜词/21点\n'
         '`/游戏 剧情` - 进入 AI 剧情互动游戏《灰区档案》\n'
         '---\n'
@@ -247,11 +244,23 @@ def menu_text():
     )
 
 
+def connect4_menu_text():
+    return (
+        '**四子棋**\n'
+        '---\n'
+        '`/游戏 四子棋 @玩家` - 开局\n'
+        '`/游戏 落子 1-7` - 轮流下棋\n'
+        '`/游戏 状态` - 查看棋盘\n'
+        '`/游戏 退出` - 结束本频道对局\n'
+        '`/游戏 排行 四子棋` - 查看四子棋排行榜'
+    )
+
+
 def start_game(channel_id, kook_id, player_name, game_key):
     _cleanup_expired_sessions()
     game = normalize_game_key(game_key) or game_key
     if game == 'connect4':
-        return _result('四子棋需要指定对手，例如 `/游戏 四子棋 @玩家`。', ok=False)
+        return _result(connect4_menu_text(), ok=False)
     if game not in {'hangman', 'scramble', 'mastermind', 'blackjack'}:
         return _result(menu_text(), ok=False)
 
@@ -336,7 +345,7 @@ def start_connect4(channel_id, starter_id, starter_name, opponent_id, opponent_n
     if not starter_id:
         return _result('未获取到发起人的 KOOK 身份。', ok=False)
     if not opponent_id:
-        return _result('请指定对手，例如 `/游戏 四子棋 @玩家`。', ok=False)
+        return _result(connect4_menu_text(), ok=False)
     if starter_id == opponent_id:
         return _result('四子棋需要两位不同玩家。', ok=False)
 
@@ -441,7 +450,7 @@ def handle_guess(channel_id, kook_id, guess_text):
     elif session.game == 'mastermind':
         result = _guess_mastermind(session, guess_text)
     else:
-        return _result('21 点不用 `/猜`，请使用 `/要牌` 或 `/停牌`。', ok=False)
+        return _result('21 点不用 `/游戏 猜`，请使用 `/游戏 要牌` 或 `/游戏 停牌`。', ok=False)
 
     if result.get('ended'):
         _sessions.pop(key, None)
@@ -462,7 +471,7 @@ def handle_blackjack_action(channel_id, kook_id, action):
     elif action_key in {'stand', 's', '停牌', '不要', '开牌'}:
         result = _blackjack_stand(session)
     else:
-        return _result('21 点操作只支持 `/要牌` 或 `/停牌`。', ok=False)
+        return _result('21 点操作只支持 `/游戏 要牌` 或 `/游戏 停牌`。', ok=False)
 
     if result.get('ended'):
         _sessions.pop(key, None)
@@ -1167,7 +1176,7 @@ def _render_blackjack(session):
         f'你: `{player_cards}` = **{_hand_value(state["player"])}**',
     ]
     if not finished:
-        lines.append('操作: `/要牌` 或 `/停牌`')
+        lines.append('操作: `/游戏 要牌` 或 `/游戏 停牌`')
     return '\n'.join(lines)
 
 
