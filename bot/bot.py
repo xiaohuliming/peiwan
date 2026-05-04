@@ -252,7 +252,7 @@ def _build_story_choice_card(text: str, choices=None, owner_id: str = ''):
         {
             "type": "context",
             "elements": [
-                {"type": "kmarkdown", "content": "点击选项可直接推进剧情；自由输入请使用 `/story continue 你的行动`。"}
+                {"type": "kmarkdown", "content": "点击选项可直接推进剧情；自由输入请使用 `/游戏 剧情 继续 你的行动`。"}
             ],
         },
     ]
@@ -1403,13 +1403,9 @@ def _build_help_text():
         "`/结单 订单号 时长` - 结单申报(仅支持整数或0.5小时)\n"
         "`/确认 订单号` - 确认订单(老板)\n"
         "`/roll 总点数 抽几个点` - 掷点/随机点数\n"
-        "`/游戏` - KOOK 小游戏厅（猜词/乱序词/密码色/21点/四子棋）\n"
-        "`/猜 内容` - 小游戏猜测输入；21点使用 `/要牌`、`/停牌`\n"
-        "`/四子棋 @玩家` - 双人四子棋；`/落子 1-7` 下棋\n"
-        "`/小游戏排行 [游戏名]` - 查看小游戏排行榜\n"
+        "`/游戏` - 打开游戏菜单（小游戏/四子棋/排行榜/灰区档案）\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
         "`/结束抽奖 [抽奖ID]` - 结束互动抽奖并立即开奖\n"
-        "`/story` - 进入 AI 剧情互动游戏《灰区档案》\n"
         "`/提现 [金额]` - 申请提现(无金额会弹网页入口；需微信+支付宝收款码)\n"
         "`/取消提现` - 取消待上传收款码的提现\n"
         "`/帮助` 或 `/help` - 查看此帮助\n"
@@ -1518,11 +1514,11 @@ async def _handle_connect4_command(msg: Message, action: str = '', *args: str):
         result = {
             'message': (
                 '**四子棋**\n'
-                '`/四子棋 @玩家` 开局\n'
-                '`/落子 1-7` 轮流下棋\n'
-                '`/四子棋 状态` 查看棋盘\n'
-                '`/四子棋 退出` 结束本频道对局\n'
-                '`/小游戏排行 四子棋` 查看排行榜'
+                '`/游戏 四子棋 @玩家` 开局\n'
+                '`/游戏 落子 1-7` 轮流下棋\n'
+                '`/游戏 状态` 查看棋盘\n'
+                '`/游戏 退出` 结束本频道对局\n'
+                '`/游戏 排行 四子棋` 查看排行榜'
             )
         }
     elif action_key in ('状态', 'status'):
@@ -1577,8 +1573,15 @@ async def minigame_cmd(msg: Message, action: str = '', *args: str):
         result = minigame_service.quit_game(channel_id, kook_id)
     elif action_key in ('状态', 'status'):
         result = minigame_service.get_status(channel_id, kook_id)
+    elif action_key in ('排行', '排行榜', 'rank', 'ranking'):
+        result = {'message': _minigame_leaderboard_message(rest)}
     elif action_key in ('猜', 'guess', 'g'):
         result = minigame_service.handle_guess(channel_id, kook_id, rest)
+    elif action_key in ('剧情', '故事', 'story', '灰区档案'):
+        story_action = args[0] if len(args) >= 1 else ''
+        story_args = args[1:] if len(args) >= 2 else ()
+        await story_cmd(msg, story_action, *story_args)
+        return
     elif action_key in ('四子棋', 'connect4', '连四'):
         result = minigame_service.start_connect4(
             channel_id=channel_id,
@@ -1653,12 +1656,6 @@ async def connect4_move_cmd(msg: Message, column: str = ''):
         return
     result = minigame_service.handle_connect4_move(_minigame_channel_id(msg), kook_id, column)
     await _reply_minigame_result(msg, result)
-
-
-@bot.command(name='小游戏排行')
-async def minigame_rank_cmd(msg: Message, game_key: str = ''):
-    """查看小游戏排行榜。"""
-    await msg.reply(_minigame_leaderboard_message(game_key), type=MessageTypes.KMD)
 
 
 @bot.command(name='猜')
@@ -1831,8 +1828,8 @@ async def story_cmd(msg: Message, action: str = '', *args: str):
             else:
                 reply_text = (
                     '未知剧情指令。\n'
-                    '`/story` 查看菜单；`/story continue 你的行动` 推进剧情；'
-                    '`/story profile` 查看档案。'
+                    '`/游戏 剧情` 查看菜单；`/游戏 剧情 继续 你的行动` 推进剧情；'
+                    '`/游戏 剧情 档案` 查看档案。'
                 )
         if reply_payload is not None:
             await _reply_story_result(msg, reply_payload, owner_id=kook_id)
@@ -1867,7 +1864,7 @@ async def on_story_choice_button(bot_obj: Bot, event: Event):
             await _send_story_event_message(
                 bot_obj,
                 event,
-                '这张剧情卡属于另一位玩家，请使用 `/story` 开始自己的剧情。',
+                '这张剧情卡属于另一位玩家，请使用 `/游戏 剧情` 开始自己的剧情。',
                 owner_id=click_user_id,
                 temp_target_id=click_user_id,
             )

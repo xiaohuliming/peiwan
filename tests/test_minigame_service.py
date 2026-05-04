@@ -6,7 +6,7 @@ from app.services import minigame_service
 class MiniGameServiceTests(unittest.TestCase):
     def setUp(self):
         self.original_words = minigame_service.WORDS
-        minigame_service.WORDS = ('陪玩店',)
+        minigame_service.WORDS = (('无畏契约', '战术射击游戏'),)
         minigame_service._sessions.clear()
 
     def tearDown(self):
@@ -17,12 +17,14 @@ class MiniGameServiceTests(unittest.TestCase):
         start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '猜词')
         self.assertTrue(start['ok'])
         self.assertIn('猜词', start['message'])
+        self.assertIn('提示', start['message'])
+        self.assertIn('字数: **4**', start['message'])
 
-        letter = minigame_service.handle_guess('chan-1', 'user-1', '陪')
+        letter = minigame_service.handle_guess('chan-1', 'user-1', '无')
         self.assertTrue(letter['ok'])
-        self.assertIn('陪 _ _', letter['message'])
+        self.assertIn('无 _ _ _', letter['message'])
 
-        win = minigame_service.handle_guess('chan-1', 'user-1', '陪玩店')
+        win = minigame_service.handle_guess('chan-1', 'user-1', '无畏契约')
         self.assertTrue(win['ended'])
         self.assertEqual(win['record']['result'], 'win')
         self.assertNotIn(('chan-1', 'user-1'), minigame_service._sessions)
@@ -30,15 +32,53 @@ class MiniGameServiceTests(unittest.TestCase):
     def test_scramble_correct_answer_ends_session(self):
         start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '乱序')
         self.assertTrue(start['ok'])
+        self.assertIn('提示', start['message'])
+        self.assertIn('字数: **4**', start['message'])
 
         wrong = minigame_service.handle_guess('chan-1', 'user-1', '老板')
         self.assertFalse(wrong['ended'])
         self.assertIn('没对', wrong['message'])
 
-        win = minigame_service.handle_guess('chan-1', 'user-1', '陪玩店')
+        win = minigame_service.handle_guess('chan-1', 'user-1', '无畏契约')
         self.assertTrue(win['ended'])
         self.assertIn('还原成功', win['message'])
         self.assertEqual(win['record']['game'], 'scramble')
+
+    def test_default_chinese_word_bank_has_hints_and_role_terms(self):
+        words = []
+        for item in self.original_words:
+            word, hint = minigame_service._word_entry(item)
+            words.append(word)
+            self.assertGreaterEqual(len(word), 1)
+            self.assertTrue(hint)
+        self.assertEqual(len(words), len(set(words)))
+        self.assertGreaterEqual(len(words), 120)
+        self.assertIn('三角洲行动', words)
+        self.assertIn('烽火地带', words)
+        self.assertIn('全面战场', words)
+        self.assertIn('红狼', words)
+        self.assertIn('蜂医', words)
+        self.assertIn('牧羊人', words)
+        self.assertIn('蝶', words)
+        self.assertIn('飞将', words)
+        self.assertIn('幻影', words)
+        self.assertIn('捷风', words)
+        self.assertIn('零', words)
+        self.assertNotIn('飞将狙击', words)
+        self.assertNotIn('幻影步枪', words)
+        self.assertNotIn('捷风突破', words)
+
+    def test_one_character_role_words_can_be_selected(self):
+        minigame_service.WORDS = (('蝶', '悄悄贴近后打关键一手的角色'),)
+        minigame_service._sessions.clear()
+
+        start = minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '猜词')
+        self.assertTrue(start['ok'])
+        self.assertIn('字数: **1**', start['message'])
+
+        win = minigame_service.handle_guess('chan-1', 'user-1', '蝶')
+        self.assertTrue(win['ended'])
+        self.assertEqual(win['record']['result'], 'win')
 
     def test_mastermind_accepts_chinese_color_guess(self):
         minigame_service.start_game('chan-1', 'user-1', 'Tester#1', '密码')

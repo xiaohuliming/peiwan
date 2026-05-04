@@ -1,7 +1,7 @@
 """
 KOOK AI 沉浸式剧情互动游戏服务。
 
-第一版聚焦 Bot 入口：/story start、/story continue、档案、记忆、私信。
+第一版聚焦 Bot 入口：/游戏 剧情 开始、/游戏 剧情 继续、档案、记忆、私信。
 """
 import json
 import os
@@ -349,14 +349,14 @@ def menu_text():
         "├─ 身份背景\n"
         f"{backgrounds}\n"
         "├─ 开始方式\n"
-        "│ `/story start 1 1` 进入源能行动部 + 失忆实验体\n"
-        "│ `/story continue 你的行动` 推进剧情\n"
-        "│ `/story profile` 查看档案\n"
-        "│ `/story archive` 查看记忆\n"
-        "│ `/story dm` 查看角色私信\n"
-        "│ `/story memory 关键词` 查看自己的长期记忆召回\n"
-        "│ `/story status` 查看 LLM 接入状态\n"
-        "╰─ 若要重开：`/story restart 1 1`"
+        "│ `/游戏 剧情 开始 1 1` 进入源能行动部 + 失忆实验体\n"
+        "│ `/游戏 剧情 继续 你的行动` 推进剧情\n"
+        "│ `/游戏 剧情 档案` 查看档案\n"
+        "│ `/游戏 剧情 记忆` 查看记忆\n"
+        "│ `/游戏 剧情 私信` 查看角色私信\n"
+        "│ `/游戏 剧情 长期记忆 关键词` 查看自己的长期记忆召回\n"
+        "│ `/游戏 剧情 状态` 查看 LLM 接入状态\n"
+        "╰─ 若要重开：`/游戏 剧情 重开 1 1`"
     )
 
 
@@ -658,8 +658,8 @@ def start_story(kook_id, kook_username='', user_id=None, world_arg='', backgroun
             'message': (
                 "你已经有一份正在运行的剧情档案。\n"
                 f"当前：{_world_name(existing.story_world)} / {_background_name(existing.background)} / Chapter {existing.chapter}\n"
-                "继续：`/story continue 你的行动`\n"
-                "重开：`/story restart 1 1`"
+                "继续：`/游戏 剧情 继续 你的行动`\n"
+                "重开：`/游戏 剧情 重开 1 1`"
             ),
         }
 
@@ -718,7 +718,7 @@ def _opening_text(state):
         "B. 你先告诉我这里是哪\n"
         "C. 我为什么要相信你\n"
         "D. 自由输入\n"
-        "╰─ 继续：`/story continue 你的回答或行动`"
+        "╰─ 继续：`/游戏 剧情 继续 你的回答或行动`"
     )
 
 
@@ -900,7 +900,7 @@ def continue_story(kook_id, user_id=None, user_input='', channel_id=None):
 def _story_llm_failure_message():
     return (
         "AI 剧情引擎没有成功返回内容，本次没有推进剧情。\n"
-        "请先确认 `/story status` 显示 API Key 已设置，并重启 KOOK Bot 后再试。"
+        "请先确认 `/游戏 剧情 状态` 显示 API Key 已设置，并重启 KOOK Bot 后再试。"
     )
 
 
@@ -981,7 +981,7 @@ def _story_graph_prepare_context(graph_state: StoryContinueGraphState):
     if not user_input:
         return _graph_failure(
             graph_state,
-            '请输入你的行动，例如：`/story continue 我举起手，说我不记得自己是谁`',
+            '请输入你的行动，例如：`/游戏 剧情 继续 我举起手，说我不记得自己是谁`',
             trace,
         )
 
@@ -1190,7 +1190,7 @@ def _format_story_response(visible_text, choices):
         lines.append("├─ 可选行动")
         for idx, choice in enumerate(choices, start=1):
             lines.append(f"{idx}. {choice}")
-    lines.append("╰─ 继续自由输入：`/story continue 你的行动`")
+    lines.append("╰─ 继续自由输入：`/游戏 剧情 继续 你的行动`")
     return '\n'.join(lines)
 
 
@@ -1489,7 +1489,7 @@ def memory_text(kook_id, query=''):
             "╭─ 灰区档案 / 长期记忆\n"
             + '\n'.join(memory_status_lines()) + "\n"
             "├─ 查询方式\n"
-            "│ `/story memory 捷风是否还记得我说过什么`\n"
+            "│ `/游戏 剧情 长期记忆 捷风是否还记得我说过什么`\n"
             "╰─ 只会查询你自己的剧情记忆"
         )
     memories = search_story_memories(kook_id, query, limit=_story_config_int('STORY_MEMORY_LIMIT', 8))
@@ -2205,7 +2205,7 @@ def _send_created_dms(rows):
             f"【灰区档案 / {row.character_name}】\n"
             f"{row.content}\n"
             "---\n"
-            f"回复：`/story reply {row.character_name} 你的回复`"
+            f"回复：`/游戏 剧情 回复 {row.character_name} 你的回复`"
         )
         try:
             send_direct_message(row.kook_id, text)
@@ -2255,7 +2255,7 @@ def profile_text(kook_id):
         f"{inventory_lines}\n"
         "├─ 已解锁记忆\n"
         f"{memory_lines}\n"
-        "╰─ 继续：`/story continue 你的行动`"
+        "╰─ 继续：`/游戏 剧情 继续 你的行动`"
     )
 
 
@@ -2275,7 +2275,7 @@ def archive_text(kook_id):
     for idx, memory in enumerate(memories, start=1):
         lines.append(f"├─ 档案 {idx:02d}：{memory.title}")
         lines.append(f"│ {memory.content}")
-    lines.append("╰─ 继续调查：`/story continue 你的行动`")
+    lines.append("╰─ 继续调查：`/游戏 剧情 继续 你的行动`")
     return '\n'.join(lines)
 
 
@@ -2295,7 +2295,7 @@ def dm_inbox_text(kook_id):
         lines.append(f"├─ {row.character_name} / {status}")
         lines.append(f"│ {row.content}")
         if row.reply_allowed and not row.replied_at:
-            lines.append(f"│ 回复：`/story reply {row.character_name} 你的回复`")
+            lines.append(f"│ 回复：`/游戏 剧情 回复 {row.character_name} 你的回复`")
     lines.append("╰─ 私信会根据剧情进度触发")
     return '\n'.join(lines)
 
@@ -2307,7 +2307,7 @@ def reply_dm(kook_id, user_id=None, character_arg='', reply_text='', channel_id=
     if not kook_id:
         return {'ok': False, 'message': '未获取到你的 KOOK 身份，请稍后重试。'}
     if not character_id:
-        return {'ok': False, 'message': '请指定要回复的角色，例如：`/story reply 捷风 你是在担心我吗`'}
+        return {'ok': False, 'message': '请指定要回复的角色，例如：`/游戏 剧情 回复 捷风 你是在担心我吗`'}
     if not reply_text:
         return {'ok': False, 'message': '请输入要回复的内容。'}
 
@@ -2332,7 +2332,7 @@ def reply_dm(kook_id, user_id=None, character_arg='', reply_text='', channel_id=
             'ok': False,
             'message': (
                 "AI 私信引擎没有成功返回内容，本次没有记录回复。\n"
-                "请先确认 `/story status` 显示 API Key 已设置，并重启 KOOK Bot 后再试。"
+                "请先确认 `/游戏 剧情 状态` 显示 API Key 已设置，并重启 KOOK Bot 后再试。"
             ),
             'llm_used': False,
         }
@@ -2381,7 +2381,7 @@ def reply_dm(kook_id, user_id=None, character_arg='', reply_text='', channel_id=
         'message': (
             f"╭─ 私信 / {_character_name(character_id)}\n"
             f"{visible_text}\n"
-            "╰─ 继续回复可直接使用同一命令，或回到主线：`/story continue 你的行动`"
+            "╰─ 继续回复可直接使用同一命令，或回到主线：`/游戏 剧情 继续 你的行动`"
         ),
         'llm_used': True,
     }

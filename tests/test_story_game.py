@@ -79,7 +79,7 @@ class StoryGameTests(unittest.TestCase):
         result = story_game_service.start_story('story-2', 'Story#2', None)
 
         self.assertFalse(result['ok'])
-        self.assertIn('/story start 1 1', result['message'])
+        self.assertIn('/游戏 剧情 开始 1 1', result['message'])
         self.assertEqual(StoryPlayerState.query.count(), 0)
 
     def test_start_creates_state_relations_and_initial_memory(self):

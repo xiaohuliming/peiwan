@@ -96,7 +96,7 @@ SITE_URL=https://www.ennb.xin
 
 ## AI 剧情长期记忆（mem0，可选）
 
-剧情 Bot 的 `/story continue` 已接入 LangGraph 编排层：`prepare_context -> call_llm -> validate_payload -> persist_turn -> dispatch_side_effects`。这条链路让上下文构建、LLM 生成、JSON 校验、数据库落库、私信与记忆写入各自成为清晰节点；如果 LLM 或校验失败，本轮不会写入剧情进度。
+剧情 Bot 的 `/游戏 剧情 继续` 已接入 LangGraph 编排层：`prepare_context -> call_llm -> validate_payload -> persist_turn -> dispatch_side_effects`。这条链路让上下文构建、LLM 生成、JSON 校验、数据库落库、私信与记忆写入各自成为清晰节点；如果 LLM 或校验失败，本轮不会写入剧情进度。
 
 剧情 Bot 已预留 mem0 适配层，默认关闭。开启后，每轮剧情会先按 KOOK 用户召回长期记忆，并在剧情成功生成后写入 mem0；记忆层失败不会阻断主线剧情。
 
@@ -145,7 +145,7 @@ docker compose -f docker-compose.mem0.yml up -d
 .venv/bin/python scripts/story_memory_check.py --smoke
 ```
 
-Bot 内可用 `/story status` 查看 Mem0 开关状态，也可以用 `/story memory 关键词` 查询当前 KOOK 用户自己的长期记忆召回结果。
+Bot 内可用 `/游戏 剧情 状态` 查看 Mem0 开关状态，也可以用 `/游戏 剧情 长期记忆 关键词` 查询当前 KOOK 用户自己的长期记忆召回结果。
 
 ## 数据库迁移
 
@@ -214,11 +214,7 @@ python bot/bot.py
 - `/提现 [金额]`：发起提现（金额可不填，支持引导到网页）
 - `/取消提现`：取消待上传收款码提现
 - `/roll 总点数 抽几个点`：随机掷点
-- `/游戏`：小游戏厅，支持猜词、乱序词、密码色、21 点、四子棋
-- `/猜 内容`：提交猜词/乱序词/密码色答案
-- `/要牌`、`/停牌`：21 点操作
-- `/四子棋 @玩家`、`/落子 1-7`：双人四子棋
-- `/小游戏排行 [游戏名]`：查看持久化小游戏排行榜，游戏名可填猜词、乱序词、密码色、21点、四子棋
+- `/游戏`：打开游戏菜单，包含猜词、乱序词、密码色、21 点、四子棋、排行榜与《灰区档案》
 - `/发布抽奖 中奖人数`：发起互动抽奖（30 分钟自动开奖）
 - `/结束抽奖`：提前结束互动抽奖
 

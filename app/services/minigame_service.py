@@ -9,29 +9,129 @@ import time
 SESSION_TTL_SECONDS = 30 * 60
 
 WORDS = (
-    '无畏契约',
-    '幻影',
-    '狂徒',
-    '捷风',
-    '贤者',
-    '猎枭',
-    '奇乐',
-    '幽影',
-    '烟位',
-    '闪光',
-    '转点',
-    '补枪',
-    '残局',
-    '守包',
-    '爆头',
-    '排位',
-    '上分',
-    '连胜',
-    '陪玩店',
-    '小猪粮',
-    '嗯呢币',
-    '老板',
-    '陪玩',
+    ('无畏契约', '战术射击游戏，也是店里常聊的项目'),
+    ('爆头击杀', '一枪命中头部完成击杀'),
+    ('残局处理', '人数劣势或时间紧张时的收尾能力'),
+    ('高光时刻', '一局里最秀、最值得剪出来的瞬间'),
+    ('经济管理', '买枪、存钱、起甲的资源安排'),
+    ('排位连胜', '上分路上最快乐的连续胜利'),
+    ('甜蜜双排', '两个人一起打排位'),
+    ('极速转点', '从一个包点快速换到另一个包点'),
+    ('封烟控图', '用烟雾技能争夺地图空间'),
+    ('战术暂停', '队伍停下来重新沟通打法'),
+    ('爆破模式', '进攻方下包、防守方拆包的核心玩法'),
+    ('竞技模式', '带段位和竞技分变化的排位玩法'),
+    ('普通模式', '没有排位压力的标准对局'),
+    ('极速模式', '节奏更快、回合更少的短局玩法'),
+    ('爆能快攻', '开局都有核心、节奏更快的娱乐模式'),
+    ('乱斗模式', '不靠技能，主要练枪和找手感'),
+    ('攻守交换', '半场结束后双方阵营互换'),
+    ('回合胜利', '一小局完成目标后拿到分数'),
+    ('下包', '进攻方把核心放到包点'),
+    ('拆包', '防守方解除已经安装的核心'),
+    ('保枪', '放弃当前回合，保住武器去下一局'),
+    ('eco', '团队为了下一回合主动省经济'),
+    ('强起', '经济不好但仍然强行购买装备'),
+    ('半甲短枪', '预算有限时的折中购买方案'),
+    ('全甲长枪', '经济充足时的完整购买配置'),
+    ('技能灵球', '地图上可争夺的大招充能资源'),
+    ('大招点数', '用于释放终极技能的资源'),
+    ('假打', '制造进攻假象后换到另一边'),
+    ('静步', '不发出脚步声慢慢靠近目标区'),
+    ('rush', '靠速度和技能迅速打进包点'),
+    ('交叉枪线', '两名队友从不同角度同时架住敌人'),
+    ('非常规位', '敌人不容易预瞄到的站位'),
+    ('单向烟雾', '自己能看见对手、对手难看见自己的烟'),
+    ('点位', '固定投掷或释放技能的位置'),
+    ('指挥', '负责做战术决策和临场调度的人'),
+    ('报点', '把敌人位置和信息及时告诉队友'),
+    ('一滴', '告诉队友敌人血量已经很低'),
+    ('预瞄', '提前把准星放在敌人可能出现的位置'),
+    ('peek', '短暂露身诱骗敌人开枪'),
+    ('旋转跳', '跳出去看信息再撤回掩体'),
+    ('补枪', '队友倒下后马上换掉对手'),
+    ('拉枪定位', '快速把准星拉到敌人身上'),
+    ('断后', '队伍推进时留人在后方抓时机'),
+    ('二楼架点', '从高处或二层位置控制区域'),
+    ('中路控制', '争夺地图中央带来的转点主动权'),
+    ('包点回防', '防守方重新夺回已经失守的包点'),
+    ('假拆骗枪', '点一下拆包来诱骗敌人露身'),
+    ('真拆到底', '顶住压力持续拆包不松手'),
+    ('队友发枪', '经济好的队友给别人购买武器'),
+    ('赛点压力', '再输一局就结束比赛的紧张局面'),
+    ('团队团灭', '全队合力消灭对方全部成员'),
+    ('五杀高光', '单人击杀五名敌人的名场面'),
+    ('莲华古城', '隐藏在密林深处的古城地图'),
+    ('裂变峡谷', '地图结构被割裂成多片区域'),
+    ('霓虹町', '充满都市霓虹感的地图名称'),
+    ('日落之城', '夕阳氛围很强的城市地图'),
+    ('森寒冬港', '寒冷港口风格的地图'),
+    ('深海明珠', '带有水下城市想象的地图'),
+    ('微风岛屿', '海岛和开阔长线较多的地图'),
+    ('亚海悬城', '高低差和悬空结构明显的地图'),
+    ('盐海矿镇', '矿镇主题的老牌地图'),
+    ('隐世修所', '有三包点结构的经典地图'),
+    ('幽邃地窟', '纵深感很强的地图名称'),
+    ('源工重镇', '工业风和核心设施感很强的地图'),
+    ('奥丁', '弹量充足、火力压制感很强的重武器'),
+    ('标配', '每局基础配置里常见的手枪'),
+    ('飞将', '适合远距离架点的狙击枪'),
+    ('蜂刺', '近中距离压制节奏很快的冲锋枪'),
+    ('鬼魅', '手枪局常见的稳定选择'),
+    ('骇灵', '适合跑打和近距离交火的冲锋枪'),
+    ('幻影', '稳定控枪和中距离交火常用步枪'),
+    ('狂怒', '射速很快、近距离凶猛的手枪'),
+    ('狂徒', '爆头收益很高的主战步枪'),
+    ('獠犬', '近距离压迫感很强的霰弹枪'),
+    ('莽侠', '火力持续输出的重型机枪'),
+    ('冥驹', '一枪威慑力极强的重狙'),
+    ('判官', '守近点时很容易打出惊喜的霰弹枪'),
+    ('戍卫', '单点精准、适合稳健架枪的步枪'),
+    ('雄鹿', '兼顾近战爆发和一定灵活性的霰弹枪'),
+    ('战神', '压制力和弹量都很强的机枪'),
+    ('正义', '伤害稳定、手枪局存在感高'),
+    ('追猎', '适合点射和补枪的手枪'),
+    ('近战', '跑图时常拿在手里的刀类武器'),
+    ('捷风', '高速进场吸引火力的突破特工'),
+    ('贤者', '能治疗和复活队友的辅助特工'),
+    ('猎枭', '用侦查技能获取敌方信息的特工'),
+    ('奇乐', '用设备守点和收集信息的特工'),
+    ('幽影', '用烟雾遮挡视野帮助进攻或防守'),
+    ('雷兹', '用爆炸物清点和压迫敌人的特工'),
+    ('蝰蛇', '用毒幕分割战场视野的特工'),
+    ('零', '用线和设备抓住敌人动向的哨位'),
+    ('霓虹', '靠高速移动撕开防线的特工'),
+    ('不死鸟', '用闪光和自保能力主动开打'),
+    ('芮娜', '依靠击杀后续航继续打架'),
+    ('尚勃勒', '用精准武器和陷阱控制长线'),
+    ('斯凯', '用闪光鸟配合队友进攻'),
+    ('铁臂', '用震荡和闪光帮助队友突破'),
+    ('三角洲行动', '今晚开黑常被点名的搜打撤项目'),
+    ('烽火地带', '进图先摸东西，活着出来才算赚'),
+    ('全面战场', '一边抢点一边被载具教育的大场面'),
+    ('黑鹰坠落', '合作战役里最有电影感的那条线'),
+    ('卡战备', '差一点门槛时临时往身上塞装备'),
+    ('零号大坝', '新手熟悉路线和撤离的常见地图'),
+    ('长弓溪谷', '跑图很远但总觉得下一个点有货'),
+    ('航天基地', '又肥又吵，大家都爱往里扎'),
+    ('巴克什', '城区楼多门多，搜着搜着就迷路'),
+    ('潮汐监狱', '看起来能发财，也可能把人关到急'),
+    ('红狼', '最爱第一个冲出去的突击干员'),
+    ('威龙', '进点前先把动静弄大的干员'),
+    ('疾风', '跑起来队友都快追不上的干员'),
+    ('蜂医', '残血队友最想喊他奶一口'),
+    ('牧羊人', '控场和反制很烦人的工程干员'),
+    ('乌鲁鲁', '喜欢用爆炸物把路打开的干员'),
+    ('比特', '看到设备就想黑一下的干员'),
+    ('深蓝', '单三最严厉的父亲'),
+    ('露娜', '一眼扫出信息的侦察干员'),
+    ('骇爪', '最会让对面电子设备难受的侦察'),
+    ('蛊', '毒雾和化学味都很浓的角色'),
+    ('无名', '不声不响摸过去的潜行干员'),
+    ('银翼', '从高处把战场信息带回来的角色'),
+    ('蝶', '救人可以腾出手架枪的角色'),
+    ('小猪粮兑换', '把小猪粮转换成嗯呢币'),
+    ('嗯呢币钱包', '店里的余额钱包'),
 )
 
 GAME_ALIASES = {
@@ -130,14 +230,18 @@ def normalize_game_key(raw_value):
 
 def menu_text():
     return (
-        '**KOOK 小游戏厅**\n'
+        '**KOOK 游戏菜单**\n'
         '---\n'
-        '`/游戏 猜词` - 猜中文词语，每次 `/猜 字` 或 `/猜 词语`\n'
-        '`/游戏 乱序` - 根据打乱文字猜原词，直接 `/猜 词语`\n'
-        '`/游戏 密码` - 颜色密码，例: `/猜 红 蓝 绿 黄`\n'
-        '`/游戏 21点` - 和机器人庄家玩 21 点，使用 `/要牌`、`/停牌`\n'
-        '`/四子棋 @玩家` - 双人四子棋，轮流 `/落子 1-7`\n'
-        '`/小游戏排行 [游戏名]` - 查看小游戏排行榜，可填 四子棋/猜词/21点\n'
+        '`/游戏 猜词` - 猜中文词语\n'
+        '`/游戏 乱序` - 根据打乱文字猜原词\n'
+        '`/游戏 密码` - 颜色密码，例: `/游戏 猜 红 蓝 绿 黄`\n'
+        '`/游戏 21点` - 和机器人庄家玩 21 点\n'
+        '`/游戏 猜 内容` - 提交猜词/乱序词/密码色答案\n'
+        '`/游戏 要牌`、`/游戏 停牌` - 21 点操作\n'
+        '`/游戏 四子棋 @玩家` - 双人四子棋开局\n'
+        '`/游戏 落子 1-7` - 四子棋落子\n'
+        '`/游戏 排行 [游戏名]` - 查看排行榜，可填 四子棋/猜词/21点\n'
+        '`/游戏 剧情` - 进入 AI 剧情互动游戏《灰区档案》\n'
         '---\n'
         '`/游戏 状态` 查看当前局，`/游戏 退出` 结束当前局。'
     )
@@ -147,7 +251,7 @@ def start_game(channel_id, kook_id, player_name, game_key):
     _cleanup_expired_sessions()
     game = normalize_game_key(game_key) or game_key
     if game == 'connect4':
-        return _result('四子棋需要指定对手，例如 `/四子棋 @玩家`。', ok=False)
+        return _result('四子棋需要指定对手，例如 `/游戏 四子棋 @玩家`。', ok=False)
     if game not in {'hangman', 'scramble', 'mastermind', 'blackjack'}:
         return _result(menu_text(), ok=False)
 
@@ -232,13 +336,13 @@ def start_connect4(channel_id, starter_id, starter_name, opponent_id, opponent_n
     if not starter_id:
         return _result('未获取到发起人的 KOOK 身份。', ok=False)
     if not opponent_id:
-        return _result('请指定对手，例如 `/四子棋 @玩家`。', ok=False)
+        return _result('请指定对手，例如 `/游戏 四子棋 @玩家`。', ok=False)
     if starter_id == opponent_id:
         return _result('四子棋需要两位不同玩家。', ok=False)
 
     key = _connect4_key(channel_id)
     if _sessions.get(key):
-        return _result('当前频道已经有一局四子棋正在进行，先 `/四子棋 状态` 看看局面。', ok=False)
+        return _result('当前频道已经有一局四子棋正在进行，先 `/游戏 状态` 看看局面。', ok=False)
     for player_id in (starter_id, opponent_id):
         if _sessions.get(_session_key(channel_id, player_id)):
             return _result(f'{_player_text(player_id)} 当前有单人小游戏正在进行，请先 `/游戏 退出`。', ok=False)
@@ -269,7 +373,7 @@ def handle_connect4_move(channel_id, kook_id, column_text):
     _cleanup_expired_sessions()
     session = _find_connect4_session(channel_id, kook_id)
     if not session:
-        return _result('你当前不在本频道的四子棋对局中。先 `/四子棋 @玩家` 开一局。', ok=False)
+        return _result('你当前不在本频道的四子棋对局中。先 `/游戏 四子棋 @玩家` 开一局。', ok=False)
 
     session.touch()
     player_index = _connect4_player_index(session, kook_id)
@@ -279,7 +383,7 @@ def handle_connect4_move(channel_id, kook_id, column_text):
     try:
         column = int(str(column_text or '').strip()) - 1
     except Exception:
-        return _result('请输入列号 1-7，例如 `/落子 4`。', ok=False)
+        return _result('请输入列号 1-7，例如 `/游戏 落子 4`。', ok=False)
 
     if column < 0 or column > 6:
         return _result('列号必须是 1-7。', ok=False)
@@ -729,12 +833,32 @@ def _render_connect4(session):
         lines.append('结果: 平局')
     else:
         lines.append(f'当前回合: {_connect4_current_player_text(session)}')
-        lines.append('操作: `/落子 1-7`，退出: `/四子棋 退出`')
+        lines.append('操作: `/游戏 落子 1-7`，退出: `/游戏 退出`')
     return '\n'.join(lines)
 
 
-def _choose_word():
-    return random.choice(WORDS).lower()
+def _choose_word(min_length=1):
+    entries = [_word_entry(item) for item in WORDS]
+    entries = [entry for entry in entries if entry[0]]
+    candidates = [entry for entry in entries if len(entry[0]) >= int(min_length or 1)]
+    if not candidates:
+        candidates = entries
+    if not candidates:
+        return '无畏契约', '默认题库'
+    return random.choice(candidates)
+
+
+def _word_entry(item):
+    if isinstance(item, dict):
+        word = item.get('word') or item.get('text') or ''
+        hint = item.get('hint') or item.get('tip') or ''
+    elif isinstance(item, (list, tuple)):
+        word = item[0] if len(item) >= 1 else ''
+        hint = item[1] if len(item) >= 2 else ''
+    else:
+        word = item
+        hint = ''
+    return _normalize_word(word), str(hint or '').strip()
 
 
 def _normalize_word(text):
@@ -742,9 +866,10 @@ def _normalize_word(text):
 
 
 def _start_hangman(session):
-    word = _choose_word()
+    word, hint = _choose_word(min_length=1)
     session.state = {
         'word': word,
+        'hint': hint,
         'revealed': ['_' for _ in word],
         'lives': 8,
         'guessed': [],
@@ -758,7 +883,7 @@ def _guess_hangman(session, guess_text):
     state = session.state
     word = state['word']
     if not guess:
-        return _result('请输入要猜的字或完整词语，例如 `/猜 陪`。', ok=False)
+        return _result('请输入要猜的字或完整词语，例如 `/游戏 猜 契`。', ok=False)
     if len(guess) > 1 and len(guess) != len(word):
         return _result('猜完整词语时长度要和答案一致；否则请只猜一个字。', ok=False)
 
@@ -798,8 +923,11 @@ def _render_hangman(session, reveal=False):
     visible = ' '.join(list(word) if reveal else state['revealed'])
     guessed = ', '.join(state['guessed']) if state['guessed'] else '-'
     missed_words = ', '.join(state['missed_words']) if state['missed_words'] else '-'
+    hint = state.get('hint') or '暂无'
     return (
         '**猜词**\n'
+        f'提示: `{hint}`\n'
+        f'字数: **{len(word)}**\n'
         f'剩余机会: **{state["lives"]}**\n'
         f'词语: `{visible}`\n'
         f'已猜字符: `{guessed}`\n'
@@ -808,15 +936,11 @@ def _render_hangman(session, reveal=False):
 
 
 def _start_scramble(session):
-    word = _choose_word()
-    chars = list(word)
-    for _ in range(12):
-        random.shuffle(chars)
-        if ''.join(chars) != word:
-            break
+    word, hint = _choose_word(min_length=2)
     session.state = {
         'word': word,
-        'scrambled': ''.join(chars),
+        'hint': hint,
+        'scrambled': _scramble_word(word),
         'attempts': 6,
         'history': [],
         'moves': 0,
@@ -827,7 +951,7 @@ def _guess_scramble(session, guess_text):
     guess = _normalize_word(guess_text)
     state = session.state
     if not guess:
-        return _result('请输入你还原出的词语，例如 `/猜 陪玩店`。', ok=False)
+        return _result('请输入你还原出的词语，例如 `/游戏 猜 无畏契约`。', ok=False)
 
     state['history'].append(guess)
     state['moves'] = int(state.get('moves') or 0) + 1
@@ -846,13 +970,30 @@ def _render_scramble(session, reveal=False):
     state = session.state
     history = ', '.join(state['history'][-5:]) if state['history'] else '-'
     answer = f'\n答案: `{state["word"]}`' if reveal else ''
+    hint = state.get('hint') or '暂无'
     return (
         '**乱序词**\n'
+        f'提示: `{hint}`\n'
+        f'字数: **{len(state["word"])}**\n'
         f'打乱文字: `{state["scrambled"]}`\n'
         f'剩余次数: **{state["attempts"]}**\n'
         f'最近猜测: `{history}`'
         f'{answer}'
     )
+
+
+def _scramble_word(word):
+    chars = list(str(word or ''))
+    if len(chars) <= 1:
+        return ''.join(chars)
+    best = ''.join(reversed(chars))
+    for _ in range(30):
+        candidate_chars = chars[:]
+        random.shuffle(candidate_chars)
+        candidate = ''.join(candidate_chars)
+        if candidate != word:
+            return candidate
+    return best if best != word else ''.join(chars)
 
 
 def _start_mastermind(session):
