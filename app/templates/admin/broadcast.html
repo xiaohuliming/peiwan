@@ -119,7 +119,7 @@
           </tr>
         </thead>
         <tbody>
-          {% set dm_types = ['boss_recharge', 'boss_consume', 'order_refund_boss', 'order_refund_player', 'order_dispatch', 'boss_order_dispatch', 'order_report', 'order_confirm', 'order_settle', 'escort_dispatch', 'gift_receive', 'withdraw_submit', 'withdraw_approved', 'withdraw_rejected', 'birthday_dm'] %}
+          {% set dm_types = ['boss_recharge', 'boss_consume', 'order_refund_boss', 'order_refund_player', 'order_dispatch', 'boss_order_dispatch', 'order_report', 'order_confirm', 'order_settle', 'gift_unfreeze', 'escort_dispatch', 'gift_receive', 'withdraw_submit', 'withdraw_approved', 'withdraw_rejected', 'birthday_dm'] %}
           {% set has_dm = [] %}
           {% for c in configs if c.broadcast_type in dm_types %}
             {% set _ = has_dm.append(1) %}

@@ -53,6 +53,7 @@ def create_app(config_class=Config, start_background_tasks=True):
     login_manager.init_app(app)
     _ensure_gift_schema_compat(app)
     _ensure_broadcast_schema_compat(app)
+    _ensure_unfreeze_broadcast_seeds(app)
 
     # 确保 app_configs 表存在
     with app.app_context():
@@ -207,6 +208,19 @@ def create_app(config_class=Config, start_background_tasks=True):
     _NOTIF_TTL = 30  # 缓存30秒
 
     @app.context_processor
+    def inject_today_holiday():
+        # 仅在已登录页面注入，避免登录页弹特效；模板中再用 current_user.is_authenticated 兜底。
+        try:
+            if not current_user.is_authenticated:
+                return {'today_holiday': None}
+            from app.services.holiday_service import get_today_holiday
+            holiday = get_today_holiday()
+            return {'today_holiday': holiday or None}
+        except Exception as e:
+            app.logger.warning(f'[Holiday] 节日判定失败: {e}')
+            return {'today_holiday': None}
+
+    @app.context_processor
     def inject_top_notifications():
         if not current_user.is_authenticated:
             return {'top_notifications': {'total': 0, 'items': []}}
@@ -315,6 +329,40 @@ def _ensure_broadcast_schema_compat(app):
         except Exception as e:
             db.session.rollback()
             app.logger.warning(f'[Schema] broadcast_configs 兼容字段补齐失败: {e}')
+
+
+def _ensure_unfreeze_broadcast_seeds(app):
+    """为解冻类私信通知预置可编辑配置行。
+
+    仅当 broadcast_configs 表里完全没有这两类记录时才插入；插入的行 template 为空字符串，
+    push 函数读到空模板会回退到 BROADCAST_TYPES 里的 default_template，行为不变。
+    管理员可在后台直接看到行并编辑文案。
+    """
+    with app.app_context():
+        try:
+            inspector = inspect(db.engine)
+            if 'broadcast_configs' not in set(inspector.get_table_names()):
+                return
+
+            from app.models.broadcast import BroadcastConfig
+            from decimal import Decimal
+
+            for bcast_type in ('order_settle', 'gift_unfreeze'):
+                exists = BroadcastConfig.query.filter_by(broadcast_type=bcast_type).first()
+                if exists:
+                    continue
+                row = BroadcastConfig(
+                    broadcast_type=bcast_type,
+                    threshold=Decimal('0'),
+                    template='',
+                    status=True,
+                )
+                db.session.add(row)
+                app.logger.info(f'[Schema] 预置广播配置: {bcast_type}')
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning(f'[Schema] 解冻广播配置预置失败: {e}')
 
 
 def _start_kook_bot(app):

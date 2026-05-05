@@ -253,7 +253,7 @@
   <div class="glass-card p-6">
     <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
       <i data-lucide="history" width="18" height="18" class="text-blue-500"></i>
-      最近对局 ({{ recent_rows|length }} 条{% if game_filter %} · 仅 {{ game_filter | replace('hangman','猜词') | replace('scramble','乱序词') | replace('mastermind','密码色') | replace('blackjack','21 点') | replace('connect4','四子棋') }}{% endif %})
+      最近对局 ({{ recent_rows|length }} 条{% if game_filter %} · 仅 {{ game_filter | replace('hangman','猜词') | replace('scramble','乱序词') | replace('mastermind','密码色') | replace('blackjack','21 点') | replace('connect4','四子棋') | replace('bomb','数字炸弹') }}{% endif %})
     </h3>
     {% if recent_rows %}
     <div class="overflow-x-auto">

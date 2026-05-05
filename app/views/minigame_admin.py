@@ -19,7 +19,7 @@ from app.utils.permissions import admin_required
 minigame_admin_bp = Blueprint('minigame_admin', __name__, template_folder='../templates')
 
 
-GAME_KEYS = ['hangman', 'scramble', 'mastermind', 'blackjack', 'connect4']
+GAME_KEYS = ['hangman', 'scramble', 'mastermind', 'blackjack', 'connect4', 'bomb']
 GAME_OPTIONS = [(k, game_label(k)) for k in GAME_KEYS]
 RESULT_LABELS = {
     'win': '胜',

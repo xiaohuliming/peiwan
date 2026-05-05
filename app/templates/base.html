@@ -11,7 +11,11 @@
   
   <!-- Tailwind CSS (pre-compiled) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
-  
+
+  {% if today_holiday and current_user.is_authenticated %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/holiday.css') }}">
+  {% endif %}
+
   <!-- Lucide Icons -->
   <script src="{{ url_for('static', filename='js/lucide.min.js') }}"></script>
 
@@ -1601,5 +1605,10 @@
     })();
   </script>
   {% block scripts %}{% endblock %}
+
+  {% if today_holiday and current_user.is_authenticated %}
+  <script>window.__HOLIDAY__ = {{ today_holiday|tojson }};</script>
+  <script src="{{ url_for('static', filename='js/holiday.js') }}" defer></script>
+  {% endif %}
 </body>
 </html>

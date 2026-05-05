@@ -737,6 +737,11 @@ def unfreeze_order(order):
             award_player_earning(player, earning, order)
             log_operation(_get_operator_id(), 'order_unfreeze', 'order', order.id,
                           f'解冻订单 {order.order_no}, 佣金 {earning} 已发放')
+            try:
+                from app.services.kook_service import push_order_settle
+                push_order_settle(order)
+            except Exception:
+                pass
         else:
             log_operation(_get_operator_id(), 'order_unfreeze', 'order', order.id,
                           f'解冻订单 {order.order_no}, 佣金已发放(跳过重复发放)')

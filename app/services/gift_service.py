@@ -181,6 +181,7 @@ def unfreeze_gift_order(gift_order, operator_id=None):
     is_crown = bool(gift_order.gift and gift_order.gift.gift_type == 'crown')
 
     # 只有冠名礼物的收益最初在冻结态；标准礼物即使被人工标记冻结，也不能重复到账。
+    notify = False
     if is_crown and earning > 0:
         adjust_legacy_frozen_cache(player, -earning)
         player.m_bean = _quantize_money(player.m_bean) + earning
@@ -192,9 +193,17 @@ def unfreeze_gift_order(gift_order, operator_id=None):
             reason=f'礼物订单 #{gift_order.id} 解冻到账'
         )
         db.session.add(commission_log)
+        notify = True
 
     if operator_id:
         log_operation(operator_id, 'gift_unfreeze', 'gift_order', gift_order.id, '解冻礼物订单')
+
+    if notify:
+        try:
+            from app.services.kook_service import push_gift_unfreeze
+            push_gift_unfreeze(gift_order)
+        except Exception:
+            pass
     return True, None
 
 

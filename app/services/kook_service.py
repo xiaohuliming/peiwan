@@ -1007,22 +1007,42 @@ BROADCAST_TYPES = {
         'hint': '老板确认/24h自动确认后私信陪玩',
     },
     'order_settle': {
-        'label': '结算通知 → 陪玩',
+        'label': '订单解冻通知 → 陪玩',
         'group': '私信通知',
         'target': 'dm',
         'color': '#10B981',
-        'title': '订单已结算',
+        'title': '订单已解冻',
         'variables': {
             '{order_no}': '订单号',
             '{earning}': '到手收益',
             '{balance}': '当前小猪粮余额',
         },
         'default_template': (
-            '**护航/代练订单已结算，佣金已解冻到账!**\n---\n'
+            '**订单已解冻，佣金已到账!**\n---\n'
             '订单号: `{order_no}`\n到手收益: `{earning}` 小猪粮\n'
             '当前可用小猪粮: `{balance}` 小猪粮'
         ),
-        'hint': '护航/代练结算后私信陪玩',
+        'hint': '订单解冻、佣金发放到账后私信陪玩',
+    },
+    'gift_unfreeze': {
+        'label': '礼物解冻通知 → 陪玩',
+        'group': '私信通知',
+        'target': 'dm',
+        'color': '#10B981',
+        'title': '礼物订单已解冻',
+        'variables': {
+            '{gift_name}': '礼物名称',
+            '{quantity}': '数量',
+            '{earning}': '到手收益',
+            '{balance}': '当前小猪粮余额',
+        },
+        'default_template': (
+            '**礼物订单已解冻，佣金已到账!**\n---\n'
+            '礼物: `{gift_name}` x`{quantity}`\n'
+            '到手收益: `{earning}` 小猪粮\n'
+            '当前可用小猪粮: `{balance}` 小猪粮'
+        ),
+        'hint': '冠名礼物解冻到账后私信陪玩',
     },
     'escort_dispatch': {
         'label': '护航/代练通知 → 陪玩',
@@ -1447,7 +1467,7 @@ def push_order_confirm(order):
 
 
 def push_order_settle(order):
-    """护航/代练结算通知 → 私信陪玩"""
+    """订单解冻、佣金发放到账后私信陪玩。"""
     player = order.player
     if not player.kook_id or not player.kook_bound:
         return
@@ -1460,6 +1480,27 @@ def push_order_settle(order):
 
     meta = BROADCAST_TYPES['order_settle']
     content = _render_tpl(_get_custom_template('order_settle') or meta['default_template'], variables)
+
+    card = _build_card(meta['title'], content, meta['color'])
+    _async_send(_send_direct_msg, player.kook_id, card)
+
+
+def push_gift_unfreeze(gift_order):
+    """冠名礼物解冻到账后私信陪玩。"""
+    player = gift_order.player
+    if not player or not player.kook_id or not player.kook_bound:
+        return
+
+    gift_name = gift_order.gift.name if gift_order.gift else '礼物'
+    variables = {
+        'gift_name': gift_name,
+        'quantity': str(gift_order.quantity or 1),
+        'earning': str(gift_order.player_earning or 0),
+        'balance': str(player.m_bean),
+    }
+
+    meta = BROADCAST_TYPES['gift_unfreeze']
+    content = _render_tpl(_get_custom_template('gift_unfreeze') or meta['default_template'], variables)
 
     card = _build_card(meta['title'], content, meta['color'])
     _async_send(_send_direct_msg, player.kook_id, card)

@@ -1465,7 +1465,7 @@ def _build_help_text():
         "`/结单 订单号 时长` - 结单申报(仅支持整数或0.5小时)\n"
         "`/确认 订单号` - 确认订单(老板)\n"
         "`/roll 总点数 抽几个点` - 掷点/随机点数\n"
-        "`/游戏` - 打开游戏菜单（小游戏/四子棋/排行榜/灰区档案）\n"
+        "`/游戏` - 游戏厅菜单（猜词/炸弹/21点/四子棋/卧底/灰区档案）\n"
         "`/发布抽奖 中奖人数` - 全员可用，发起互动抽奖(30分钟自动开奖)\n"
         "`/结束抽奖 [抽奖ID]` - 结束互动抽奖并立即开奖\n"
         "`/提现 [金额]` - 申请提现(无金额会弹网页入口；需微信+支付宝收款码)\n"
@@ -1561,11 +1561,30 @@ async def _reply_minigame_result(msg: Message, result):
             try:
                 await msg.reply(json.dumps(card, ensure_ascii=False), type=MessageTypes.CARD)
                 await _persist_minigame_record(msg, result)
+                await _dispatch_minigame_side_effects((result or {}).get('side_effects'))
                 return
             except Exception:
                 logger.exception('21 点按钮卡片发送失败，降级 KMD')
     await msg.reply(message, type=MessageTypes.KMD)
     await _persist_minigame_record(msg, result)
+    await _dispatch_minigame_side_effects((result or {}).get('side_effects'))
+
+
+async def _dispatch_minigame_side_effects(side_effects):
+    """处理小游戏返回的副作用（目前只有 DM 私信派发，谁是卧底用）。"""
+    if not side_effects:
+        return
+    dm_list = side_effects.get('dm') or []
+    for dm in dm_list:
+        kook_id = str(dm.get('kook_id') or '').strip()
+        text = dm.get('text') or ''
+        if not kook_id or not text:
+            continue
+        try:
+            target = KhlUser(id=kook_id, _gate_=bot.client.gate)
+            await target.send(text, type=MessageTypes.KMD)
+        except Exception:
+            logger.exception('小游戏 DM 发送失败 kook_id=%s', kook_id)
 
 
 async def _persist_minigame_record(msg: Message, result):
@@ -1717,6 +1736,28 @@ async def minigame_cmd(msg: Message, action: str = '', *args: str):
         story_args = args[1:] if len(args) >= 2 else ()
         await story_cmd(msg, story_action, *story_args)
         return
+    elif action_key in ('炸弹', 'bomb', '数字炸弹'):
+        sub_parts = rest.split(maxsplit=1)
+        sub_action = sub_parts[0] if sub_parts else ''
+        sub_rest = sub_parts[1] if len(sub_parts) > 1 else ''
+        result = minigame_service.handle_bomb_command(
+            channel_id,
+            kook_id,
+            _kook_user_tag(getattr(msg, 'author', None)),
+            sub_action,
+            sub_rest,
+        )
+    elif action_key in ('卧底', 'undercover', '谁是卧底'):
+        sub_parts = rest.split(maxsplit=1)
+        sub_action = sub_parts[0] if sub_parts else ''
+        sub_rest = sub_parts[1] if len(sub_parts) > 1 else ''
+        result = minigame_service.handle_undercover_command(
+            channel_id,
+            kook_id,
+            _kook_user_tag(getattr(msg, 'author', None)),
+            sub_action,
+            sub_rest,
+        )
     elif action_key in ('四子棋', 'connect4', '连四'):
         result = minigame_service.start_connect4(
             channel_id=channel_id,
@@ -1766,6 +1807,46 @@ async def mastermind_game_cmd(msg: Message):
 async def blackjack_game_cmd(msg: Message):
     """快速开始 21 点。"""
     await _start_minigame(msg, '21点')
+
+
+@bot.command(name='炸弹')
+async def bomb_game_cmd(msg: Message, action: str = '', *args: str):
+    """数字炸弹（单人/多人）。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    rest = ' '.join(args).strip()
+    result = minigame_service.handle_bomb_command(
+        _minigame_channel_id(msg),
+        kook_id,
+        _kook_user_tag(getattr(msg, 'author', None)),
+        action,
+        rest,
+    )
+    await _reply_minigame_result(msg, result)
+
+
+@bot.command(name='卧底')
+async def undercover_game_cmd(msg: Message, action: str = '', *args: str):
+    """谁是卧底。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    rest = ' '.join(args).strip()
+    result = minigame_service.handle_undercover_command(
+        _minigame_channel_id(msg),
+        kook_id,
+        _kook_user_tag(getattr(msg, 'author', None)),
+        action,
+        rest,
+    )
+    await _reply_minigame_result(msg, result)
 
 
 @bot.command(name='四子棋')

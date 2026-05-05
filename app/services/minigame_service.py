@@ -1,6 +1,8 @@
 """KOOK 中文文本小游戏。"""
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import json
+import os
 import random
 import re
 import time
@@ -150,6 +152,12 @@ GAME_ALIASES = {
     'connect4': 'connect4',
     '四子棋': 'connect4',
     '连四': 'connect4',
+    'bomb': 'bomb',
+    '炸弹': 'bomb',
+    '数字炸弹': 'bomb',
+    'undercover': 'undercover',
+    '卧底': 'undercover',
+    '谁是卧底': 'undercover',
 }
 
 COLOR_LABELS = {
@@ -276,7 +284,10 @@ def menu_text():
         '`/游戏 密码` - 颜色密码，例: `/游戏 猜 红 蓝 绿 黄`\n'
         '`/游戏 21点` - 和机器人庄家玩 21 点(带排位分,需绑账号)\n'
         '`/游戏 四子棋` - 双人四子棋\n'
-        '`/游戏 排行 [游戏名]` - 查看排行榜,可填 四子棋/猜词/21点\n'
+        '`/游戏 炸弹` - 数字炸弹 1-100（单人速通）\n'
+        '`/游戏 炸弹 多人` - 多人接力炸弹（踩到的输）\n'
+        '`/游戏 卧底` - 谁是卧底（4-8 人，AI 出题）\n'
+        '`/游戏 排行 [游戏名]` - 查看排行榜,可填 四子棋/猜词/21点/炸弹\n'
         '`/游戏 剧情` - 进入 AI 剧情互动游戏《灰区档案》\n'
         '---\n'
         '`/游戏 状态` 查看当前局，`/游戏 退出` 结束当前局。'
@@ -300,7 +311,9 @@ def start_game(channel_id, kook_id, player_name, game_key):
     game = normalize_game_key(game_key) or game_key
     if game == 'connect4':
         return _result(connect4_menu_text(), ok=False)
-    if game not in {'hangman', 'scramble', 'mastermind', 'blackjack'}:
+    if game == 'undercover':
+        return _result(undercover_menu_text(), ok=False)
+    if game not in {'hangman', 'scramble', 'mastermind', 'blackjack', 'bomb'}:
         return _result(menu_text(), ok=False)
 
     key = _session_key(channel_id, kook_id)
@@ -318,6 +331,18 @@ def start_game(channel_id, kook_id, player_name, game_key):
             f'轮到谁: {_connect4_current_player_text(connect4_session)}',
             ok=False,
         )
+    bomb_multi = _sessions.get(_bomb_multi_key(channel_id))
+    if bomb_multi and _bomb_multi_has_player(bomb_multi, kook_id):
+        return _result(
+            '你已经在本频道的多人数字炸弹局中。先 `/游戏 状态` 查看，或 `/游戏 退出` 结束。',
+            ok=False,
+        )
+    undercover_session = _sessions.get(_undercover_key(channel_id))
+    if undercover_session and _undercover_has_player(undercover_session, kook_id):
+        return _result(
+            '你已经在本频道的谁是卧底中。先 `/游戏 卧底 状态` 查看，或 `/游戏 卧底 退出`。',
+            ok=False,
+        )
 
     session = MiniGameSession(
         game=game,
@@ -333,6 +358,8 @@ def start_game(channel_id, kook_id, player_name, game_key):
         _start_mastermind(session)
     elif game == 'blackjack':
         _start_blackjack(session)
+    elif game == 'bomb':
+        _start_bomb_solo(session)
     _sessions[key] = session
     return _result(f'已开启 **{_game_label(game)}**。\n\n{_render_session(session)}')
 
@@ -345,6 +372,14 @@ def get_status(channel_id, kook_id):
         if connect4_session:
             connect4_session.touch()
             return _result(_render_connect4(connect4_session))
+        bomb_multi = _sessions.get(_bomb_multi_key(channel_id))
+        if bomb_multi:
+            bomb_multi.touch()
+            return _result(_render_bomb_multi(bomb_multi))
+        undercover_session = _sessions.get(_undercover_key(channel_id))
+        if undercover_session:
+            undercover_session.touch()
+            return _result(_render_undercover(undercover_session))
         return _result('你当前没有进行中的小游戏。\n\n' + menu_text(), ok=False)
     session.touch()
     return _result(_render_session(session))
@@ -366,6 +401,12 @@ def quit_game(channel_id, kook_id):
                 abandoned_by=kook_id,
             )
             return _result(f'已结束 **四子棋**，由 {_player_text(kook_id)} 退出。', ended=True, record=record)
+        bomb_multi = _sessions.get(_bomb_multi_key(channel_id))
+        if bomb_multi and _bomb_multi_has_player(bomb_multi, kook_id):
+            return _bomb_multi_quit(bomb_multi, kook_id)
+        undercover_session = _sessions.get(_undercover_key(channel_id))
+        if undercover_session and _undercover_has_player(undercover_session, kook_id):
+            return _undercover_quit(undercover_session, kook_id)
         return _result('你当前没有进行中的小游戏。', ok=False)
     record = _build_record_payload(
         session,
@@ -479,22 +520,27 @@ def handle_guess(channel_id, kook_id, guess_text):
     _cleanup_expired_sessions()
     key = _session_key(channel_id, kook_id)
     session = _sessions.get(key)
-    if not session:
-        return _result('你当前没有进行中的猜谜类小游戏。先发送 `/游戏 猜词`、`/游戏 乱序` 或 `/游戏 密码`。', ok=False)
+    if session:
+        session.touch()
+        if session.game == 'hangman':
+            result = _guess_hangman(session, guess_text)
+        elif session.game == 'scramble':
+            result = _guess_scramble(session, guess_text)
+        elif session.game == 'mastermind':
+            result = _guess_mastermind(session, guess_text)
+        elif session.game == 'bomb':
+            result = _guess_bomb_solo(session, guess_text)
+        else:
+            return _result('21 点不用 `/游戏 猜`，请使用 `/游戏 要牌` 或 `/游戏 停牌`。', ok=False)
+        if result.get('ended'):
+            _sessions.pop(key, None)
+        return result
 
-    session.touch()
-    if session.game == 'hangman':
-        result = _guess_hangman(session, guess_text)
-    elif session.game == 'scramble':
-        result = _guess_scramble(session, guess_text)
-    elif session.game == 'mastermind':
-        result = _guess_mastermind(session, guess_text)
-    else:
-        return _result('21 点不用 `/游戏 猜`，请使用 `/游戏 要牌` 或 `/游戏 停牌`。', ok=False)
+    bomb_multi = _sessions.get(_bomb_multi_key(channel_id))
+    if bomb_multi and _bomb_multi_has_player(bomb_multi, kook_id):
+        return _guess_bomb_multi(bomb_multi, kook_id, guess_text)
 
-    if result.get('ended'):
-        _sessions.pop(key, None)
-    return result
+    return _result('你当前没有进行中的猜谜类小游戏。先发送 `/游戏 猜词`、`/游戏 乱序`、`/游戏 密码` 或 `/游戏 炸弹`。', ok=False)
 
 
 def handle_blackjack_action(channel_id, kook_id, action):
@@ -861,7 +907,7 @@ def format_leaderboard(game_key=None, limit=10):
     game = normalize_game_key(game_key) if game_key else None
     raw_game = str(game_key or '').strip()
     if raw_game and raw_game not in {'全部', 'all'} and not game:
-        available = '猜词、乱序词、密码色、21点、四子棋'
+        available = '猜词、乱序词、密码色、21点、四子棋、炸弹'
         return f'暂不支持 `{raw_game}` 的排行榜。可用游戏: {available}。'
 
     if game == 'blackjack':
@@ -885,10 +931,14 @@ def format_leaderboard(game_key=None, limit=10):
     return '\n'.join(lines)
 
 
-def _result(message, ok=True, ended=False, record=None):
+def _result(message, ok=True, ended=False, record=None, side_effects=None, records=None):
     payload = {'ok': ok, 'message': message, 'ended': ended}
     if record:
         payload['record'] = record
+    if records:
+        payload['records'] = records
+    if side_effects:
+        payload['side_effects'] = side_effects
     return payload
 
 
@@ -1008,6 +1058,9 @@ def _game_label(game):
         'mastermind': '密码色',
         'blackjack': '21 点',
         'connect4': '四子棋',
+        'bomb': '数字炸弹',
+        'bomb_multi': '数字炸弹·多人',
+        'undercover': '谁是卧底',
     }.get(game, game)
 
 
@@ -1465,4 +1518,990 @@ def _render_session(session):
         return _render_mastermind(session)
     if session.game == 'blackjack':
         return _render_blackjack(session)
+    if session.game == 'bomb':
+        return _render_bomb_solo(session)
+    if session.game == 'bomb_multi':
+        return _render_bomb_multi(session)
+    if session.game == 'undercover':
+        return _render_undercover(session)
     return menu_text()
+
+
+# ============================================================
+# 数字炸弹（单人 + 多人）
+# ============================================================
+
+BOMB_DEFAULT_LOW = 1
+BOMB_DEFAULT_HIGH = 100
+BOMB_SOLO_MAX_ATTEMPTS = 10
+BOMB_MULTI_MIN_PLAYERS = 2
+BOMB_MULTI_MAX_PLAYERS = 12
+
+
+def _bomb_multi_key(channel_id):
+    return ('bomb_multi', str(channel_id or 'unknown'))
+
+
+def _bomb_multi_has_player(session, kook_id):
+    if not session or session.game != 'bomb_multi':
+        return False
+    kook_id = str(kook_id or '').strip()
+    if not kook_id:
+        return False
+    for p in session.state.get('players') or []:
+        if str(p.get('id') or '') == kook_id:
+            return True
+    return False
+
+
+def _start_bomb_solo(session):
+    secret = random.randint(BOMB_DEFAULT_LOW, BOMB_DEFAULT_HIGH)
+    session.state = {
+        'low': BOMB_DEFAULT_LOW,
+        'high': BOMB_DEFAULT_HIGH,
+        'secret': secret,
+        'attempts_left': BOMB_SOLO_MAX_ATTEMPTS,
+        'history': [],
+        'finished': False,
+        'moves': 0,
+    }
+
+
+def _parse_bomb_number(raw_text, low, high):
+    text = str(raw_text or '').strip()
+    if not text:
+        return None, '请输入一个数字。'
+    m = re.search(r'-?\d+', text)
+    if not m:
+        return None, f'请输入 {low}-{high} 之间的整数。'
+    try:
+        n = int(m.group(0))
+    except ValueError:
+        return None, f'请输入 {low}-{high} 之间的整数。'
+    if n < low or n > high:
+        return None, f'数字必须在当前区间 **{low}-{high}** 内。'
+    return n, None
+
+
+def _guess_bomb_solo(session, guess_text):
+    state = session.state
+    n, err = _parse_bomb_number(guess_text, state['low'], state['high'])
+    if err:
+        return _result(err, ok=False)
+
+    state['moves'] = int(state.get('moves') or 0) + 1
+    state['attempts_left'] = max(0, int(state['attempts_left']) - 1)
+    secret = int(state['secret'])
+    history = state.setdefault('history', [])
+
+    if n == secret:
+        history.append(f'{n} 命中')
+        state['finished'] = True
+        record = _build_record_payload(
+            session,
+            result='win',
+            winner_id=session.kook_id,
+            winner_name=session.player_name,
+            end_reason='solved',
+        )
+        return _result(
+            f'**数字炸弹**\n答案: `{n}`\n用了 **{state["moves"]}** 次猜中，干得漂亮。',
+            ended=True,
+            record=record,
+        )
+
+    if n < secret:
+        state['low'] = n + 1
+        history.append(f'{n} → 再大一点')
+    else:
+        state['high'] = n - 1
+        history.append(f'{n} → 再小一点')
+
+    if state['attempts_left'] <= 0 or state['low'] > state['high']:
+        state['finished'] = True
+        record = _build_record_payload(session, result='loss', end_reason='out_of_attempts')
+        return _result(
+            f'**数字炸弹**\n答案是 `{secret}`。次数用完，本局结束。',
+            ended=True,
+            record=record,
+        )
+
+    return _result(_render_bomb_solo(session))
+
+
+def _render_bomb_solo(session):
+    state = session.state
+    history = state.get('history') or []
+    history_text = '\n'.join(f'  · {item}' for item in history[-6:]) if history else '  · -'
+    return (
+        '**数字炸弹**\n'
+        f'当前区间: **{state["low"]} - {state["high"]}**\n'
+        f'剩余次数: **{state["attempts_left"]}**\n'
+        f'历史:\n{history_text}\n'
+        '操作: `/游戏 猜 数字` 或直接 `/游戏 数字`'
+    )
+
+
+def start_bomb_multi(channel_id, host_id, host_name):
+    """在频道发起多人数字炸弹（招募阶段）。"""
+    _cleanup_expired_sessions()
+    channel_id = str(channel_id or 'unknown')
+    host_id = str(host_id or '').strip()
+    if not host_id:
+        return _result('未获取到发起人的 KOOK 身份。', ok=False)
+    key = _bomb_multi_key(channel_id)
+    if _sessions.get(key):
+        return _result('当前频道已经有一局多人数字炸弹，先 `/游戏 状态` 看看。', ok=False)
+    if _sessions.get(_session_key(channel_id, host_id)):
+        return _result('你当前有别的小游戏在进行，请先 `/游戏 退出`。', ok=False)
+    if _sessions.get(_undercover_key(channel_id)):
+        return _result('当前频道有谁是卧底进行中，无法同时开多人炸弹。', ok=False)
+
+    session = MiniGameSession(
+        game='bomb_multi',
+        channel_id=channel_id,
+        kook_id=host_id,
+        player_name=str(host_name or ''),
+        state={
+            'phase': 'recruiting',
+            'host_id': host_id,
+            'players': [{'id': host_id, 'name': str(host_name or '')}],
+            'low': BOMB_DEFAULT_LOW,
+            'high': BOMB_DEFAULT_HIGH,
+            'secret': 0,
+            'turn': 0,
+            'history': [],
+            'moves': 0,
+        },
+    )
+    _sessions[key] = session
+    return _result(
+        '**多人数字炸弹** 招募中（踩到的输）。\n'
+        f'{_player_text(host_id)} 发起，区间 1-100。\n'
+        '其他玩家用 `/游戏 炸弹 加入` 入局，'
+        f'人数到 {BOMB_MULTI_MIN_PLAYERS}+ 后由发起人发 `/游戏 炸弹 开始`。'
+    )
+
+
+def join_bomb_multi(channel_id, kook_id, kook_name):
+    session = _sessions.get(_bomb_multi_key(channel_id))
+    if not session:
+        return _result('当前频道没有招募中的多人数字炸弹。先 `/游戏 炸弹 多人` 发起。', ok=False)
+    if session.state.get('phase') != 'recruiting':
+        return _result('当前局已经开始，无法再加入。', ok=False)
+    kook_id = str(kook_id or '').strip()
+    if not kook_id:
+        return _result('未获取到你的 KOOK 身份。', ok=False)
+    players = session.state.setdefault('players', [])
+    if any(str(p.get('id') or '') == kook_id for p in players):
+        return _result('你已经在局里了。', ok=False)
+    if len(players) >= BOMB_MULTI_MAX_PLAYERS:
+        return _result(f'人数已满（{BOMB_MULTI_MAX_PLAYERS}）。', ok=False)
+    if _sessions.get(_session_key(session.channel_id, kook_id)):
+        return _result('你当前有别的小游戏在进行，请先 `/游戏 退出`。', ok=False)
+    players.append({'id': kook_id, 'name': str(kook_name or '')})
+    session.touch()
+    names = '、'.join(_player_text(p['id']) for p in players)
+    return _result(
+        f'{_player_text(kook_id)} 已加入。\n当前 **{len(players)}** 人: {names}\n'
+        '人数到位后由发起人发 `/游戏 炸弹 开始`。'
+    )
+
+
+def begin_bomb_multi(channel_id, kook_id):
+    session = _sessions.get(_bomb_multi_key(channel_id))
+    if not session:
+        return _result('当前频道没有多人数字炸弹。', ok=False)
+    if session.state.get('phase') != 'recruiting':
+        return _result('当前局已经开始，发 `/游戏 状态` 看回合。', ok=False)
+    if str(session.state.get('host_id') or '') != str(kook_id or ''):
+        return _result('只有发起人能开始本局。', ok=False)
+    players = session.state.get('players') or []
+    if len(players) < BOMB_MULTI_MIN_PLAYERS:
+        return _result(f'至少需要 {BOMB_MULTI_MIN_PLAYERS} 人才能开始。', ok=False)
+
+    random.shuffle(players)
+    session.state['players'] = players
+    session.state['phase'] = 'playing'
+    session.state['secret'] = random.randint(BOMB_DEFAULT_LOW, BOMB_DEFAULT_HIGH)
+    session.state['turn'] = 0
+    session.touch()
+    return _result(
+        '**多人数字炸弹** 开始！踩到炸弹的输，其他人共赢。\n' + _render_bomb_multi(session)
+    )
+
+
+def _guess_bomb_multi(session, kook_id, guess_text):
+    if session.state.get('phase') != 'playing':
+        return _result('本局还在招募中，等发起人 `/游戏 炸弹 开始` 再猜。', ok=False)
+    players = session.state.get('players') or []
+    turn = int(session.state.get('turn') or 0)
+    if not players:
+        return _result('当前局没有玩家，已结束。', ok=False)
+    current_player = players[turn % len(players)]
+    if str(current_player.get('id') or '') != str(kook_id or ''):
+        return _result(f'还没轮到你。当前: {_player_text(current_player.get("id"))}', ok=False)
+
+    state = session.state
+    n, err = _parse_bomb_number(guess_text, state['low'], state['high'])
+    if err:
+        return _result(err, ok=False)
+
+    state['moves'] = int(state.get('moves') or 0) + 1
+    secret = int(state['secret'])
+    history = state.setdefault('history', [])
+
+    if n == secret:
+        history.append(f'{_short_name(current_player)} 猜 {n} → 💥 踩雷')
+        loser_id = str(current_player.get('id') or '')
+        loser_name = str(current_player.get('name') or '')
+        winners = [p for p in players if str(p.get('id') or '') != loser_id]
+        winners_text = '、'.join(_player_text(p['id']) for p in winners) or '无人'
+        message = (
+            f'**多人数字炸弹** 💥\n'
+            f'答案: `{secret}`\n'
+            f'踩到炸弹: {_player_text(loser_id)}\n'
+            f'共赢: {winners_text}\n'
+            f'累计回合: **{state["moves"]}**'
+        )
+        _sessions.pop(_bomb_multi_key(session.channel_id), None)
+        # 多人模式不入排行（多玩家结构 vs 双玩家 schema 难以公平），仅播报。
+        return _result(message, ended=True)
+
+    if n < secret:
+        state['low'] = n + 1
+        history.append(f'{_short_name(current_player)} 猜 {n} → ↑')
+    else:
+        state['high'] = n - 1
+        history.append(f'{_short_name(current_player)} 猜 {n} → ↓')
+
+    state['turn'] = (turn + 1) % len(players)
+    session.touch()
+    return _result(_render_bomb_multi(session))
+
+
+def _render_bomb_multi(session):
+    state = session.state
+    players = state.get('players') or []
+    phase = state.get('phase', 'recruiting')
+    if phase == 'recruiting':
+        roster = '\n'.join(
+            f'  {idx + 1}. {_player_text(p["id"])}'
+            for idx, p in enumerate(players)
+        ) or '  -'
+        return (
+            '**多人数字炸弹** · 招募中\n'
+            f'区间: 1-100\n'
+            f'人数: **{len(players)}** / 最少 {BOMB_MULTI_MIN_PLAYERS}\n'
+            f'{roster}\n'
+            '`/游戏 炸弹 加入` 入局，发起人 `/游戏 炸弹 开始`。'
+        )
+    turn = int(state.get('turn') or 0)
+    current = players[turn % len(players)] if players else {}
+    history = state.get('history') or []
+    history_text = '\n'.join(f'  · {item}' for item in history[-6:]) if history else '  · -'
+    queue = ' → '.join(_short_name(p) for p in players)
+    return (
+        '**多人数字炸弹** · 进行中\n'
+        f'当前区间: **{state["low"]} - {state["high"]}**\n'
+        f'当前回合: {_player_text(current.get("id"))}\n'
+        f'顺序: {queue}\n'
+        f'累计回合: **{state.get("moves") or 0}**\n'
+        f'历史:\n{history_text}\n'
+        '操作: `/游戏 猜 数字`（轮到你时）；`/游戏 退出` 解散。'
+    )
+
+
+def _bomb_multi_quit(session, kook_id):
+    """招募阶段任何人可退；进行中只允许发起人解散。"""
+    state = session.state
+    phase = state.get('phase', 'recruiting')
+    host_id = str(state.get('host_id') or '')
+    kook_id = str(kook_id or '')
+
+    if phase == 'recruiting':
+        players = state.get('players') or []
+        if kook_id == host_id:
+            _sessions.pop(_bomb_multi_key(session.channel_id), None)
+            return _result(f'已解散 **多人数字炸弹**（发起人 {_player_text(kook_id)} 取消招募）。', ended=True)
+        new_players = [p for p in players if str(p.get('id') or '') != kook_id]
+        if len(new_players) == len(players):
+            return _result('你不在当前招募列表里。', ok=False)
+        state['players'] = new_players
+        return _result(f'{_player_text(kook_id)} 已退出招募。\n\n' + _render_bomb_multi(session), ended=False)
+
+    if kook_id != host_id:
+        return _result('对局已开始，仅发起人可发 `/游戏 退出` 解散。', ok=False)
+    _sessions.pop(_bomb_multi_key(session.channel_id), None)
+    return _result(f'已解散 **多人数字炸弹**（由 {_player_text(kook_id)} 解散）。', ended=True)
+
+
+def _short_name(player):
+    name = str((player or {}).get('name') or '').strip()
+    if name:
+        return name.split('#')[0][:10]
+    pid = str((player or {}).get('id') or '')
+    return pid[-4:] if pid else '玩家'
+
+
+# ============================================================
+# 谁是卧底
+# ============================================================
+
+UNDERCOVER_MIN_PLAYERS = 4
+UNDERCOVER_MAX_PLAYERS = 8
+
+UNDERCOVER_ROLE_TABLE = {
+    4: 1,
+    5: 1,
+    6: 2,
+    7: 2,
+    8: 2,
+}
+
+UNDERCOVER_FALLBACK_PAIRS = [
+    ('咖啡', '奶茶'),
+    ('狮子', '老虎'),
+    ('孙悟空', '齐天大圣'),
+    ('草莓', '樱桃'),
+    ('钢琴', '电子琴'),
+    ('微波炉', '烤箱'),
+    ('警察', '保安'),
+    ('医生', '护士'),
+    ('蛋糕', '面包'),
+    ('泡面', '螺蛳粉'),
+    ('啤酒', '香槟'),
+    ('地铁', '公交'),
+    ('微信', 'QQ'),
+    ('鼠标', '触摸板'),
+    ('火锅', '麻辣烫'),
+    ('哈士奇', '萨摩耶'),
+    ('王者荣耀', '英雄联盟'),
+    ('CSGO', '无畏契约'),
+    ('诸葛亮', '司马懿'),
+    ('熊大', '熊二'),
+]
+
+UNDERCOVER_LLM_SYSTEM_PROMPT = (
+    '你是"谁是卧底"游戏的出题人。生成一对中文词语用于游戏。\n'
+    '要求：\n'
+    '1. 两词在某个属性上相似但有微妙区别，玩家容易混淆，但描述时能找到差异点；\n'
+    '2. 都是日常常见的事物或概念（食物/动物/饮品/明星/影视/职业/物品/游戏 等），不要生僻；\n'
+    '3. 不能完全相同，也不能完全无关；\n'
+    '4. 内容要适合所有人讨论，不涉及政治/暴力/色情。\n\n'
+    '严格只返回一个 JSON 对象，不要任何额外文字：\n'
+    '{"civilian": "词A", "undercover": "词B", "category": "类别", "hint": "对比要点"}\n\n'
+    '示例：\n'
+    '{"civilian": "咖啡", "undercover": "奶茶", "category": "饮品", "hint": "原料/口感"}\n'
+    '{"civilian": "孙悟空", "undercover": "齐天大圣", "category": "人物", "hint": "称呼角度"}'
+)
+
+
+def _undercover_key(channel_id):
+    return ('undercover', str(channel_id or 'unknown'))
+
+
+def _undercover_has_player(session, kook_id):
+    if not session or session.game != 'undercover':
+        return False
+    kook_id = str(kook_id or '').strip()
+    if not kook_id:
+        return False
+    for p in session.state.get('players') or []:
+        if str(p.get('id') or '') == kook_id:
+            return True
+    return False
+
+
+def undercover_menu_text():
+    return (
+        '**谁是卧底**\n'
+        '---\n'
+        '`/游戏 卧底 发起` - 在当前频道发起一局\n'
+        '`/游戏 卧底 加入` - 加入正在招募的局\n'
+        '`/游戏 卧底 开始` - 发起人开始（≥4 人）\n'
+        '`/游戏 卧底 描述 内容` - 轮到你时发言（描述但不能直接说出词）\n'
+        '`/游戏 卧底 投票 编号` - 投票踢人（编号见状态）\n'
+        '`/游戏 卧底 状态` - 查看当前阶段\n'
+        '`/游戏 卧底 退出` - 退出 / 发起人解散\n'
+        '---\n'
+        '规则: 多数平民拿到词A，少数卧底拿到词B（AI 出题）。轮流描述后投票踢出最可疑的人。\n'
+        f'人数: {UNDERCOVER_MIN_PLAYERS}-{UNDERCOVER_MAX_PLAYERS} 人。'
+    )
+
+
+def _llm_config(name, default=''):
+    try:
+        from flask import current_app, has_app_context
+        if has_app_context() and name in current_app.config:
+            return current_app.config.get(name, default)
+    except Exception:
+        pass
+    return os.environ.get(name, default)
+
+
+def _normalize_llm_url(api_url):
+    url = str(api_url or '').strip().rstrip('/')
+    if not url:
+        return ''
+    if url.endswith('/chat/completions'):
+        return url
+    if url.endswith('/v1') or url.endswith('/beta'):
+        return f'{url}/chat/completions'
+    return f'{url}/chat/completions'
+
+
+def _call_minigame_llm(messages, max_tokens=300, temperature=0.85):
+    api_key = _llm_config('STORY_LLM_API_KEY', '')
+    api_url = _normalize_llm_url(_llm_config('STORY_LLM_API_URL', ''))
+    model = str(_llm_config('STORY_LLM_MODEL', 'deepseek-v4-flash') or 'deepseek-v4-flash').strip()
+    if 'api.deepseek.com' in api_url and model in ('', 'deepseek-ai/DeepSeek-V4-Flash', 'DeepSeek-V4-Flash', 'deepseek-chat'):
+        model = 'deepseek-v4-flash'
+    if not api_key or not api_url:
+        return None
+    try:
+        import requests
+        resp = requests.post(
+            api_url,
+            headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+            json={
+                'model': model,
+                'messages': messages,
+                'temperature': temperature,
+                'max_tokens': max_tokens,
+                'response_format': {'type': 'json_object'},
+            },
+            timeout=int(_llm_config('STORY_LLM_TIMEOUT', 25)),
+        )
+        if resp.status_code >= 400:
+            return None
+        data = resp.json()
+        choices = data.get('choices') or []
+        if not choices:
+            return None
+        msg = choices[0].get('message') or {}
+        return msg.get('content') or choices[0].get('text')
+    except Exception:
+        return None
+
+
+def _generate_undercover_word_pair():
+    """LLM 生成词对，失败回退本地词库。返回 (civilian_word, undercover_word, meta)。"""
+    user_prompt = (
+        '请直接生成一对全新的词，类别不限。'
+        f'\n随机种子: {random.randint(1000, 9999)}（确保多样性）。'
+    )
+    messages = [
+        {'role': 'system', 'content': UNDERCOVER_LLM_SYSTEM_PROMPT},
+        {'role': 'user', 'content': user_prompt},
+    ]
+    raw = _call_minigame_llm(messages)
+    if raw:
+        try:
+            obj = json.loads(raw)
+            civilian = str(obj.get('civilian') or '').strip()
+            undercover = str(obj.get('undercover') or '').strip()
+            if civilian and undercover and civilian != undercover and len(civilian) <= 12 and len(undercover) <= 12:
+                return civilian, undercover, {
+                    'source': 'llm',
+                    'category': str(obj.get('category') or '').strip(),
+                    'hint': str(obj.get('hint') or '').strip(),
+                }
+        except Exception:
+            pass
+    pair = random.choice(UNDERCOVER_FALLBACK_PAIRS)
+    civilian, undercover = pair if random.random() < 0.5 else (pair[1], pair[0])
+    return civilian, undercover, {'source': 'fallback', 'category': '', 'hint': ''}
+
+
+def create_undercover(channel_id, host_id, host_name):
+    """发起一局谁是卧底（招募阶段）。"""
+    _cleanup_expired_sessions()
+    channel_id = str(channel_id or 'unknown')
+    host_id = str(host_id or '').strip()
+    if not host_id:
+        return _result('未获取到发起人的 KOOK 身份。', ok=False)
+    key = _undercover_key(channel_id)
+    if _sessions.get(key):
+        return _result('当前频道已有谁是卧底，先 `/游戏 卧底 状态` 查看。', ok=False)
+    if _sessions.get(_session_key(channel_id, host_id)):
+        return _result('你当前有别的小游戏在进行，请先 `/游戏 退出`。', ok=False)
+    if _sessions.get(_bomb_multi_key(channel_id)):
+        return _result('当前频道有多人炸弹进行中。', ok=False)
+
+    session = MiniGameSession(
+        game='undercover',
+        channel_id=channel_id,
+        kook_id=host_id,
+        player_name=str(host_name or ''),
+        state={
+            'phase': 'recruiting',
+            'host_id': host_id,
+            'players': [_undercover_new_player(host_id, host_name)],
+            'civilian_word': '',
+            'undercover_word': '',
+            'word_meta': {},
+            'round': 0,
+            'turn_index': 0,
+            'descriptions': [],
+            'votes': {},
+            'eliminated': [],
+            'result': '',
+        },
+    )
+    _sessions[key] = session
+    return _result(
+        '**谁是卧底** 招募中。\n'
+        f'{_player_text(host_id)} 发起。\n'
+        f'其他人 `/游戏 卧底 加入`，凑到 **{UNDERCOVER_MIN_PLAYERS}-{UNDERCOVER_MAX_PLAYERS}** 人后由发起人 `/游戏 卧底 开始`。\n'
+        '词对由 AI 生成（失败时回退本地词库）。'
+    )
+
+
+def _undercover_new_player(kook_id, name):
+    return {
+        'id': str(kook_id or ''),
+        'name': str(name or ''),
+        'role': '',
+        'word': '',
+        'alive': True,
+        'eliminated_round': None,
+    }
+
+
+def join_undercover(channel_id, kook_id, kook_name):
+    session = _sessions.get(_undercover_key(channel_id))
+    if not session:
+        return _result('当前频道没有招募中的谁是卧底。先 `/游戏 卧底 发起`。', ok=False)
+    if session.state.get('phase') != 'recruiting':
+        return _result('对局已开始，无法加入。', ok=False)
+    kook_id = str(kook_id or '').strip()
+    if not kook_id:
+        return _result('未获取到你的 KOOK 身份。', ok=False)
+    players = session.state.setdefault('players', [])
+    if any(str(p.get('id') or '') == kook_id for p in players):
+        return _result('你已经在局里了。', ok=False)
+    if len(players) >= UNDERCOVER_MAX_PLAYERS:
+        return _result(f'人数已满（{UNDERCOVER_MAX_PLAYERS}）。', ok=False)
+    if _sessions.get(_session_key(session.channel_id, kook_id)):
+        return _result('你当前有别的小游戏在进行，请先 `/游戏 退出`。', ok=False)
+    players.append(_undercover_new_player(kook_id, kook_name))
+    session.touch()
+    return _result(
+        f'{_player_text(kook_id)} 已加入。\n'
+        f'当前 **{len(players)}** / {UNDERCOVER_MIN_PLAYERS}-{UNDERCOVER_MAX_PLAYERS} 人。\n\n'
+        + _render_undercover(session)
+    )
+
+
+def begin_undercover(channel_id, kook_id):
+    session = _sessions.get(_undercover_key(channel_id))
+    if not session:
+        return _result('当前频道没有谁是卧底。', ok=False)
+    if session.state.get('phase') != 'recruiting':
+        return _result('对局已开始。`/游戏 卧底 状态` 查看进度。', ok=False)
+    if str(session.state.get('host_id') or '') != str(kook_id or ''):
+        return _result('只有发起人能开始本局。', ok=False)
+    players = session.state.get('players') or []
+    if len(players) < UNDERCOVER_MIN_PLAYERS:
+        return _result(f'至少需要 {UNDERCOVER_MIN_PLAYERS} 人。', ok=False)
+    if len(players) > UNDERCOVER_MAX_PLAYERS:
+        return _result(f'人数超过上限 {UNDERCOVER_MAX_PLAYERS}。', ok=False)
+
+    civilian_word, undercover_word, meta = _generate_undercover_word_pair()
+    undercover_count = UNDERCOVER_ROLE_TABLE.get(len(players), 1)
+
+    indices = list(range(len(players)))
+    random.shuffle(indices)
+    undercover_indices = set(indices[:undercover_count])
+
+    dm_targets = []
+    for idx, player in enumerate(players):
+        if idx in undercover_indices:
+            player['role'] = 'undercover'
+            player['word'] = undercover_word
+        else:
+            player['role'] = 'civilian'
+            player['word'] = civilian_word
+        player['alive'] = True
+        player['eliminated_round'] = None
+        dm_targets.append({
+            'kook_id': player['id'],
+            'text': (
+                f'**谁是卧底** 你的身份已生成。\n'
+                f'你的词: `{player["word"]}`\n'
+                f'回到频道用 `/游戏 卧底 描述 内容` 描述这个词，但不能直接说出。\n'
+                '提示: 描述既不能太露骨被卧底偷词，也不能太离谱被怀疑。'
+            ),
+        })
+
+    random.shuffle(players)
+    session.state['players'] = players
+    session.state['civilian_word'] = civilian_word
+    session.state['undercover_word'] = undercover_word
+    session.state['word_meta'] = meta
+    session.state['phase'] = 'describing'
+    session.state['round'] = 1
+    session.state['turn_index'] = 0
+    session.state['descriptions'] = []
+    session.state['votes'] = {}
+    session.state['eliminated'] = []
+    session.touch()
+
+    source_label = 'AI 生成' if meta.get('source') == 'llm' else '本地词库'
+    return _result(
+        f'**谁是卧底** 开始！本局共 {len(players)} 人，其中 {undercover_count} 个卧底。\n'
+        f'词对来源: {source_label}。请查看私信确认你的词。\n\n'
+        + _render_undercover(session),
+        side_effects={'dm': dm_targets},
+    )
+
+
+def describe_undercover(channel_id, kook_id, text):
+    session = _sessions.get(_undercover_key(channel_id))
+    if not session:
+        return _result('当前频道没有谁是卧底。', ok=False)
+    if session.state.get('phase') != 'describing':
+        return _result('当前不是描述阶段。`/游戏 卧底 状态` 查看。', ok=False)
+    text = str(text or '').strip()
+    if not text:
+        return _result('请发送描述内容: `/游戏 卧底 描述 内容`。', ok=False)
+    if len(text) > 80:
+        return _result('描述请不超过 80 字。', ok=False)
+
+    alive_players = _undercover_alive_players(session)
+    turn = int(session.state.get('turn_index') or 0)
+    if not alive_players:
+        return _result('当前没有存活玩家。', ok=False)
+    current = alive_players[turn % len(alive_players)]
+    if str(current.get('id') or '') != str(kook_id or ''):
+        return _result(f'还没轮到你。当前发言: {_player_text(current.get("id"))}', ok=False)
+
+    civilian_word = session.state.get('civilian_word', '')
+    undercover_word = session.state.get('undercover_word', '')
+    if civilian_word and civilian_word in text:
+        return _result(f'描述里不能包含 `{civilian_word}` 本身，换个说法。', ok=False)
+    if undercover_word and undercover_word in text:
+        return _result(f'描述里不能包含 `{undercover_word}` 本身，换个说法。', ok=False)
+
+    descriptions = session.state.setdefault('descriptions', [])
+    descriptions.append({
+        'round': int(session.state.get('round') or 1),
+        'player_id': str(current.get('id') or ''),
+        'name': str(current.get('name') or ''),
+        'text': text,
+    })
+
+    session.state['turn_index'] = turn + 1
+    if session.state['turn_index'] >= len(alive_players):
+        session.state['phase'] = 'voting'
+        session.state['votes'] = {}
+        session.state['turn_index'] = 0
+        session.touch()
+        return _result(
+            f'{_player_text(current.get("id"))} 描述: {text}\n\n'
+            '本轮描述结束，进入投票。\n\n' + _render_undercover(session)
+        )
+    session.touch()
+    next_player = alive_players[session.state['turn_index'] % len(alive_players)]
+    return _result(
+        f'{_player_text(current.get("id"))} 描述: {text}\n\n'
+        f'下一位: {_player_text(next_player.get("id"))}\n'
+        '使用 `/游戏 卧底 描述 内容`。'
+    )
+
+
+def vote_undercover(channel_id, kook_id, target_text):
+    session = _sessions.get(_undercover_key(channel_id))
+    if not session:
+        return _result('当前频道没有谁是卧底。', ok=False)
+    if session.state.get('phase') != 'voting':
+        return _result('当前不是投票阶段。`/游戏 卧底 状态` 查看。', ok=False)
+
+    voter = _undercover_player_by_id(session, kook_id)
+    if not voter or not voter.get('alive'):
+        return _result('你不在本局或已经出局，不能投票。', ok=False)
+
+    target = _undercover_resolve_vote_target(session, target_text)
+    if not target:
+        return _result(
+            '无法识别投票目标。可用 `/游戏 卧底 投票 编号`，编号见 `/游戏 卧底 状态`。',
+            ok=False,
+        )
+    if str(target.get('id')) == str(voter.get('id')):
+        return _result('不能投自己。', ok=False)
+
+    votes = session.state.setdefault('votes', {})
+    votes[str(voter['id'])] = str(target['id'])
+    session.touch()
+
+    alive = _undercover_alive_players(session)
+    voted_count = sum(1 for p in alive if str(p['id']) in votes)
+    if voted_count < len(alive):
+        return _result(
+            f'{_player_text(voter["id"])} 投给了 {_player_text(target["id"])}。\n'
+            f'已投: **{voted_count}** / {len(alive)}',
+        )
+
+    return _undercover_resolve_round(session)
+
+
+def _undercover_resolve_round(session):
+    alive = _undercover_alive_players(session)
+    votes = session.state.get('votes') or {}
+    tallies = {}
+    for target_id in votes.values():
+        tallies[target_id] = tallies.get(target_id, 0) + 1
+
+    if not tallies:
+        return _result('本轮没有有效投票，跳过踢人。', ok=False)
+
+    top = max(tallies.values())
+    candidates = [pid for pid, n in tallies.items() if n == top]
+    if len(candidates) > 1:
+        eliminated_id = random.choice(candidates)
+        tie_text = '（票数相同，随机抽中）'
+    else:
+        eliminated_id = candidates[0]
+        tie_text = ''
+
+    eliminated = _undercover_player_by_id(session, eliminated_id)
+    if not eliminated:
+        return _result('投票出现异常，本轮无人出局。', ok=False)
+
+    eliminated['alive'] = False
+    eliminated['eliminated_round'] = int(session.state.get('round') or 1)
+    session.state.setdefault('eliminated', []).append(str(eliminated_id))
+
+    tally_lines = '\n'.join(
+        f'  · {_player_text(pid)}: {n} 票' for pid, n in sorted(tallies.items(), key=lambda x: -x[1])
+    )
+    role_label = '卧底' if eliminated.get('role') == 'undercover' else '平民'
+    role_emoji = '🕵️' if eliminated.get('role') == 'undercover' else '👥'
+    civilian_word = session.state.get('civilian_word', '')
+    undercover_word = session.state.get('undercover_word', '')
+
+    end_state = _undercover_check_winner(session)
+    if end_state:
+        winner_side = end_state
+        winners = [p for p in session.state.get('players') or [] if p.get('role') == winner_side]
+        winner_names = '、'.join(_player_text(p['id']) for p in winners)
+        winner_label = '平民' if winner_side == 'civilian' else '卧底'
+        message = (
+            '**谁是卧底** · 投票揭晓\n'
+            f'{tally_lines}\n'
+            f'被踢出: {_player_text(eliminated_id)} → {role_emoji} **{role_label}** {tie_text}\n'
+            f'\n🏁 **{winner_label}阵营获胜**！\n'
+            f'平民词: `{civilian_word}`　卧底词: `{undercover_word}`\n'
+            f'获胜玩家: {winner_names}'
+        )
+        _sessions.pop(_undercover_key(session.channel_id), None)
+        session.state['phase'] = 'ended'
+        session.state['result'] = winner_side
+        return _result(message, ended=True)
+
+    session.state['round'] = int(session.state.get('round') or 1) + 1
+    session.state['phase'] = 'describing'
+    session.state['turn_index'] = 0
+    session.state['votes'] = {}
+    session.touch()
+
+    return _result(
+        '**谁是卧底** · 投票揭晓\n'
+        f'{tally_lines}\n'
+        f'被踢出: {_player_text(eliminated_id)} → {role_emoji} **{role_label}** {tie_text}\n\n'
+        f'进入第 {session.state["round"]} 轮描述。\n\n'
+        + _render_undercover(session)
+    )
+
+
+def _undercover_check_winner(session):
+    """返回 'civilian' 或 'undercover' 表示阵营获胜；None 表示继续。"""
+    players = session.state.get('players') or []
+    alive_civilian = sum(1 for p in players if p.get('alive') and p.get('role') == 'civilian')
+    alive_undercover = sum(1 for p in players if p.get('alive') and p.get('role') == 'undercover')
+    if alive_undercover == 0:
+        return 'civilian'
+    if alive_undercover >= alive_civilian:
+        return 'undercover'
+    return None
+
+
+def _undercover_alive_players(session):
+    return [p for p in (session.state.get('players') or []) if p.get('alive')]
+
+
+def _undercover_player_by_id(session, kook_id):
+    kook_id = str(kook_id or '').strip()
+    for p in session.state.get('players') or []:
+        if str(p.get('id') or '') == kook_id:
+            return p
+    return None
+
+
+def _undercover_resolve_vote_target(session, target_text):
+    """支持编号 / @mention / kook_id 数字。仅返回 alive 玩家。"""
+    raw = str(target_text or '').strip()
+    if not raw:
+        return None
+    alive = _undercover_alive_players(session)
+    digit_match = re.search(r'\d+', raw)
+    if digit_match:
+        n = int(digit_match.group(0))
+        if 1 <= n <= len(alive):
+            return alive[n - 1]
+        for p in alive:
+            if str(p.get('id') or '') == str(n):
+                return p
+    mention_match = re.search(r'\(met\)(\d+)\(met\)|<@!?(\d+)>', raw)
+    if mention_match:
+        kook_id = mention_match.group(1) or mention_match.group(2)
+        for p in alive:
+            if str(p.get('id') or '') == str(kook_id):
+                return p
+    return None
+
+
+def _render_undercover(session):
+    state = session.state
+    phase = state.get('phase', 'recruiting')
+    players = state.get('players') or []
+    if phase == 'recruiting':
+        lines = [
+            '**谁是卧底** · 招募中',
+            f'人数: **{len(players)}** / {UNDERCOVER_MIN_PLAYERS}-{UNDERCOVER_MAX_PLAYERS}',
+        ]
+        for idx, p in enumerate(players, start=1):
+            lines.append(f'  {idx}. {_player_text(p["id"])}')
+        lines.append('')
+        lines.append('`/游戏 卧底 加入` 入局，发起人 `/游戏 卧底 开始`。')
+        return '\n'.join(lines)
+
+    alive = _undercover_alive_players(session)
+    eliminated = [p for p in players if not p.get('alive')]
+
+    lines = [f'**谁是卧底** · 第 {state.get("round", 1)} 轮 · {("描述阶段" if phase == "describing" else "投票阶段")}']
+
+    lines.append('存活玩家:')
+    for idx, p in enumerate(alive, start=1):
+        lines.append(f'  {idx}. {_player_text(p["id"])}')
+
+    if eliminated:
+        lines.append('已出局:')
+        for p in eliminated:
+            role_label = '卧底' if p.get('role') == 'undercover' else '平民'
+            lines.append(f'  · {_player_text(p["id"])} ({role_label})')
+
+    descriptions = state.get('descriptions') or []
+    cur_round = int(state.get('round') or 1)
+    cur_round_desc = [d for d in descriptions if d.get('round') == cur_round]
+    if cur_round_desc:
+        lines.append('本轮描述:')
+        for d in cur_round_desc:
+            lines.append(f'  · {_player_text(d["player_id"])}: {d["text"]}')
+
+    if phase == 'describing':
+        turn = int(state.get('turn_index') or 0)
+        if alive:
+            current = alive[turn % len(alive)]
+            lines.append('')
+            lines.append(f'轮到: {_player_text(current["id"])}')
+            lines.append('操作: `/游戏 卧底 描述 内容`（一句话，不能含词本身）')
+    elif phase == 'voting':
+        votes = state.get('votes') or {}
+        voted = sum(1 for p in alive if str(p['id']) in votes)
+        lines.append('')
+        lines.append(f'投票进度: **{voted}** / {len(alive)}')
+        lines.append('操作: `/游戏 卧底 投票 编号`（编号取上方"存活玩家"列表）')
+
+    return '\n'.join(lines)
+
+
+def _undercover_quit(session, kook_id):
+    """招募阶段任何人可退；进行中只允许发起人解散。"""
+    state = session.state
+    phase = state.get('phase', 'recruiting')
+    host_id = str(state.get('host_id') or '')
+    kook_id = str(kook_id or '')
+
+    if phase == 'recruiting':
+        if kook_id == host_id:
+            _sessions.pop(_undercover_key(session.channel_id), None)
+            return _result(f'已解散 **谁是卧底**（{_player_text(kook_id)} 取消招募）。', ended=True)
+        players = state.get('players') or []
+        new_players = [p for p in players if str(p.get('id') or '') != kook_id]
+        if len(new_players) == len(players):
+            return _result('你不在当前招募列表里。', ok=False)
+        state['players'] = new_players
+        return _result(f'{_player_text(kook_id)} 已退出。\n\n' + _render_undercover(session))
+
+    if kook_id != host_id:
+        return _result('对局已开始，仅发起人可发 `/游戏 退出` 解散。', ok=False)
+    civilian_word = state.get('civilian_word', '')
+    undercover_word = state.get('undercover_word', '')
+    _sessions.pop(_undercover_key(session.channel_id), None)
+    return _result(
+        f'已解散 **谁是卧底**（由 {_player_text(kook_id)} 解散）。\n'
+        f'平民词: `{civilian_word}`　卧底词: `{undercover_word}`',
+        ended=True,
+    )
+
+
+def handle_undercover_command(channel_id, kook_id, kook_name, action, rest):
+    """谁是卧底命令统一入口。action 已 lower。"""
+    action = str(action or '').strip().lower()
+    if action in ('', '帮助', 'help', '菜单'):
+        return _result(undercover_menu_text())
+    if action in ('发起', '开局', '创建', 'create', 'new'):
+        return create_undercover(channel_id, kook_id, kook_name)
+    if action in ('加入', 'join'):
+        return join_undercover(channel_id, kook_id, kook_name)
+    if action in ('开始', 'start', 'begin'):
+        return begin_undercover(channel_id, kook_id)
+    if action in ('描述', '发言', 'desc', 'describe'):
+        return describe_undercover(channel_id, kook_id, rest)
+    if action in ('投票', '投', 'vote'):
+        return vote_undercover(channel_id, kook_id, rest)
+    if action in ('状态', 'status'):
+        session = _sessions.get(_undercover_key(channel_id))
+        if not session:
+            return _result('当前频道没有谁是卧底。', ok=False)
+        return _result(_render_undercover(session))
+    if action in ('退出', '解散', 'quit', 'stop', 'cancel'):
+        session = _sessions.get(_undercover_key(channel_id))
+        if not session:
+            return _result('当前频道没有谁是卧底。', ok=False)
+        return _undercover_quit(session, kook_id)
+    return _result(f'不认识的指令 `{action}`。\n\n' + undercover_menu_text(), ok=False)
+
+
+def handle_bomb_command(channel_id, kook_id, kook_name, action, rest):
+    """数字炸弹命令统一入口。"""
+    action = str(action or '').strip().lower()
+    if action in ('', '单人', 'solo'):
+        return start_game(channel_id, kook_id, kook_name, 'bomb')
+    if action in ('多人', 'multi', '多人模式', '接力'):
+        return start_bomb_multi(channel_id, kook_id, kook_name)
+    if action in ('加入', 'join'):
+        return join_bomb_multi(channel_id, kook_id, kook_name)
+    if action in ('开始', 'start', 'begin'):
+        return begin_bomb_multi(channel_id, kook_id)
+    if action in ('状态', 'status'):
+        bomb_multi = _sessions.get(_bomb_multi_key(channel_id))
+        if bomb_multi and _bomb_multi_has_player(bomb_multi, kook_id):
+            return _result(_render_bomb_multi(bomb_multi))
+        solo = _sessions.get(_session_key(channel_id, kook_id))
+        if solo and solo.game == 'bomb':
+            return _result(_render_bomb_solo(solo))
+        return _result('当前没有进行中的数字炸弹。', ok=False)
+    if action in ('退出', 'quit', 'stop', 'cancel'):
+        return quit_game(channel_id, kook_id)
+    if action in ('帮助', 'help', '菜单'):
+        return _result(
+            '**数字炸弹**\n'
+            '`/游戏 炸弹` 单人速通（10 次内猜中 1-100）\n'
+            '`/游戏 炸弹 多人` 多人接力（踩到的输）\n'
+            '`/游戏 炸弹 加入` / `开始` / `状态` / `退出`\n'
+            '猜数字: `/游戏 猜 50` 或 `/游戏 50`'
+        )
+    return _result(f'不认识的指令 `{action}`。\n用 `/游戏 炸弹 帮助` 查看说明。', ok=False)
