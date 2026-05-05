@@ -1365,6 +1365,18 @@ def _hand_value(cards):
     return total
 
 
+def _hand_display(cards):
+    """带 A 的软牌显示成 `硬/软`,例如 5+A 显示 6/16;无活 A 或软=硬时只显示一个数。"""
+    has_ace = any(rank == 'A' for rank, _v, _s in cards)
+    if not has_ace:
+        return str(_hand_value(cards))
+    hard = sum((1 if rank == 'A' else value) for rank, value, _s in cards)
+    soft = hard + 10
+    if soft <= 21 and soft != hard:
+        return f'{hard}/{soft}'
+    return str(_hand_value(cards))
+
+
 def _card_text(card):
     rank, _value, suit = card
     return f'{suit}{rank}'
@@ -1430,13 +1442,16 @@ def _render_blackjack(session):
     finished = bool(state.get('finished'))
     player_cards = ' '.join(_card_text(card) for card in state['player'])
     dealer_cards = ' '.join(_card_text(card) for card in state['dealer']) if finished else f'{_card_text(state["dealer"][0])} [暗牌]'
-    dealer_value = _hand_value(state['dealer']) if finished else _hand_value([state['dealer'][0]])
+    dealer_value = _hand_display(state['dealer']) if finished else _hand_display([state['dealer'][0]])
+    player_display = _hand_display(state['player'])
     lines = [
         '**21 点**',
         f'庄家: `{dealer_cards}` = **{dealer_value}**' + ('' if finished else ' + 暗牌'),
-        f'你: `{player_cards}` = **{_hand_value(state["player"])}**',
+        f'你: `{player_cards}` = **{player_display}**',
     ]
     if not finished:
+        if '/' in player_display:
+            lines.append('💡 含 A 时显示 `硬/软` 两种点数,A 在不爆牌时按 11 计,会爆时自动按 1。')
         lines.append('操作: 点击下方按钮，或发送 `/游戏 要牌` / `/游戏 停牌`')
     return '\n'.join(lines)
 
