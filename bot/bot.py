@@ -362,9 +362,12 @@ def _button_event_channel_type(event: Event) -> str:
 
 
 def _minigame_event_channel_id(event: Event, fallback_channel_id: str = '') -> str:
+    # 按钮 value 里 baked 的 channel_id 就是开局保存 session 时用的 ID,优先用它,确保 session 一定能命中。
+    if fallback_channel_id:
+        return str(fallback_channel_id)
     if _button_event_channel_type(event) == 'PERSON':
         return 'dm'
-    return str(fallback_channel_id or _button_event_target_id(event) or 'unknown')
+    return str(_button_event_target_id(event) or 'unknown')
 
 
 async def _send_story_event_message(
@@ -1474,10 +1477,10 @@ def _build_help_text():
 
 
 def _minigame_channel_id(msg: Message) -> str:
-    channel_id = _extract_msg_channel_id(msg)
-    if channel_id:
-        return channel_id
-    return 'dm' if _is_private_message(msg) else 'unknown'
+    # DM 必须返回固定 'dm',否则按钮回调路径的 channel_id 与开局存的不一致,导致 session 找不到。
+    if _is_private_message(msg):
+        return 'dm'
+    return _extract_msg_channel_id(msg) or 'unknown'
 
 
 def _minigame_user_id(msg: Message) -> str:
