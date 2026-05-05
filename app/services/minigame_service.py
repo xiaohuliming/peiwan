@@ -188,6 +188,28 @@ COLOR_ALIASES = {
     'orange': 'orange',
 }
 
+BLACKJACK_DEFAULT_RATING = 1000
+BLACKJACK_DELTAS = {
+    'natural_bj_win': 35,
+    'dealer_bust': 25,
+    'normal_win': 20,
+    'draw': 5,
+    'normal_loss': -15,
+    'bust_loss': -20,
+    'abandoned': -10,
+}
+BLACKJACK_WIN_KINDS = {'natural_bj_win', 'dealer_bust', 'normal_win'}
+BLACKJACK_STREAK_BONUS = 5  # 连胜≥3 时,本局额外 +5
+BLACKJACK_TIERS = (
+    (1800, '王者'),
+    (1600, '钻石'),
+    (1400, '铂金'),
+    (1200, '黄金'),
+    (1000, '白银'),
+    (0, '青铜'),
+)
+
+
 CARD_SUITS = ('黑桃', '红心', '方块', '梅花')
 CARD_RANKS = (
     ('A', 11),
@@ -235,9 +257,9 @@ def menu_text():
         '`/游戏 猜词` - 猜中文词语\n'
         '`/游戏 乱序` - 根据打乱文字猜原词\n'
         '`/游戏 密码` - 颜色密码，例: `/游戏 猜 红 蓝 绿 黄`\n'
-        '`/游戏 21点` - 和机器人庄家玩 21 点\n'
+        '`/游戏 21点` - 和机器人庄家玩 21 点(带排位分,需绑账号)\n'
         '`/游戏 四子棋` - 双人四子棋\n'
-        '`/游戏 排行 [游戏名]` - 查看排行榜，可填 四子棋/猜词/21点\n'
+        '`/游戏 排行 [游戏名]` - 查看排行榜,可填 四子棋/猜词/21点\n'
         '`/游戏 剧情` - 进入 AI 剧情互动游戏《灰区档案》\n'
         '---\n'
         '`/游戏 状态` 查看当前局，`/游戏 退出` 结束当前局。'
@@ -333,6 +355,7 @@ def quit_game(channel_id, kook_id):
         result='abandoned',
         end_reason='quit',
         abandoned_by=kook_id,
+        outcome_kind='abandoned' if session.game == 'blackjack' else '',
     )
     return _result(f'已结束 **{_game_label(session.game)}**。', ended=True, record=record)
 
@@ -529,6 +552,113 @@ def record_minigame_result(record_payload):
     return record
 
 
+def blackjack_tier(rating):
+    rating = int(rating or 0)
+    for threshold, name in BLACKJACK_TIERS:
+        if rating >= threshold:
+            return name
+    return '青铜'
+
+
+def apply_blackjack_rating(record_payload):
+    """根据一局 21 点结果更新玩家排位分,返回展示文本。
+    必须在 Flask app context 中调用;玩家未绑定账号则返回空。
+    """
+    payload = record_payload or {}
+    if normalize_game_key(payload.get('game')) != 'blackjack':
+        return ''
+    outcome = str(payload.get('outcome_kind') or '').strip()
+    if outcome not in BLACKJACK_DELTAS:
+        return ''
+
+    players = payload.get('players') or []
+    kook_id = str((players[0] if players else {}).get('id') or '').strip()
+    user = _resolve_user_by_kook_id(kook_id)
+    if not user or not user.id:
+        return ''
+
+    from app.extensions import db
+    from app.models.minigame import MiniGameRating
+
+    rating_row = MiniGameRating.query.filter_by(user_id=user.id, game='blackjack').first()
+    if not rating_row:
+        rating_row = MiniGameRating(
+            user_id=user.id,
+            game='blackjack',
+            rating=BLACKJACK_DEFAULT_RATING,
+            peak_rating=BLACKJACK_DEFAULT_RATING,
+            win_streak=0,
+            games_played=0,
+        )
+        db.session.add(rating_row)
+
+    before = int(rating_row.rating or BLACKJACK_DEFAULT_RATING)
+    base_delta = int(BLACKJACK_DELTAS[outcome])
+    is_win = outcome in BLACKJACK_WIN_KINDS
+    prev_streak = int(rating_row.win_streak or 0)
+    streak_bonus = BLACKJACK_STREAK_BONUS if (is_win and prev_streak >= 2) else 0
+    delta = base_delta + streak_bonus
+
+    after = max(0, before + delta)
+    rating_row.rating = after
+    rating_row.peak_rating = max(int(rating_row.peak_rating or 0), after)
+    rating_row.games_played = int(rating_row.games_played or 0) + 1
+    rating_row.win_streak = prev_streak + 1 if is_win else 0
+    new_streak = int(rating_row.win_streak)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return ''
+
+    real_delta = after - before
+    sign = '+' if real_delta >= 0 else ''
+    bonus_tag = ' 🔥连胜+5' if streak_bonus else ''
+    streak_tag = f' · 连胜 {new_streak}' if is_win and new_streak >= 2 else ''
+    return f'排位分: {before} → {after} ({sign}{real_delta}){bonus_tag} · {blackjack_tier(after)}{streak_tag}'
+
+
+def _format_blackjack_rating_leaderboard(limit=10):
+    from app.models.minigame import MiniGameRating
+    from app.models.user import User
+
+    limit = max(1, min(50, int(limit or 10)))
+    rows = (
+        MiniGameRating.query
+        .filter_by(game='blackjack')
+        .order_by(
+            MiniGameRating.rating.desc(),
+            MiniGameRating.peak_rating.desc(),
+            MiniGameRating.games_played.asc(),
+        )
+        .limit(limit)
+        .all()
+    )
+    lines = ['**21 点排位榜**']
+    if not rows:
+        lines.append('暂无排位记录,先来一局吧。')
+        return '\n'.join(lines)
+
+    user_ids = [int(r.user_id) for r in rows]
+    users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    for idx, r in enumerate(rows, start=1):
+        u = users.get(int(r.user_id))
+        kook_id = getattr(u, 'kook_id', '') or ''
+        if kook_id:
+            mention = _player_text(kook_id)
+        else:
+            mention = f"**{_display_name_from_user(u, '', kook_id)}**"
+        tier = blackjack_tier(int(r.rating or 0))
+        lines.append(
+            f'`#{idx}` {mention} **{int(r.rating)}** ({tier}) '
+            f'· 巅峰 {int(r.peak_rating or 0)} · {int(r.games_played or 0)} 局'
+        )
+    lines.append('---')
+    lines.append('段位: 青铜 < 1000 / 白银 1000+ / 黄金 1200+ / 铂金 1400+ / 钻石 1600+ / 王者 1800+')
+    return '\n'.join(lines)
+
+
 def get_leaderboard(game_key=None, limit=10):
     """返回小游戏胜场排行榜。"""
     from app.models.minigame import MiniGameRecord
@@ -619,6 +749,9 @@ def format_leaderboard(game_key=None, limit=10):
         available = '猜词、乱序词、密码色、21点、四子棋'
         return f'暂不支持 `{raw_game}` 的排行榜。可用游戏: {available}。'
 
+    if game == 'blackjack':
+        return _format_blackjack_rating_leaderboard(limit)
+
     title = _game_label(game) if game else '全部小游戏'
     rows = get_leaderboard(game, limit=limit)
     lines = [f'**小游戏排行榜 · {title}**']
@@ -671,7 +804,7 @@ def _cleanup_expired_sessions():
         _sessions.pop(key, None)
 
 
-def _build_record_payload(session, result, winner_id='', winner_name='', end_reason='', abandoned_by=''):
+def _build_record_payload(session, result, winner_id='', winner_name='', end_reason='', abandoned_by='', outcome_kind=''):
     players = session.state.get('players') if session.game == 'connect4' else None
     if not players:
         players = [{'id': session.kook_id, 'name': session.player_name}]
@@ -693,6 +826,7 @@ def _build_record_payload(session, result, winner_id='', winner_name='', end_rea
         'result': str(result or ''),
         'end_reason': str(end_reason or ''),
         'abandoned_by': str(abandoned_by or '').strip(),
+        'outcome_kind': str(outcome_kind or ''),
         'moves': int(session.state.get('moves') or 0),
         'started_at': float(session.created_at or time.time()),
         'ended_at': time.time(),
@@ -1124,7 +1258,7 @@ def _blackjack_hit(session):
     if _hand_value(state['player']) > 21:
         state['finished'] = True
         state['result'] = '你爆牌了，庄家胜。'
-        record = _build_record_payload(session, result='loss', end_reason='bust')
+        record = _build_record_payload(session, result='loss', end_reason='bust', outcome_kind='bust_loss')
         return _result(_render_blackjack(session) + '\n\n' + state['result'], ended=True, record=record)
     return _result(_render_blackjack(session))
 
@@ -1137,22 +1271,27 @@ def _blackjack_stand(session):
 
     player_value = _hand_value(state['player'])
     dealer_value = _hand_value(state['dealer'])
+    player_natural = len(state['player']) == 2 and player_value == 21
     if dealer_value > 21:
         result = '庄家爆牌，你赢了。'
         record_result = 'win'
         winner_id = session.kook_id
+        outcome_kind = 'dealer_bust'
     elif player_value > dealer_value:
         result = '你赢了。'
         record_result = 'win'
         winner_id = session.kook_id
+        outcome_kind = 'natural_bj_win' if player_natural else 'normal_win'
     elif player_value == dealer_value:
         result = '平局。'
         record_result = 'draw'
         winner_id = ''
+        outcome_kind = 'draw'
     else:
         result = '庄家胜。'
         record_result = 'loss'
         winner_id = ''
+        outcome_kind = 'normal_loss'
 
     state['finished'] = True
     state['result'] = result
@@ -1162,6 +1301,7 @@ def _blackjack_stand(session):
         winner_id=winner_id,
         winner_name=session.player_name if winner_id else '',
         end_reason='stand',
+        outcome_kind=outcome_kind,
     )
     return _result(_render_blackjack(session) + '\n\n' + result, ended=True, record=record)
 

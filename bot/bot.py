@@ -1530,6 +1530,28 @@ def _build_blackjack_action_card(text: str, owner_id: str, channel_id: str):
 
 async def _reply_minigame_result(msg: Message, result):
     message = (result or {}).get('message') or '小游戏暂无响应。'
+    record_payload = (result or {}).get('record') or None
+    rating_text = ''
+    if record_payload and record_payload.get('game') == 'blackjack' and record_payload.get('outcome_kind'):
+        try:
+            with app.app_context():
+                from app.services import minigame_service
+                try:
+                    if getattr(msg, 'author', None):
+                        get_or_create_user_by_kook(msg.author)
+                except Exception:
+                    logger.exception('21 点排位分账号识别失败')
+                    db.session.rollback()
+                rating_text = minigame_service.apply_blackjack_rating(record_payload) or ''
+        except Exception:
+            logger.exception('21 点排位分更新失败')
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    if rating_text:
+        message = f'{message}\n\n{rating_text}'
+        result['message'] = message
     if _is_active_blackjack_result(result):
         card = _build_blackjack_action_card(message, _minigame_user_id(msg), _minigame_channel_id(msg))
         if card:
@@ -1990,6 +2012,11 @@ async def on_story_choice_button(bot_obj: Bot, event: Event):
                 from app.services import minigame_service
 
                 result = minigame_service.handle_blackjack_action(channel_id, kook_id, action)
+                record_payload = (result or {}).get('record') or None
+                if record_payload and record_payload.get('outcome_kind'):
+                    rating_text = minigame_service.apply_blackjack_rating(record_payload) or ''
+                    if rating_text:
+                        result['message'] = f"{result.get('message', '')}\n\n{rating_text}"
 
             await _send_minigame_event_result(
                 bot_obj,
