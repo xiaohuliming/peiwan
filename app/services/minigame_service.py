@@ -208,6 +208,23 @@ BLACKJACK_TIERS = (
     (1000, '白银'),
     (0, '青铜'),
 )
+BLACKJACK_TIER_EMOJI = {
+    '青铜': '🥉',
+    '白银': '🥈',
+    '黄金': '🥇',
+    '铂金': '💠',
+    '钻石': '💎',
+    '王者': '👑',
+}
+BLACKJACK_OUTCOME_LABEL = {
+    'natural_bj_win': '天选 21',
+    'dealer_bust': '庄家爆牌',
+    'normal_win': '点数压庄',
+    'draw': '握手言和',
+    'normal_loss': '点数告负',
+    'bust_loss': '爆牌出局',
+    'abandoned': '中途弃局',
+}
 
 
 CARD_SUITS = ('黑桃', '红心', '方块', '梅花')
@@ -560,6 +577,88 @@ def blackjack_tier(rating):
     return '青铜'
 
 
+def _blackjack_tier_progress(rating):
+    """返回 (当前段位下界, 下一段位下界 or None, 下一段位名 or '')。"""
+    sorted_tiers = sorted(BLACKJACK_TIERS, key=lambda item: item[0])
+    cur_floor = sorted_tiers[0][0]
+    next_floor = None
+    next_name = ''
+    for floor, name in sorted_tiers:
+        if rating >= floor:
+            cur_floor = floor
+        else:
+            next_floor = floor
+            next_name = name
+            break
+    return cur_floor, next_floor, next_name
+
+
+def _format_blackjack_rating_panel(before, after, base_delta, streak_bonus,
+                                   prev_streak, new_streak, is_win, outcome):
+    """构建 21 点排位结算 TUI 面板。"""
+    delta = after - before
+    tier = blackjack_tier(after)
+    tier_emoji = BLACKJACK_TIER_EMOJI.get(tier, '🏅')
+    cur_floor, next_floor, next_name = _blackjack_tier_progress(after)
+
+    if next_floor is None:
+        bar = '█' * 10
+        progress_text = '巅峰段位 · 无人能及'
+    else:
+        span = max(1, next_floor - cur_floor)
+        gained = max(0, after - cur_floor)
+        ratio = min(1.0, gained / span)
+        filled = int(round(ratio * 10))
+        bar = '▰' * filled + '▱' * (10 - filled)
+        next_emoji = BLACKJACK_TIER_EMOJI.get(next_name, '')
+        progress_text = f'{int(ratio * 100)}% → {next_emoji} {next_name} · 还差 {next_floor - after}'
+
+    if delta > 0:
+        change_text = f'`+{delta} ▲`'
+        score_emoji = '📈'
+    elif delta < 0:
+        change_text = f'`{delta} ▼`'
+        score_emoji = '📉'
+    else:
+        change_text = '`±0 ─`'
+        score_emoji = '📊'
+
+    if is_win:
+        if new_streak >= 5:
+            streak_emoji = '🔥🔥'
+        elif new_streak >= 3:
+            streak_emoji = '🔥'
+        else:
+            streak_emoji = '✨'
+        streak_text = f'×{new_streak}'
+        if streak_bonus:
+            streak_text += f'　`连胜+{streak_bonus}`'
+    elif outcome == 'draw':
+        streak_emoji = '🤝'
+        streak_text = '×0'
+    else:
+        if prev_streak >= 3:
+            streak_emoji = '💔'
+            streak_text = f'×0　`{prev_streak} 连胜中断`'
+        else:
+            streak_emoji = '·'
+            streak_text = '×0'
+
+    outcome_label = BLACKJACK_OUTCOME_LABEL.get(outcome, '')
+    sep = '━' * 30
+    lines = [
+        sep,
+        f'🎰  **21 点 · 排位结算**　{("· " + outcome_label) if outcome_label else ""}',
+        sep,
+        f'🏅  段位　⤳　**{tier_emoji} {tier}**',
+        f'{score_emoji}  分数　⤳　{before} ➜ **{after}**　{change_text}',
+        f'{streak_emoji}  连胜　⤳　{streak_text}',
+        f'📊  进度　⤳　`{bar}`　{progress_text}',
+        sep,
+    ]
+    return '\n'.join(lines)
+
+
 def apply_blackjack_rating(record_payload):
     """根据一局 21 点结果更新玩家排位分,返回展示文本。
     必须在 Flask app context 中调用;玩家未绑定账号则返回空。
@@ -612,11 +711,16 @@ def apply_blackjack_rating(record_payload):
         db.session.rollback()
         return ''
 
-    real_delta = after - before
-    sign = '+' if real_delta >= 0 else ''
-    bonus_tag = ' 🔥连胜+5' if streak_bonus else ''
-    streak_tag = f' · 连胜 {new_streak}' if is_win and new_streak >= 2 else ''
-    return f'排位分: {before} → {after} ({sign}{real_delta}){bonus_tag} · {blackjack_tier(after)}{streak_tag}'
+    return _format_blackjack_rating_panel(
+        before=before,
+        after=after,
+        base_delta=base_delta,
+        streak_bonus=streak_bonus,
+        prev_streak=prev_streak,
+        new_streak=new_streak,
+        is_win=is_win,
+        outcome=outcome,
+    )
 
 
 def _format_blackjack_rating_leaderboard(limit=10):
@@ -635,27 +739,38 @@ def _format_blackjack_rating_leaderboard(limit=10):
         .limit(limit)
         .all()
     )
-    lines = ['**21 点排位榜**']
+
+    sep = '━' * 32
+    lines = [
+        sep,
+        '🎰  **21 点 · 排位榜 TOP {}**'.format(min(limit, len(rows) or limit)),
+        sep,
+    ]
     if not rows:
-        lines.append('暂无排位记录,先来一局吧。')
+        lines.append('暂无排位记录,先来一局开荒吧。')
+        lines.append(sep)
         return '\n'.join(lines)
 
     user_ids = [int(r.user_id) for r in rows]
     users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    rank_badges = {1: '🥇', 2: '🥈', 3: '🥉'}
     for idx, r in enumerate(rows, start=1):
         u = users.get(int(r.user_id))
         kook_id = getattr(u, 'kook_id', '') or ''
-        if kook_id:
-            mention = _player_text(kook_id)
-        else:
-            mention = f"**{_display_name_from_user(u, '', kook_id)}**"
+        mention = _player_text(kook_id) if kook_id else f"**{_display_name_from_user(u, '', kook_id)}**"
         tier = blackjack_tier(int(r.rating or 0))
+        tier_emoji = BLACKJACK_TIER_EMOJI.get(tier, '🏅')
+        badge = rank_badges.get(idx, f'`#{idx:>2}`')
         lines.append(
-            f'`#{idx}` {mention} **{int(r.rating)}** ({tier}) '
-            f'· 巅峰 {int(r.peak_rating or 0)} · {int(r.games_played or 0)} 局'
+            f'{badge}  {mention}　{tier_emoji} **{tier}**　'
+            f'`{int(r.rating)}`　巅峰 {int(r.peak_rating or 0)}　· {int(r.games_played or 0)} 局'
         )
-    lines.append('---')
-    lines.append('段位: 青铜 < 1000 / 白银 1000+ / 黄金 1200+ / 铂金 1400+ / 钻石 1600+ / 王者 1800+')
+    lines.append(sep)
+    lines.append(
+        '段位 ❯ 🥉 青铜 < 1000　🥈 白银 1000+　🥇 黄金 1200+　'
+        '💠 铂金 1400+　💎 钻石 1600+　👑 王者 1800+'
+    )
+    lines.append(sep)
     return '\n'.join(lines)
 
 
@@ -880,6 +995,10 @@ def _display_name_from_user(user=None, fallback_name='', kook_id=''):
             if candidate:
                 return candidate
     return fallback_name or str(kook_id or '')
+
+
+def game_label(game):
+    return _game_label(game)
 
 
 def _game_label(game):
