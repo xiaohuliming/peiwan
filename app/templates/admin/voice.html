@@ -44,7 +44,7 @@
   .voice-page .ratio-bar > span {
     display: block;
     height: 100%;
-    background: #a855f7;
+    background: var(--theme-primary-500);
     border-radius: 9999px;
   }
   .voice-page .pill {
@@ -64,10 +64,9 @@
   .dark .voice-page .pill.truncated { color: #fbbf24; }
   .dark .voice-page .pill.cross_day { color: #38bdf8; }
   /* ============================================================
-     配置区设计 v2 — 单色紫主调 + 等宽字 ID + 玻璃质感
+     配置区设计 v2 — 主题变量驱动 + 等宽字 ID + 玻璃质感
+     所有强调色直接读 base.html 的 --theme-primary-* 变量,跟随主题切换
      ============================================================ */
-  .voice-page .cfg-form { --pri: #a855f7; --pri-d: #9333ea; --pri-soft: rgba(168, 85, 247, 0.10); --pri-ring: rgba(168, 85, 247, 0.18); }
-  .dark .voice-page .cfg-form { --pri-soft: rgba(168, 85, 247, 0.16); --pri-ring: rgba(168, 85, 247, 0.28); }
 
   /* —— 输入控件统一 —— */
   .voice-page input[type="text"],
@@ -95,15 +94,15 @@
   .voice-page textarea::placeholder { color: #94a3b8; opacity: 0.85; }
   .voice-page input:hover,
   .voice-page textarea:hover {
-    border-color: rgba(168, 85, 247, 0.4);
+    border-color: var(--theme-primary-border);
     background: #ffffff;
   }
   .voice-page input:focus,
   .voice-page textarea:focus {
     outline: none;
     background: #ffffff;
-    border-color: var(--pri);
-    box-shadow: 0 0 0 4px var(--pri-ring), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border-color: var(--theme-primary-600);
+    box-shadow: 0 0 0 4px var(--theme-primary-soft-strong), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
   .voice-page input[type="number"]::-webkit-outer-spin-button,
   .voice-page input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -121,14 +120,14 @@
   .dark .voice-page textarea::placeholder { color: #64748b; }
   .dark .voice-page input:hover,
   .dark .voice-page textarea:hover {
-    border-color: rgba(168, 85, 247, 0.5);
+    border-color: var(--theme-primary-border);
     background: rgba(15, 23, 42, 0.85);
   }
   .dark .voice-page input:focus,
   .dark .voice-page textarea:focus {
     background: rgba(15, 23, 42, 0.96);
-    border-color: var(--pri);
-    box-shadow: 0 0 0 4px var(--pri-ring), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    border-color: var(--theme-primary-500);
+    box-shadow: 0 0 0 4px var(--theme-primary-soft-dark), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
   /* —— 字段元素 —— */
@@ -143,7 +142,8 @@
     margin-bottom: 8px;
   }
   .dark .voice-page .field-label { color: rgb(226, 232, 240); }
-  .voice-page .field-label .field-icon { color: var(--pri); flex-shrink: 0; }
+  .voice-page .field-label .field-icon { color: var(--theme-primary-600); flex-shrink: 0; }
+  .dark .voice-page .field-label .field-icon { color: var(--theme-primary-400); }
   .voice-page .field-label .field-tag {
     margin-left: auto;
     font-size: 0.6875rem;
@@ -155,8 +155,12 @@
     letter-spacing: 0.02em;
   }
   .voice-page .field-label .field-tag.pri {
-    background: var(--pri-soft);
-    color: var(--pri-d);
+    background: var(--theme-primary-soft);
+    color: var(--theme-primary-700);
+  }
+  .dark .voice-page .field-label .field-tag.pri {
+    background: var(--theme-primary-soft-dark);
+    color: var(--theme-primary-300);
   }
   .voice-page .field-label .field-tag.danger {
     background: rgba(239, 68, 68, 0.14);
@@ -189,14 +193,17 @@
     transition: background 0.2s ease, color 0.2s ease;
   }
   .voice-page .input-with-suffix input:focus ~ .suffix {
-    background: var(--pri-soft);
-    color: var(--pri-d);
+    background: var(--theme-primary-soft);
+    color: var(--theme-primary-700);
   }
   .dark .voice-page .input-with-suffix .suffix {
     background: rgba(30, 41, 59, 0.85);
     color: rgb(148, 163, 184);
   }
-  .dark .voice-page .input-with-suffix input:focus ~ .suffix { color: #c4b5fd; }
+  .dark .voice-page .input-with-suffix input:focus ~ .suffix {
+    background: var(--theme-primary-soft-dark);
+    color: var(--theme-primary-300);
+  }
 
   /* —— 启用开关:全宽 banner —— */
   .voice-page .toggle-banner {
@@ -283,21 +290,27 @@
   .voice-page .toggle-banner input { display: none; }
   /* 选中态 */
   .voice-page .toggle-banner:has(input:checked) {
-    background: var(--pri-soft);
-    border-color: rgba(168, 85, 247, 0.32);
+    background: var(--theme-primary-soft);
+    border-color: var(--theme-primary-border);
   }
-  .voice-page .toggle-banner:has(input:checked)::before { background: var(--pri); }
+  .dark .voice-page .toggle-banner:has(input:checked) {
+    background: var(--theme-primary-soft-dark);
+  }
+  .voice-page .toggle-banner:has(input:checked)::before { background: var(--theme-primary-600); }
   .voice-page .toggle-banner:has(input:checked) .toggle-icon {
-    background: var(--pri);
+    background: var(--theme-primary-600);
     color: #fff;
-    box-shadow: 0 2px 10px rgba(168, 85, 247, 0.32);
+    box-shadow: 0 2px 10px var(--theme-primary-shadow);
   }
   .voice-page .toggle-banner:has(input:checked) .toggle-status {
-    background: var(--pri-soft);
-    color: var(--pri-d);
+    background: var(--theme-primary-soft);
+    color: var(--theme-primary-700);
   }
-  .dark .voice-page .toggle-banner:has(input:checked) .toggle-status { color: #c4b5fd; }
-  .voice-page .toggle-banner input:checked ~ .toggle-switch { background: var(--pri); }
+  .dark .voice-page .toggle-banner:has(input:checked) .toggle-status {
+    background: var(--theme-primary-soft-dark);
+    color: var(--theme-primary-300);
+  }
+  .voice-page .toggle-banner input:checked ~ .toggle-switch { background: var(--theme-primary-600); }
   .voice-page .toggle-banner input:checked ~ .toggle-switch::after { transform: translateX(18px); }
   /* 关闭时显示 OFF / 开启时显示 ON 的可视文案 — 用 CSS 直接控制 */
   .voice-page .toggle-banner .lbl-on { display: none; }
@@ -328,13 +341,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--pri-soft);
-    color: var(--pri-d);
+    background: var(--theme-primary-soft);
+    color: var(--theme-primary-700);
     font-size: 0.7rem;
     font-weight: 800;
     letter-spacing: 0;
   }
-  .dark .voice-page .config-section-title .sec-num { color: #c4b5fd; }
+  .dark .voice-page .config-section-title .sec-num {
+    background: var(--theme-primary-soft-dark);
+    color: var(--theme-primary-300);
+  }
 
   /* —— ID 行计数徽标(贴在 textarea 右下角) —— */
   .voice-page .field-textarea-wrap { position: relative; }
@@ -384,19 +400,22 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: #fff;
-    background: var(--pri);
-    box-shadow: 0 6px 16px rgba(168, 85, 247, 0.28);
+    background: var(--theme-primary-600);
+    box-shadow: 0 6px 16px var(--theme-primary-shadow);
     transition: background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
   }
   .voice-page .btn-save:hover {
-    background: var(--pri-d);
+    background: var(--theme-primary-700);
     transform: translateY(-1px);
-    box-shadow: 0 10px 20px rgba(168, 85, 247, 0.36);
+    box-shadow: 0 10px 20px var(--theme-primary-shadow);
   }
-  .voice-page .btn-save:active { transform: translateY(0); box-shadow: 0 3px 10px rgba(168, 85, 247, 0.28); }
+  .voice-page .btn-save:active {
+    transform: translateY(0);
+    box-shadow: 0 3px 10px var(--theme-primary-shadow);
+  }
   .voice-page .btn-save:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 4px var(--pri-ring), 0 6px 16px rgba(168, 85, 247, 0.28);
+    box-shadow: 0 0 0 4px var(--theme-primary-soft-strong), 0 6px 16px var(--theme-primary-shadow);
   }
 
   /* —— prefers-reduced-motion —— */
