@@ -1493,6 +1493,7 @@ def _is_active_blackjack_result(result) -> bool:
         bool(result and result.get('ok', True))
         and not bool(result.get('ended'))
         and '**21 点**' in message
+        and '21 点 · 双人' not in message
     )
 
 
@@ -1535,7 +1536,8 @@ async def _reply_minigame_result(msg: Message, result):
     message = (result or {}).get('message') or '小游戏暂无响应。'
     record_payload = (result or {}).get('record') or None
     rating_text = ''
-    if record_payload and record_payload.get('game') == 'blackjack' and record_payload.get('outcome_kind'):
+    record_game = (record_payload or {}).get('game') or ''
+    if record_payload and record_payload.get('outcome_kind') and record_game in ('blackjack', 'blackjack_pvp'):
         try:
             with app.app_context():
                 from app.services import minigame_service
@@ -1545,7 +1547,10 @@ async def _reply_minigame_result(msg: Message, result):
                 except Exception:
                     logger.exception('21 点排位分账号识别失败')
                     db.session.rollback()
-                rating_text = minigame_service.apply_blackjack_rating(record_payload) or ''
+                if record_game == 'blackjack_pvp':
+                    rating_text = minigame_service.apply_blackjack_pvp_rating(record_payload) or ''
+                else:
+                    rating_text = minigame_service.apply_blackjack_rating(record_payload) or ''
         except Exception:
             logger.exception('21 点排位分更新失败')
             try:
@@ -1770,6 +1775,31 @@ async def minigame_cmd(msg: Message, action: str = '', *args: str):
         result = minigame_service.handle_connect4_move(channel_id, kook_id, rest)
     elif action_key in ('要牌', 'hit', 'h', '拿牌', '停牌', 'stand', 's', '不要', '开牌'):
         result = minigame_service.handle_blackjack_action(channel_id, kook_id, action_key)
+    elif minigame_service.normalize_game_key(action_key) in ('blackjack', 'blackjack_pvp'):
+        sub_parts = rest.split(maxsplit=1) if rest else []
+        sub = sub_parts[0].lower() if sub_parts else ''
+        if sub in ('接受', '同意', 'accept', 'yes', 'y'):
+            result = minigame_service.accept_blackjack_pvp(
+                channel_id, kook_id, _kook_user_tag(getattr(msg, 'author', None))
+            )
+        elif sub in ('拒绝', '谢绝', 'decline', 'no', 'n'):
+            result = minigame_service.decline_blackjack_pvp(channel_id, kook_id)
+        else:
+            opponent_id = _extract_kook_id_from_text(rest)
+            if opponent_id:
+                result = minigame_service.start_blackjack_pvp(
+                    channel_id=channel_id,
+                    starter_id=kook_id,
+                    starter_name=_kook_user_tag(getattr(msg, 'author', None)),
+                    opponent_id=opponent_id,
+                )
+            else:
+                result = minigame_service.start_game(
+                    channel_id=channel_id,
+                    kook_id=kook_id,
+                    player_name=_kook_user_tag(getattr(msg, 'author', None)),
+                    game_key=action_key,
+                )
     elif minigame_service.normalize_game_key(action_key):
         result = minigame_service.start_game(
             channel_id=channel_id,
@@ -1804,8 +1834,39 @@ async def mastermind_game_cmd(msg: Message):
 
 
 @bot.command(name='21点')
-async def blackjack_game_cmd(msg: Message):
-    """快速开始 21 点。"""
+async def blackjack_game_cmd(msg: Message, *args: str):
+    """快速开始 21 点；带 @对手 即进入 PvP。"""
+    from app.services import minigame_service
+
+    kook_id = _minigame_user_id(msg)
+    if not kook_id:
+        await msg.reply('未获取到你的 KOOK 身份，请重试')
+        return
+    rest = ' '.join(args).strip()
+    if rest:
+        sub_parts = rest.split(maxsplit=1)
+        sub = sub_parts[0].lower() if sub_parts else ''
+        channel_id = _minigame_channel_id(msg)
+        if sub in ('接受', '同意', 'accept', 'yes', 'y'):
+            result = minigame_service.accept_blackjack_pvp(
+                channel_id, kook_id, _kook_user_tag(getattr(msg, 'author', None))
+            )
+            await _reply_minigame_result(msg, result)
+            return
+        if sub in ('拒绝', '谢绝', 'decline', 'no', 'n'):
+            result = minigame_service.decline_blackjack_pvp(channel_id, kook_id)
+            await _reply_minigame_result(msg, result)
+            return
+        opponent_id = _extract_kook_id_from_text(rest)
+        if opponent_id:
+            result = minigame_service.start_blackjack_pvp(
+                channel_id=channel_id,
+                starter_id=kook_id,
+                starter_name=_kook_user_tag(getattr(msg, 'author', None)),
+                opponent_id=opponent_id,
+            )
+            await _reply_minigame_result(msg, result)
+            return
     await _start_minigame(msg, '21点')
 
 
@@ -2098,7 +2159,10 @@ async def on_story_choice_button(bot_obj: Bot, event: Event):
                 result = minigame_service.handle_blackjack_action(channel_id, kook_id, action)
                 record_payload = (result or {}).get('record') or None
                 if record_payload and record_payload.get('outcome_kind'):
-                    rating_text = minigame_service.apply_blackjack_rating(record_payload) or ''
+                    if record_payload.get('game') == 'blackjack_pvp':
+                        rating_text = minigame_service.apply_blackjack_pvp_rating(record_payload) or ''
+                    else:
+                        rating_text = minigame_service.apply_blackjack_rating(record_payload) or ''
                     if rating_text:
                         result['message'] = f"{result.get('message', '')}\n\n{rating_text}"
 

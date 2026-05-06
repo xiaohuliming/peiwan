@@ -158,6 +158,12 @@ GAME_ALIASES = {
     'undercover': 'undercover',
     '卧底': 'undercover',
     '谁是卧底': 'undercover',
+    'blackjack_pvp': 'blackjack_pvp',
+    '21点对决': 'blackjack_pvp',
+    '21点双人': 'blackjack_pvp',
+    '21点pvp': 'blackjack_pvp',
+    'pvp21': 'blackjack_pvp',
+    '双人21点': 'blackjack_pvp',
 }
 
 COLOR_LABELS = {
@@ -283,11 +289,12 @@ def menu_text():
         '`/游戏 乱序` - 根据打乱文字猜原词\n'
         '`/游戏 密码` - 颜色密码，例: `/游戏 猜 红 蓝 绿 黄`\n'
         '`/游戏 21点` - 和机器人庄家玩 21 点(带排位分,需绑账号)\n'
+        '`/游戏 21点 @玩家` - 双人对决 21 点（独立 ELO 排位）\n'
         '`/游戏 四子棋` - 双人四子棋\n'
         '`/游戏 炸弹` - 数字炸弹 1-100（单人速通）\n'
         '`/游戏 炸弹 多人` - 多人接力炸弹（踩到的输）\n'
         '`/游戏 卧底` - 谁是卧底（4-8 人，AI 出题）\n'
-        '`/游戏 排行 [游戏名]` - 查看排行榜,可填 四子棋/猜词/21点/炸弹\n'
+        '`/游戏 排行 [游戏名]` - 查看排行榜,可填 四子棋/猜词/21点/21点对决/炸弹\n'
         '`/游戏 剧情` - 进入 AI 剧情互动游戏《灰区档案》\n'
         '---\n'
         '`/游戏 状态` 查看当前局，`/游戏 退出` 结束当前局。'
@@ -313,6 +320,12 @@ def start_game(channel_id, kook_id, player_name, game_key):
         return _result(connect4_menu_text(), ok=False)
     if game == 'undercover':
         return _result(undercover_menu_text(), ok=False)
+    if game == 'blackjack_pvp':
+        return _result(
+            '21 点双人对决需要指定对手，例：`/游戏 21点 @对手`。\n'
+            '不带 @ 则进入单人 vs 庄家模式。',
+            ok=False,
+        )
     if game not in {'hangman', 'scramble', 'mastermind', 'blackjack', 'bomb'}:
         return _result(menu_text(), ok=False)
 
@@ -343,6 +356,12 @@ def start_game(channel_id, kook_id, player_name, game_key):
             '你已经在本频道的谁是卧底中。先 `/游戏 卧底 状态` 查看，或 `/游戏 卧底 退出`。',
             ok=False,
         )
+    pvp_session = _find_blackjack_pvp_session(channel_id, kook_id)
+    if pvp_session:
+        return _result(
+            '你已经在本频道的 21 点双人对决中。先 `/游戏 状态` 查看，或 `/游戏 退出` 结束。',
+            ok=False,
+        )
 
     session = MiniGameSession(
         game=game,
@@ -368,6 +387,10 @@ def get_status(channel_id, kook_id):
     _cleanup_expired_sessions()
     session = _sessions.get(_session_key(channel_id, kook_id))
     if not session:
+        pvp_session = _find_blackjack_pvp_session(channel_id, kook_id) or _sessions.get(_blackjack_pvp_key(channel_id))
+        if pvp_session:
+            pvp_session.touch()
+            return _result(_render_blackjack_pvp(pvp_session))
         connect4_session = _find_connect4_session(channel_id, kook_id) or _sessions.get(_connect4_key(channel_id))
         if connect4_session:
             connect4_session.touch()
@@ -388,6 +411,9 @@ def get_status(channel_id, kook_id):
 def quit_game(channel_id, kook_id):
     session = _sessions.pop(_session_key(channel_id, kook_id), None)
     if not session:
+        pvp_session = _find_blackjack_pvp_session(channel_id, kook_id)
+        if pvp_session:
+            return _blackjack_pvp_quit(pvp_session, kook_id)
         connect4_session = _find_connect4_session(channel_id, kook_id)
         if connect4_session:
             _sessions.pop(_connect4_key(channel_id), None)
@@ -545,13 +571,19 @@ def handle_guess(channel_id, kook_id, guess_text):
 
 def handle_blackjack_action(channel_id, kook_id, action):
     _cleanup_expired_sessions()
+    action_key = str(action or '').strip().lower()
+
+    pvp_session = _find_blackjack_pvp_session(channel_id, kook_id)
+    if pvp_session:
+        pvp_session.touch()
+        return _handle_blackjack_pvp_action(pvp_session, kook_id, action_key)
+
     key = _session_key(channel_id, kook_id)
     session = _sessions.get(key)
     if not session or session.game != 'blackjack':
         return _result('你当前没有进行中的 21 点。先发送 `/游戏 21点`。', ok=False)
 
     session.touch()
-    action_key = str(action or '').strip().lower()
     if action_key in {'hit', 'h', '要牌', '拿牌'}:
         result = _blackjack_hit(session)
     elif action_key in {'stand', 's', '停牌', '不要', '开牌'}:
@@ -907,11 +939,13 @@ def format_leaderboard(game_key=None, limit=10):
     game = normalize_game_key(game_key) if game_key else None
     raw_game = str(game_key or '').strip()
     if raw_game and raw_game not in {'全部', 'all'} and not game:
-        available = '猜词、乱序词、密码色、21点、四子棋、炸弹'
+        available = '猜词、乱序词、密码色、21点、21点对决、四子棋、炸弹'
         return f'暂不支持 `{raw_game}` 的排行榜。可用游戏: {available}。'
 
     if game == 'blackjack':
         return _format_blackjack_rating_leaderboard(limit)
+    if game == 'blackjack_pvp':
+        return _format_blackjack_pvp_rating_leaderboard(limit)
 
     title = _game_label(game) if game else '全部小游戏'
     rows = get_leaderboard(game, limit=limit)
@@ -970,7 +1004,10 @@ def _cleanup_expired_sessions():
 
 
 def _build_record_payload(session, result, winner_id='', winner_name='', end_reason='', abandoned_by='', outcome_kind=''):
-    players = session.state.get('players') if session.game == 'connect4' else None
+    if session.game in ('connect4', 'blackjack_pvp'):
+        players = session.state.get('players') or None
+    else:
+        players = None
     if not players:
         players = [{'id': session.kook_id, 'name': session.player_name}]
     cleaned_players = []
@@ -1057,6 +1094,7 @@ def _game_label(game):
         'scramble': '乱序词',
         'mastermind': '密码色',
         'blackjack': '21 点',
+        'blackjack_pvp': '21 点 · 双人对决',
         'connect4': '四子棋',
         'bomb': '数字炸弹',
         'bomb_multi': '数字炸弹·多人',
@@ -1518,6 +1556,8 @@ def _render_session(session):
         return _render_mastermind(session)
     if session.game == 'blackjack':
         return _render_blackjack(session)
+    if session.game == 'blackjack_pvp':
+        return _render_blackjack_pvp(session)
     if session.game == 'bomb':
         return _render_bomb_solo(session)
     if session.game == 'bomb_multi':
@@ -1525,6 +1565,541 @@ def _render_session(session):
     if session.game == 'undercover':
         return _render_undercover(session)
     return menu_text()
+
+
+# ============================================================
+# 21 点 · 双人 PvP（频道级，独立 ELO 排位分）
+# ============================================================
+
+BLACKJACK_PVP_DEFAULT_RATING = 1000
+BLACKJACK_PVP_K_FACTOR = 24
+BLACKJACK_PVP_STREAK_BONUS = 5
+
+
+def _blackjack_pvp_key(channel_id):
+    return ('blackjack_pvp', str(channel_id or 'unknown'))
+
+
+def _find_blackjack_pvp_session(channel_id, kook_id=None):
+    session = _sessions.get(_blackjack_pvp_key(channel_id))
+    if not session or session.game != 'blackjack_pvp':
+        return None
+    if not kook_id:
+        return session
+    return session if _blackjack_pvp_player_index(session, kook_id) >= 0 else None
+
+
+def _blackjack_pvp_player_index(session, kook_id):
+    kook_id = str(kook_id or '')
+    if not kook_id:
+        return -1
+    for index, player in enumerate(session.state.get('players') or []):
+        if str(player.get('id') or '') == kook_id:
+            return index
+    return -1
+
+
+def start_blackjack_pvp(channel_id, starter_id, starter_name, opponent_id, opponent_name=''):
+    """发起一局 21 点 PvP（招募阶段，等对手接受）。"""
+    _cleanup_expired_sessions()
+    channel_id = str(channel_id or 'unknown')
+    starter_id = str(starter_id or '').strip()
+    opponent_id = str(opponent_id or '').strip()
+    if not starter_id:
+        return _result('未获取到发起人的 KOOK 身份。', ok=False)
+    if not opponent_id:
+        return _result(
+            '请 @ 一名对手发起 PvP，例：`/游戏 21点 @对手`。\n'
+            '不带 @ 则进入单人 vs 庄家模式。',
+            ok=False,
+        )
+    if starter_id == opponent_id:
+        return _result('21 点对决需要两位不同玩家。', ok=False)
+
+    key = _blackjack_pvp_key(channel_id)
+    if _sessions.get(key):
+        return _result('当前频道已经有一局 21 点对决，先 `/游戏 状态` 看看。', ok=False)
+    for player_id in (starter_id, opponent_id):
+        if _sessions.get(_session_key(channel_id, player_id)):
+            return _result(
+                f'{_player_text(player_id)} 当前有别的小游戏在进行，请先 `/游戏 退出`。',
+                ok=False,
+            )
+    if _sessions.get(_connect4_key(channel_id)):
+        return _result('当前频道有四子棋进行中。', ok=False)
+    if _sessions.get(_bomb_multi_key(channel_id)):
+        return _result('当前频道有多人炸弹进行中。', ok=False)
+    if _sessions.get(_undercover_key(channel_id)):
+        return _result('当前频道有谁是卧底进行中。', ok=False)
+
+    session = MiniGameSession(
+        game='blackjack_pvp',
+        channel_id=channel_id,
+        kook_id=starter_id,
+        player_name=str(starter_name or ''),
+        state={
+            'phase': 'invited',
+            'host_id': starter_id,
+            'opponent_id': opponent_id,
+            'players': [
+                {'id': starter_id, 'name': str(starter_name or ''), 'hand': [], 'status': 'waiting'},
+                {'id': opponent_id, 'name': str(opponent_name or ''), 'hand': [], 'status': 'waiting'},
+            ],
+            'deck': [],
+            'turn': 0,
+            'moves': 0,
+        },
+    )
+    _sessions[key] = session
+    return _result(
+        '**21 点 · 双人对决** 邀请发出。\n'
+        f'{_player_text(starter_id)} ⚔️ {_player_text(opponent_id)}\n'
+        '对手发送 `/游戏 21点 接受` 接战，或 `/游戏 21点 拒绝` 谢绝；'
+        '`/游戏 退出` 撤回邀请。\n'
+        '邀请 30 分钟内有效。'
+    )
+
+
+def accept_blackjack_pvp(channel_id, kook_id, kook_name=''):
+    """对手接受邀请，发牌进入对局。"""
+    session = _sessions.get(_blackjack_pvp_key(channel_id))
+    if not session:
+        return _result('当前频道没有 21 点对决邀请。', ok=False)
+    if session.state.get('phase') != 'invited':
+        return _result('对局已开始。`/游戏 状态` 查看。', ok=False)
+    if str(session.state.get('opponent_id') or '') != str(kook_id or ''):
+        return _result('这局邀请不是给你的。', ok=False)
+    if _sessions.get(_session_key(session.channel_id, kook_id)):
+        return _result('你当前有别的小游戏在进行，请先 `/游戏 退出`。', ok=False)
+
+    if kook_name:
+        for player in session.state.get('players') or []:
+            if str(player.get('id') or '') == str(kook_id):
+                player['name'] = str(kook_name)
+                break
+
+    deck = [(rank, value, suit) for suit in CARD_SUITS for rank, value in CARD_RANKS]
+    random.shuffle(deck)
+    session.state['deck'] = deck
+    for player in session.state.get('players') or []:
+        player['hand'] = [_deal(deck), _deal(deck)]
+        player['status'] = 'playing'
+    session.state['phase'] = 'playing'
+    session.state['turn'] = 0
+    session.touch()
+
+    host_id = session.state.get('host_id') or ''
+    return _result(
+        f'{_player_text(kook_id)} 接战！发牌完毕，{_player_text(host_id)} 先手。\n\n'
+        + _render_blackjack_pvp(session)
+    )
+
+
+def decline_blackjack_pvp(channel_id, kook_id):
+    session = _sessions.get(_blackjack_pvp_key(channel_id))
+    if not session:
+        return _result('当前频道没有 21 点对决邀请。', ok=False)
+    if session.state.get('phase') != 'invited':
+        return _result('对局已经开始，无法拒绝。', ok=False)
+    if str(session.state.get('opponent_id') or '') != str(kook_id or ''):
+        return _result('这局邀请不是给你的。', ok=False)
+    _sessions.pop(_blackjack_pvp_key(channel_id), None)
+    return _result(f'{_player_text(kook_id)} 谢绝了对决，邀请已撤销。', ended=True)
+
+
+def _handle_blackjack_pvp_action(session, kook_id, action_key):
+    state = session.state
+    phase = state.get('phase', 'invited')
+    if phase == 'invited':
+        return _result('对局还没开始，等待对手 `/游戏 21点 接受`。', ok=False)
+    if phase == 'finished':
+        return _result('对局已结束。', ok=False)
+
+    players = state.get('players') or []
+    if not players:
+        return _result('对局玩家信息异常。', ok=False)
+    turn = int(state.get('turn') or 0)
+    current = players[turn % len(players)]
+    if str(current.get('id') or '') != str(kook_id or ''):
+        return _result(
+            f'还没轮到你。当前: {_player_text(current.get("id"))}',
+            ok=False,
+        )
+
+    if action_key in {'hit', 'h', '要牌', '拿牌'}:
+        return _blackjack_pvp_hit(session, current)
+    if action_key in {'stand', 's', '停牌', '不要', '开牌'}:
+        return _blackjack_pvp_stand(session, current)
+    return _result('21 点操作只支持 `/游戏 要牌` 或 `/游戏 停牌`。', ok=False)
+
+
+def _blackjack_pvp_hit(session, player):
+    state = session.state
+    state['moves'] = int(state.get('moves') or 0) + 1
+    deck = state.get('deck') or []
+    if not deck:
+        return _blackjack_pvp_resolve(session, end_reason='deck_empty')
+    player['hand'].append(_deal(deck))
+    if _hand_value(player['hand']) > 21:
+        player['status'] = 'bust'
+        return _blackjack_pvp_advance_turn(
+            session,
+            prefix=f'{_player_text(player["id"])} 抽到 `{_card_text(player["hand"][-1])}` → 💥 爆牌\n\n',
+        )
+    return _result(_render_blackjack_pvp(session))
+
+
+def _blackjack_pvp_stand(session, player):
+    player['status'] = 'stand'
+    return _blackjack_pvp_advance_turn(
+        session,
+        prefix=f'{_player_text(player["id"])} 停牌（{_hand_display(player["hand"])}）。\n\n',
+    )
+
+
+def _blackjack_pvp_advance_turn(session, prefix=''):
+    """切到下一个仍在 'playing' 的玩家；都结束就结算。"""
+    state = session.state
+    players = state.get('players') or []
+    n = len(players)
+    if n == 0:
+        return _result('对局玩家信息异常。', ok=False)
+    cur = int(state.get('turn') or 0)
+    for step in range(1, n + 1):
+        idx = (cur + step) % n
+        if (players[idx].get('status') or '') == 'playing':
+            state['turn'] = idx
+            session.touch()
+            return _result(prefix + _render_blackjack_pvp(session))
+    return _blackjack_pvp_resolve(session, prefix=prefix)
+
+
+def _blackjack_pvp_resolve(session, prefix='', end_reason='resolve'):
+    state = session.state
+    state['phase'] = 'finished'
+    players = state.get('players') or []
+    if len(players) < 2:
+        _sessions.pop(_blackjack_pvp_key(session.channel_id), None)
+        return _result('对局玩家信息异常，已结束。', ok=False, ended=True)
+
+    p1, p2 = players[0], players[1]
+    v1, v2 = _hand_value(p1.get('hand') or []), _hand_value(p2.get('hand') or [])
+    bust1, bust2 = v1 > 21, v2 > 21
+
+    if bust1 and bust2:
+        winner_idx = -1
+        result_text = '双方爆牌 💥💥 平局 🤝'
+    elif bust1:
+        winner_idx = 1
+        result_text = f'{_player_text(p1["id"])} 爆牌 💥，{_player_text(p2["id"])} 不战而胜 🏆'
+    elif bust2:
+        winner_idx = 0
+        result_text = f'{_player_text(p2["id"])} 爆牌 💥，{_player_text(p1["id"])} 不战而胜 🏆'
+    elif v1 > v2:
+        winner_idx = 0
+        result_text = f'{_player_text(p1["id"])} 点数压制（**{v1}** vs {v2}），胜 🏆'
+    elif v2 > v1:
+        winner_idx = 1
+        result_text = f'{_player_text(p2["id"])} 点数压制（**{v2}** vs {v1}），胜 🏆'
+    else:
+        winner_idx = -1
+        result_text = f'点数相同（**{v1}** vs **{v2}**），平局 🤝'
+
+    if winner_idx >= 0:
+        winner = players[winner_idx]
+        record_result = 'win'
+        winner_id = str(winner.get('id') or '')
+        winner_name = str(winner.get('name') or '')
+        outcome_kind = 'pvp_win'
+    else:
+        winner_id = ''
+        winner_name = ''
+        record_result = 'draw'
+        outcome_kind = 'pvp_draw'
+
+    record = _build_record_payload(
+        session,
+        result=record_result,
+        winner_id=winner_id,
+        winner_name=winner_name,
+        end_reason=end_reason,
+        outcome_kind=outcome_kind,
+    )
+    _sessions.pop(_blackjack_pvp_key(session.channel_id), None)
+    message = prefix + _render_blackjack_pvp(session, finished=True) + '\n\n' + result_text
+    return _result(message, ended=True, record=record)
+
+
+def _blackjack_pvp_quit(session, kook_id):
+    state = session.state
+    phase = state.get('phase', 'invited')
+    host_id = str(state.get('host_id') or '')
+    opponent_id = str(state.get('opponent_id') or '')
+    quitter = str(kook_id or '')
+
+    if phase == 'invited':
+        if quitter not in (host_id, opponent_id):
+            return _result('你不在这局对决中。', ok=False)
+        _sessions.pop(_blackjack_pvp_key(session.channel_id), None)
+        return _result(f'已撤销 21 点对决邀请（由 {_player_text(quitter)} 取消）。', ended=True)
+
+    quitter_idx = _blackjack_pvp_player_index(session, quitter)
+    if quitter_idx < 0:
+        return _result('你不在这局对决中。', ok=False)
+    players = state.get('players') or []
+    winner = players[1 - quitter_idx] if len(players) >= 2 else {}
+    state['phase'] = 'finished'
+    record = _build_record_payload(
+        session,
+        result='abandoned',
+        winner_id=str(winner.get('id') or ''),
+        winner_name=str(winner.get('name') or ''),
+        end_reason='quit',
+        abandoned_by=quitter,
+        outcome_kind='pvp_abandon',
+    )
+    _sessions.pop(_blackjack_pvp_key(session.channel_id), None)
+    return _result(
+        f'{_player_text(quitter)} 弃局，{_player_text(winner.get("id"))} 不战而胜。',
+        ended=True,
+        record=record,
+    )
+
+
+def _render_blackjack_pvp(session, finished=False):
+    state = session.state
+    players = state.get('players') or []
+    phase = state.get('phase', 'invited')
+    finished = finished or phase == 'finished'
+    lines = ['**21 点 · 双人对决**']
+
+    if phase == 'invited':
+        host_id = state.get('host_id') or ''
+        opp_id = state.get('opponent_id') or ''
+        lines.append(f'{_player_text(host_id)} 发出邀请，等待 {_player_text(opp_id)} 接战。')
+        lines.append('对手 `/游戏 21点 接受` 进入对局，`/游戏 21点 拒绝` 谢绝。')
+        return '\n'.join(lines)
+
+    turn = int(state.get('turn') or 0)
+    current_id = ''
+    if not finished and players:
+        current_id = str(players[turn % len(players)].get('id') or '')
+    for player in players:
+        hand = player.get('hand') or []
+        cards = ' '.join(_card_text(card) for card in hand) or '-'
+        value_text = _hand_display(hand) if hand else '0'
+        status = player.get('status') or 'playing'
+        if finished:
+            tag_map = {
+                'playing': '',
+                'stand': ' · 停牌',
+                'bust': ' · 💥 爆牌',
+                'waiting': ' · 等待中',
+            }
+            tag = tag_map.get(status, '')
+        else:
+            if status == 'bust':
+                tag = ' · 💥 爆牌'
+            elif status == 'stand':
+                tag = ' · 停牌'
+            else:
+                tag = ''
+        marker = ''
+        if not finished and str(player.get('id') or '') == current_id:
+            marker = ' ◀ 当前回合'
+        lines.append(
+            f'{_player_text(player["id"])}: `{cards}` = **{value_text}**{tag}{marker}'
+        )
+
+    if not finished and current_id:
+        lines.append('')
+        lines.append(
+            f'轮到 {_player_text(current_id)} 决策：`/游戏 要牌` 或 `/游戏 停牌`。'
+        )
+    return '\n'.join(lines)
+
+
+# ----- ELO 排位分（双人 PvP，需双方都绑账号才更新） -----
+
+def apply_blackjack_pvp_rating(record_payload):
+    """根据一局 PvP 21 点结果更新两位玩家的 ELO 排位分,返回展示文本。
+    必须在 Flask app context 中调用;任一玩家未绑账号则返回空。
+    """
+    payload = record_payload or {}
+    if str(payload.get('game') or '') != 'blackjack_pvp':
+        return ''
+    outcome = str(payload.get('outcome_kind') or '').strip()
+    if outcome not in {'pvp_win', 'pvp_draw', 'pvp_abandon'}:
+        return ''
+    players = payload.get('players') or []
+    if len(players) < 2:
+        return ''
+
+    p1_id = str(players[0].get('id') or '').strip()
+    p2_id = str(players[1].get('id') or '').strip()
+    p1_user = _resolve_user_by_kook_id(p1_id)
+    p2_user = _resolve_user_by_kook_id(p2_id)
+    if not (p1_user and p2_user and p1_user.id and p2_user.id):
+        return ''
+
+    from app.extensions import db
+    from app.models.minigame import MiniGameRating
+
+    def _ensure_row(user_id):
+        row = MiniGameRating.query.filter_by(user_id=user_id, game='blackjack_pvp').first()
+        if not row:
+            row = MiniGameRating(
+                user_id=user_id,
+                game='blackjack_pvp',
+                rating=BLACKJACK_PVP_DEFAULT_RATING,
+                peak_rating=BLACKJACK_PVP_DEFAULT_RATING,
+                win_streak=0,
+                games_played=0,
+            )
+            db.session.add(row)
+        return row
+
+    row1 = _ensure_row(p1_user.id)
+    row2 = _ensure_row(p2_user.id)
+    before1 = int(row1.rating or BLACKJACK_PVP_DEFAULT_RATING)
+    before2 = int(row2.rating or BLACKJACK_PVP_DEFAULT_RATING)
+
+    expected1 = 1.0 / (1.0 + 10 ** ((before2 - before1) / 400.0))
+    expected2 = 1.0 - expected1
+
+    winner_id = str(payload.get('winner_id') or '').strip()
+    result = str(payload.get('result') or '')
+    if result == 'draw':
+        actual1, actual2 = 0.5, 0.5
+    elif winner_id == p1_id:
+        actual1, actual2 = 1.0, 0.0
+    elif winner_id == p2_id:
+        actual1, actual2 = 0.0, 1.0
+    else:
+        actual1, actual2 = 0.5, 0.5
+
+    base_delta1 = int(round(BLACKJACK_PVP_K_FACTOR * (actual1 - expected1)))
+    base_delta2 = int(round(BLACKJACK_PVP_K_FACTOR * (actual2 - expected2)))
+
+    is_win1 = actual1 == 1.0
+    is_win2 = actual2 == 1.0
+    prev_streak1 = int(row1.win_streak or 0)
+    prev_streak2 = int(row2.win_streak or 0)
+    bonus1 = BLACKJACK_PVP_STREAK_BONUS if (is_win1 and prev_streak1 >= 2) else 0
+    bonus2 = BLACKJACK_PVP_STREAK_BONUS if (is_win2 and prev_streak2 >= 2) else 0
+
+    after1 = max(0, before1 + base_delta1 + bonus1)
+    after2 = max(0, before2 + base_delta2 + bonus2)
+    row1.rating = after1
+    row2.rating = after2
+    row1.peak_rating = max(int(row1.peak_rating or 0), after1)
+    row2.peak_rating = max(int(row2.peak_rating or 0), after2)
+    row1.games_played = int(row1.games_played or 0) + 1
+    row2.games_played = int(row2.games_played or 0) + 1
+    row1.win_streak = prev_streak1 + 1 if is_win1 else 0
+    row2.win_streak = prev_streak2 + 1 if is_win2 else 0
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return ''
+
+    return _format_blackjack_pvp_rating_panel(
+        players=players,
+        before=(before1, before2),
+        after=(after1, after2),
+        deltas=(base_delta1, base_delta2),
+        bonuses=(bonus1, bonus2),
+        new_streaks=(int(row1.win_streak), int(row2.win_streak)),
+        is_wins=(is_win1, is_win2),
+    )
+
+
+def _format_blackjack_pvp_rating_panel(players, before, after, deltas, bonuses, new_streaks, is_wins):
+    sep = '━' * 32
+    lines = [sep, '⚔️  **21 点 · 双人对决 · 排位结算**', sep]
+    for idx in range(2):
+        player = players[idx]
+        total_delta = deltas[idx] + bonuses[idx]
+        if total_delta > 0:
+            change_text = f'`+{total_delta} ▲`'
+            score_emoji = '📈'
+        elif total_delta < 0:
+            change_text = f'`{total_delta} ▼`'
+            score_emoji = '📉'
+        else:
+            change_text = '`±0 ─`'
+            score_emoji = '📊'
+        tier = blackjack_tier(after[idx])
+        tier_emoji = BLACKJACK_TIER_EMOJI.get(tier, '🏅')
+        bonus_text = f'　`连胜+{bonuses[idx]}`' if bonuses[idx] else ''
+        if is_wins[idx]:
+            streak_line = f'  🔥 连胜 ×{new_streaks[idx]}'
+        elif new_streaks[idx] == 0 and not is_wins[idx]:
+            streak_line = ''
+        else:
+            streak_line = ''
+        block = (
+            f'{_player_text(player.get("id") or "")}　{tier_emoji} {tier}\n'
+            f'  {score_emoji} {before[idx]} ➜ **{after[idx]}**　{change_text}{bonus_text}'
+        )
+        if streak_line:
+            block += f'\n{streak_line}'
+        lines.append(block)
+    lines.append(sep)
+    return '\n'.join(lines)
+
+
+def _format_blackjack_pvp_rating_leaderboard(limit=10):
+    from app.models.minigame import MiniGameRating
+    from app.models.user import User
+
+    limit = max(1, min(50, int(limit or 10)))
+    rows = (
+        MiniGameRating.query
+        .filter_by(game='blackjack_pvp')
+        .order_by(
+            MiniGameRating.rating.desc(),
+            MiniGameRating.peak_rating.desc(),
+            MiniGameRating.games_played.asc(),
+        )
+        .limit(limit)
+        .all()
+    )
+
+    sep = '━' * 32
+    lines = [
+        sep,
+        '⚔️  **21 点 · 双人对决 · 排位榜 TOP {}**'.format(min(limit, len(rows) or limit)),
+        sep,
+    ]
+    if not rows:
+        lines.append('暂无排位记录,先约一局开荒吧。')
+        lines.append(sep)
+        return '\n'.join(lines)
+
+    user_ids = [int(r.user_id) for r in rows]
+    users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
+    rank_badges = {1: '🥇', 2: '🥈', 3: '🥉'}
+    for idx, r in enumerate(rows, start=1):
+        u = users.get(int(r.user_id))
+        kook_id = getattr(u, 'kook_id', '') or ''
+        mention = _player_text(kook_id) if kook_id else f"**{_display_name_from_user(u, '', kook_id)}**"
+        tier = blackjack_tier(int(r.rating or 0))
+        tier_emoji = BLACKJACK_TIER_EMOJI.get(tier, '🏅')
+        badge = rank_badges.get(idx, f'`#{idx:>2}`')
+        lines.append(
+            f'{badge}  {mention}　{tier_emoji} **{tier}**　'
+            f'`{int(r.rating)}`　巅峰 {int(r.peak_rating or 0)}　· {int(r.games_played or 0)} 局'
+        )
+    lines.append(sep)
+    lines.append(
+        '段位 ❯ 🥉 青铜 < 1000　🥈 白银 1000+　🥇 黄金 1200+　'
+        '💠 铂金 1400+　💎 钻石 1600+　👑 王者 1800+'
+    )
+    lines.append(sep)
+    return '\n'.join(lines)
 
 
 # ============================================================
