@@ -176,6 +176,22 @@ def init_scheduler(app):
             if count > 0:
                 app.logger.info(f'[Scheduler] 每周发言排行结算 {count} 人')
 
+    def voice_truncate_orphans():
+        """兜底：把 active 但超过 truncate_hours 的语音会话强制关闭"""
+        with app.app_context():
+            from app.services.voice_stats_service import truncate_orphan_sessions
+            count = truncate_orphan_sessions()
+            if count > 0:
+                app.logger.info(f'[Scheduler] 强制结算挂机会话 {count} 条')
+
+    def voice_split_cross_day():
+        """每天 00:01 把仍 active 的语音会话在昨日 23:59:59 截断、今日 00:00:00 起接续"""
+        with app.app_context():
+            from app.services.voice_stats_service import split_cross_day_sessions
+            count = split_cross_day_sessions()
+            if count > 0:
+                app.logger.info(f'[Scheduler] 跨日切分挂机会话 {count} 条')
+
     scheduler.add_job(
         auto_settle_escort_orders,
         trigger=IntervalTrigger(minutes=5),
@@ -219,6 +235,22 @@ def init_scheduler(app):
         trigger=CronTrigger(day_of_week=0, hour=0, minute=10, timezone=bj_tz),
         id='settle_chat_weekly_rankings',
         name='每周发言排行榜结算',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        voice_truncate_orphans,
+        trigger=IntervalTrigger(minutes=5),
+        id='voice_truncate_orphans',
+        name='挂机会话兜底截断',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        voice_split_cross_day,
+        trigger=CronTrigger(hour=0, minute=1, timezone=bj_tz),
+        id='voice_split_cross_day',
+        name='挂机会话跨日切分',
         replace_existing=True
     )
 

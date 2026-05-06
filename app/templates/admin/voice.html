@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block header_title %}挂机统计{% endblock %}
+
+{% block styles %}
+<style>
+  .voice-page .glass-card {
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(148, 163, 184, 0.24);
+  }
+  .dark .voice-page .glass-card {
+    background: rgba(15, 23, 42, 0.86);
+    border-color: rgba(148, 163, 184, 0.22);
+  }
+  .voice-page table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .voice-page th,
+  .voice-page td {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 0.875rem;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  }
+  .voice-page th {
+    font-weight: 600;
+    color: rgb(100 116 139);
+    background: rgba(248, 250, 252, 0.5);
+  }
+  .dark .voice-page th {
+    background: rgba(15, 23, 42, 0.4);
+    color: rgb(148 163 184);
+  }
+  .voice-page tbody tr:hover {
+    background: rgba(148, 163, 184, 0.08);
+  }
+  .voice-page .ratio-bar {
+    height: 6px;
+    border-radius: 9999px;
+    background: rgba(148, 163, 184, 0.18);
+    overflow: hidden;
+  }
+  .voice-page .ratio-bar > span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #22d3ee, #6366f1);
+    border-radius: 9999px;
+  }
+  .voice-page .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .voice-page .pill.active { background: rgba(16, 185, 129, 0.14); color: #059669; }
+  .voice-page .pill.closed { background: rgba(99, 102, 241, 0.14); color: #4f46e5; }
+  .voice-page .pill.truncated { background: rgba(245, 158, 11, 0.16); color: #d97706; }
+  .voice-page .pill.cross_day { background: rgba(14, 165, 233, 0.16); color: #0ea5e9; }
+  .dark .voice-page .pill.active { color: #34d399; }
+  .dark .voice-page .pill.closed { color: #818cf8; }
+  .dark .voice-page .pill.truncated { color: #fbbf24; }
+  .dark .voice-page .pill.cross_day { color: #38bdf8; }
+  .voice-page input[type="text"],
+  .voice-page input[type="number"],
+  .voice-page textarea {
+    background: rgba(248, 250, 252, 0.96);
+    border: 1px solid rgba(100, 116, 139, 0.28);
+    color: #0f172a;
+  }
+  .dark .voice-page input[type="text"],
+  .dark .voice-page input[type="number"],
+  .dark .voice-page textarea {
+    background: rgba(2, 6, 23, 0.64);
+    border-color: rgba(148, 163, 184, 0.34);
+    color: #e2e8f0;
+  }
+  .voice-page .live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: voice-pulse 2.2s infinite;
+    margin-right: 6px;
+  }
+  @keyframes voice-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6 voice-page">
+
+  <!-- 标题 + 窗口选择 -->
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+        <i data-lucide="headphones" width="22" height="22" class="text-purple-500"></i>
+        KOOK 语音挂机统计
+      </h2>
+      <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">基于进出语音频道事件统计，跨日切分、超时兜底自动结算</p>
+    </div>
+    <form method="get" class="flex flex-wrap items-center gap-2">
+      <label class="text-sm text-slate-500 dark:text-slate-400">最近</label>
+      <select name="days" class="h-10 rounded-xl border border-white/60 dark:border-slate-700/60 bg-white/70 dark:bg-slate-900/60 px-3 text-sm text-slate-700 dark:text-slate-200">
+        {% for d in [1, 3, 7, 14, 30, 90] %}
+        <option value="{{ d }}" {% if days == d %}selected{% endif %}>{{ d }} 天</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium transition-colors flex items-center gap-2">
+        <i data-lucide="refresh-cw" width="16" height="16"></i> 刷新
+      </button>
+    </form>
+  </div>
+
+  <!-- KPI -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">当前在线</p>
+      <p class="mt-2 text-2xl font-bold text-emerald-600 dark:text-emerald-300 flex items-center">
+        <span class="live-dot"></span>{{ overview.active_now }}
+      </p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">今日总挂机</p>
+      <p class="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-300">{{ format_duration(overview.today_total_seconds) }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">今日活跃用户</p>
+      <p class="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-300">{{ overview.today_unique }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">今日会话数</p>
+      <p class="mt-2 text-2xl font-bold text-cyan-600 dark:text-cyan-300">{{ overview.today_sessions }}</p>
+    </div>
+    <div class="glass-card p-5">
+      <p class="text-xs text-slate-400">近 {{ overview.window_days }} 天总时长</p>
+      <p class="mt-2 text-2xl font-bold text-amber-600 dark:text-amber-300">{{ format_duration(overview.window_total_seconds) }}</p>
+    </div>
+  </div>
+
+  <!-- 当前在线 -->
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+      <i data-lucide="radio" width="18" height="18" class="text-emerald-500"></i>
+      当前在线 ({{ active_rows|length }})
+    </h3>
+    {% if active_rows %}
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>用户</th>
+            <th>频道</th>
+            <th>进入时间</th>
+            <th>已挂时长</th>
+            <th>KOOK ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in active_rows %}
+          <tr>
+            <td class="font-medium text-slate-700 dark:text-slate-200">{{ row.display_name }}</td>
+            <td class="text-slate-600 dark:text-slate-300">{{ row.channel_name }}</td>
+            <td class="text-slate-500 whitespace-nowrap">{{ fmt_dt(row.joined_at, '%m-%d %H:%M:%S') }}</td>
+            <td class="font-semibold text-emerald-600 dark:text-emerald-300 whitespace-nowrap">{{ format_duration(row.elapsed_seconds) }}</td>
+            <td class="text-xs text-slate-400">{{ row.kook_id }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400 text-center py-8">当前没有用户在语音频道</p>
+    {% endif %}
+  </div>
+
+  <!-- 排行榜 (今日 / 窗口) -->
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+    <div class="glass-card p-6">
+      <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+        <i data-lucide="trophy" width="18" height="18" class="text-amber-500"></i>
+        今日挂机榜 · {{ today_date.strftime('%Y-%m-%d') }} (北京时间)
+      </h3>
+      {% if today_rows %}
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>名次</th>
+              <th>玩家</th>
+              <th>总时长</th>
+              <th>会话</th>
+              <th>最近离线</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in today_rows %}
+            <tr>
+              <td>
+                {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}<span class="text-slate-400">#{{ row.rank }}</span>{% endif %}
+              </td>
+              <td class="font-medium text-slate-700 dark:text-slate-200">{{ row.display_name }}</td>
+              <td class="font-bold text-purple-600 dark:text-purple-300 whitespace-nowrap">{{ format_duration(row.total_seconds) }}</td>
+              <td class="text-slate-500">{{ row.sessions }}</td>
+              <td class="text-slate-400 text-xs whitespace-nowrap">{% if row.last_left_at %}{{ fmt_dt(row.last_left_at, '%H:%M') }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-400 text-center py-8">今日还没有挂机数据</p>
+      {% endif %}
+    </div>
+
+    <div class="glass-card p-6">
+      <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+        <i data-lucide="bar-chart-3" width="18" height="18" class="text-purple-500"></i>
+        近 {{ days }} 天挂机榜
+      </h3>
+      {% if window_rows %}
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>名次</th>
+              <th>玩家</th>
+              <th>总时长</th>
+              <th>活跃天数</th>
+              <th>会话</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in window_rows %}
+            <tr>
+              <td>
+                {% if row.rank == 1 %}🥇{% elif row.rank == 2 %}🥈{% elif row.rank == 3 %}🥉{% else %}<span class="text-slate-400">#{{ row.rank }}</span>{% endif %}
+              </td>
+              <td class="font-medium text-slate-700 dark:text-slate-200">{{ row.display_name }}</td>
+              <td class="font-bold text-blue-600 dark:text-blue-300 whitespace-nowrap">{{ format_duration(row.total_seconds) }}</td>
+              <td class="text-slate-500">{{ row.active_days }} / {{ days }}</td>
+              <td class="text-slate-500">{{ row.sessions }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-400 text-center py-8">该窗口内无挂机数据</p>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- 频道分布 -->
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+      <i data-lucide="hash" width="18" height="18" class="text-cyan-500"></i>
+      频道分布 · 近 {{ days }} 天
+    </h3>
+    {% if channel_rows %}
+    {% set _max = channel_rows[0].total_seconds or 1 %}
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>名次</th>
+            <th>频道</th>
+            <th>总时长</th>
+            <th>占比</th>
+            <th>会话</th>
+            <th>独立用户</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in channel_rows %}
+          {% set ratio = (row.total_seconds * 100 / _max) if _max else 0 %}
+          <tr>
+            <td class="text-slate-400">#{{ row.rank }}</td>
+            <td class="font-medium text-slate-700 dark:text-slate-200">
+              {{ row.channel_name }}
+              {% if row.channel_name != row.channel_id %}<span class="text-xs text-slate-400 ml-1">{{ row.channel_id }}</span>{% endif %}
+            </td>
+            <td class="font-semibold whitespace-nowrap">{{ format_duration(row.total_seconds) }}</td>
+            <td>
+              <div class="flex items-center gap-2">
+                <div class="ratio-bar w-32"><span style="width: {{ '%.1f'|format(ratio) }}%"></span></div>
+                <span class="text-xs text-slate-500">{{ '%.1f'|format(ratio) }}%</span>
+              </div>
+            </td>
+            <td class="text-slate-500">{{ row.sessions }}</td>
+            <td class="text-slate-500">{{ row.uniques }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400 text-center py-8">该窗口内没有挂机数据</p>
+    {% endif %}
+  </div>
+
+  <!-- 最近会话 -->
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+      <i data-lucide="history" width="18" height="18" class="text-blue-500"></i>
+      最近会话 ({{ recent_rows|length }} 条)
+    </h3>
+    {% if recent_rows %}
+    <div class="overflow-x-auto">
+      <table>
+        <thead>
+          <tr>
+            <th>用户</th>
+            <th>频道</th>
+            <th>进入</th>
+            <th>离开</th>
+            <th>时长</th>
+            <th>状态</th>
+            <th>备注</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in recent_rows %}
+          <tr>
+            <td class="font-medium text-slate-700 dark:text-slate-200">{{ row.display_name }}</td>
+            <td class="text-slate-600 dark:text-slate-300">{{ row.channel_name }}</td>
+            <td class="text-slate-500 whitespace-nowrap">{{ fmt_dt(row.joined_at, '%m-%d %H:%M') }}</td>
+            <td class="text-slate-500 whitespace-nowrap">{% if row.left_at %}{{ fmt_dt(row.left_at, '%m-%d %H:%M') }}{% else %}<span class="text-emerald-500">在线中</span>{% endif %}</td>
+            <td class="font-semibold whitespace-nowrap">{% if row.duration_seconds is not none %}{{ format_duration(row.duration_seconds) }}{% else %}—{% endif %}</td>
+            <td><span class="pill {{ row.status }}">
+              {% if row.status == 'active' %}进行中
+              {% elif row.status == 'closed' %}已结束
+              {% elif row.status == 'truncated' %}超时截断
+              {% elif row.status == 'cross_day' %}跨日切分
+              {% else %}{{ row.status }}{% endif %}
+            </span></td>
+            <td class="text-xs text-slate-400">{{ row.note }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-slate-400 text-center py-8">还没有挂机会话记录</p>
+    {% endif %}
+  </div>
+
+  <!-- 配置 -->
+  <div class="glass-card p-6">
+    <h3 class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-4">
+      <i data-lucide="settings-2" width="18" height="18" class="text-slate-500"></i>
+      统计配置
+    </h3>
+    <form method="post" action="{{ url_for('voice_admin.save_config', days=days) }}" class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <label class="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700">
+          <input type="checkbox" name="enabled" {% if config_form.enabled %}checked{% endif %}>
+          <span class="text-sm text-slate-700 dark:text-slate-200">启用挂机统计</span>
+        </label>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">最低有效时长(秒)</label>
+          <input type="number" min="0" max="3600" name="min_session_seconds" value="{{ config_form.min_session_seconds }}"
+                 class="h-10 w-full rounded-xl px-3 text-sm">
+          <p class="mt-1 text-xs text-slate-400">低于此时长的会话仍记录,但不计入聚合排行</p>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">超时强制截断(小时)</label>
+          <input type="number" min="1" max="72" name="truncate_hours" value="{{ config_form.truncate_hours }}"
+                 class="h-10 w-full rounded-xl px-3 text-sm">
+          <p class="mt-1 text-xs text-slate-400">单条 active 会话超过此时长会被定时任务自动关闭</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">仅统计的语音频道 ID(留空=全部)</label>
+          <textarea name="whitelist_channel_ids" rows="3" class="w-full rounded-xl px-3 py-2 text-sm" placeholder="一行一个">{{ config_form.whitelist_channel_ids }}</textarea>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">永远排除的频道 ID</label>
+          <textarea name="blacklist_channel_ids" rows="3" class="w-full rounded-xl px-3 py-2 text-sm" placeholder="一行一个">{{ config_form.blacklist_channel_ids }}</textarea>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-500 mb-1">仅统计的 KOOK 用户 ID(留空=全部)</label>
+          <textarea name="whitelist_kook_ids" rows="3" class="w-full rounded-xl px-3 py-2 text-sm" placeholder="一行一个">{{ config_form.whitelist_kook_ids }}</textarea>
+        </div>
+      </div>
+      <div class="flex justify-end">
+        <button type="submit" class="h-10 px-5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium flex items-center gap-2">
+          <i data-lucide="save" width="16" height="16"></i> 保存配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

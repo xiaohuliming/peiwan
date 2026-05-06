@@ -19,6 +19,7 @@ from .chat_stats import (
     ChatCheckinRecord,
 )
 from .minigame import MiniGameRecord
+from .voice import VoiceSession, VoiceDailyStat, VoiceStatConfig
 from .story_game import (
     StoryPlayerState,
     StoryCharacterRelation,

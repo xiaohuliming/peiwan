@@ -139,6 +139,9 @@ def create_app(config_class=Config, start_background_tasks=True):
     from app.views.minigame_admin import minigame_admin_bp
     app.register_blueprint(minigame_admin_bp, url_prefix='/admin/minigame')
 
+    from app.views.voice_admin import voice_admin_bp
+    app.register_blueprint(voice_admin_bp, url_prefix='/admin/voice')
+
     from app.views.assistant import assistant_bp
     app.register_blueprint(assistant_bp, url_prefix='/assistant')
 

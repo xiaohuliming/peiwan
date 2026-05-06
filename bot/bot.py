@@ -2348,20 +2348,32 @@ async def on_reaction_delete(b: Bot, event: Event):
 
 @bot.on_event(EventTypes.JOINED_CHANNEL)
 async def on_joined_channel(b: Bot, event: Event):
-    """用户进入语音频道 → 播报"""
+    """用户进入语音频道 → 播报 + 挂机时长统计开始"""
     user_id = event.body.get('user_id', '')
     channel_id = event.body.get('channel_id', '')
     if not user_id or not channel_id:
         return
 
     with app.app_context():
-        from app.services.kook_service import push_channel_event
+        from app.services.kook_service import _get_channel_name, push_channel_event
+        from app.services.voice_stats_service import open_session
+
         push_channel_event(user_id, channel_id, 'join')
+
+        try:
+            channel_name = _get_channel_name(channel_id) or None
+            open_session(
+                kook_id=user_id,
+                channel_id=channel_id,
+                channel_name=channel_name,
+            )
+        except Exception as e:
+            logger.warning(f'[Voice] open_session 失败 user={user_id} ch={channel_id}: {e}')
 
 
 @bot.on_event(EventTypes.EXITED_CHANNEL)
 async def on_exited_channel(b: Bot, event: Event):
-    """用户离开语音频道 → 播报"""
+    """用户离开语音频道 → 播报 + 挂机时长统计结束"""
     user_id = event.body.get('user_id', '')
     channel_id = event.body.get('channel_id', '')
     if not user_id or not channel_id:
@@ -2369,7 +2381,14 @@ async def on_exited_channel(b: Bot, event: Event):
 
     with app.app_context():
         from app.services.kook_service import push_channel_event
+        from app.services.voice_stats_service import close_session
+
         push_channel_event(user_id, channel_id, 'leave')
+
+        try:
+            close_session(kook_id=user_id, channel_id=channel_id)
+        except Exception as e:
+            logger.warning(f'[Voice] close_session 失败 user={user_id} ch={channel_id}: {e}')
 
 
 if __name__ == '__main__':
