@@ -44,7 +44,7 @@
   .voice-page .ratio-bar > span {
     display: block;
     height: 100%;
-    background: linear-gradient(90deg, #22d3ee, #6366f1);
+    background: #a855f7;
     border-radius: 9999px;
   }
   .voice-page .pill {
@@ -63,251 +63,351 @@
   .dark .voice-page .pill.closed { color: #818cf8; }
   .dark .voice-page .pill.truncated { color: #fbbf24; }
   .dark .voice-page .pill.cross_day { color: #38bdf8; }
-  /* ===== 配置表单美化 ===== */
-  .voice-page .cfg-input,
+  /* ============================================================
+     配置区设计 v2 — 单色紫主调 + 等宽字 ID + 玻璃质感
+     ============================================================ */
+  .voice-page .cfg-form { --pri: #a855f7; --pri-d: #9333ea; --pri-soft: rgba(168, 85, 247, 0.10); --pri-ring: rgba(168, 85, 247, 0.18); }
+  .dark .voice-page .cfg-form { --pri-soft: rgba(168, 85, 247, 0.16); --pri-ring: rgba(168, 85, 247, 0.28); }
+
+  /* —— 输入控件统一 —— */
   .voice-page input[type="text"],
   .voice-page input[type="number"],
   .voice-page textarea {
     width: 100%;
-    background: rgba(248, 250, 252, 0.94);
+    background: rgba(248, 250, 252, 0.92);
     border: 1px solid rgba(148, 163, 184, 0.34);
-    border-radius: 0.875rem;
+    border-radius: 12px;
     padding: 10px 14px;
     color: #0f172a;
     font-size: 0.875rem;
-    line-height: 1.4;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    line-height: 1.45;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
     transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
   }
   .voice-page textarea {
     resize: vertical;
-    min-height: 88px;
-    font-family: inherit;
+    min-height: 96px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    letter-spacing: 0.01em;
   }
-  .voice-page .cfg-input::placeholder,
   .voice-page input::placeholder,
-  .voice-page textarea::placeholder {
-    color: #94a3b8;
-    opacity: 0.85;
-  }
-  .voice-page .cfg-input:hover,
-  .voice-page input[type="text"]:hover,
-  .voice-page input[type="number"]:hover,
+  .voice-page textarea::placeholder { color: #94a3b8; opacity: 0.85; }
+  .voice-page input:hover,
   .voice-page textarea:hover {
-    border-color: rgba(148, 163, 184, 0.55);
+    border-color: rgba(168, 85, 247, 0.4);
     background: #ffffff;
   }
-  .voice-page .cfg-input:focus,
-  .voice-page input[type="text"]:focus,
-  .voice-page input[type="number"]:focus,
+  .voice-page input:focus,
   .voice-page textarea:focus {
     outline: none;
     background: #ffffff;
-    border-color: #a855f7;
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    border-color: var(--pri);
+    box-shadow: 0 0 0 4px var(--pri-ring), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
-  /* 隐藏丑陋的数字 spinner */
   .voice-page input[type="number"]::-webkit-outer-spin-button,
-  .voice-page input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
+  .voice-page input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .voice-page input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
-  .dark .voice-page .cfg-input,
   .dark .voice-page input[type="text"],
   .dark .voice-page input[type="number"],
   .dark .voice-page textarea {
-    background: rgba(2, 6, 23, 0.62);
-    border-color: rgba(148, 163, 184, 0.32);
+    background: rgba(2, 6, 23, 0.6);
+    border-color: rgba(148, 163, 184, 0.28);
     color: #e2e8f0;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
-  .dark .voice-page .cfg-input::placeholder,
   .dark .voice-page input::placeholder,
-  .dark .voice-page textarea::placeholder {
-    color: #64748b;
-  }
-  .dark .voice-page .cfg-input:hover,
-  .dark .voice-page input[type="text"]:hover,
-  .dark .voice-page input[type="number"]:hover,
+  .dark .voice-page textarea::placeholder { color: #64748b; }
+  .dark .voice-page input:hover,
   .dark .voice-page textarea:hover {
-    border-color: rgba(148, 163, 184, 0.55);
+    border-color: rgba(168, 85, 247, 0.5);
     background: rgba(15, 23, 42, 0.85);
   }
-  .dark .voice-page .cfg-input:focus,
-  .dark .voice-page input[type="text"]:focus,
-  .dark .voice-page input[type="number"]:focus,
+  .dark .voice-page input:focus,
   .dark .voice-page textarea:focus {
     background: rgba(15, 23, 42, 0.96);
-    border-color: #a855f7;
-    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    border-color: var(--pri);
+    box-shadow: 0 0 0 4px var(--pri-ring), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
-  /* 字段标签 + 帮助文案 */
+  /* —— 字段元素 —— */
+  .voice-page .field { display: flex; flex-direction: column; }
   .voice-page .field-label {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 0.78rem;
+    gap: 7px;
+    font-size: 0.8125rem;
     font-weight: 600;
-    color: rgb(71, 85, 105);
+    color: rgb(51, 65, 85);
     margin-bottom: 8px;
-    letter-spacing: 0.01em;
   }
-  .dark .voice-page .field-label {
-    color: rgb(203, 213, 225);
+  .dark .voice-page .field-label { color: rgb(226, 232, 240); }
+  .voice-page .field-label .field-icon { color: var(--pri); flex-shrink: 0; }
+  .voice-page .field-label .field-tag {
+    margin-left: auto;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.18);
+    color: rgb(100, 116, 139);
+    letter-spacing: 0.02em;
   }
-  .voice-page .field-label .field-icon {
-    color: #a855f7;
-    flex-shrink: 0;
+  .voice-page .field-label .field-tag.pri {
+    background: var(--pri-soft);
+    color: var(--pri-d);
   }
+  .voice-page .field-label .field-tag.danger {
+    background: rgba(239, 68, 68, 0.14);
+    color: #dc2626;
+  }
+  .dark .voice-page .field-label .field-tag.danger { color: #f87171; }
   .voice-page .field-hint {
-    margin-top: 6px;
+    margin-top: 7px;
     font-size: 0.72rem;
     color: rgb(148, 163, 184);
-    line-height: 1.4;
+    line-height: 1.45;
   }
 
-  /* iOS 风格开关卡片 */
-  .voice-page .toggle-card {
+  /* —— 数字输入 + 单位 —— */
+  .voice-page .input-with-suffix { position: relative; }
+  .voice-page .input-with-suffix input { padding-right: 56px; }
+  .voice-page .input-with-suffix .suffix {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgb(100, 116, 139);
+    pointer-events: none;
+    background: rgba(241, 245, 249, 0.9);
+    padding: 3px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .voice-page .input-with-suffix input:focus ~ .suffix {
+    background: var(--pri-soft);
+    color: var(--pri-d);
+  }
+  .dark .voice-page .input-with-suffix .suffix {
+    background: rgba(30, 41, 59, 0.85);
+    color: rgb(148, 163, 184);
+  }
+  .dark .voice-page .input-with-suffix input:focus ~ .suffix { color: #c4b5fd; }
+
+  /* —— 启用开关:全宽 banner —— */
+  .voice-page .toggle-banner {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 14px;
-    padding: 14px 16px;
-    border-radius: 0.875rem;
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(99, 102, 241, 0.05));
-    border: 1px solid rgba(168, 85, 247, 0.22);
+    padding: 14px 18px 14px 22px;
+    border-radius: 14px;
+    background: rgba(148, 163, 184, 0.10);
+    border: 1px solid rgba(148, 163, 184, 0.22);
     cursor: pointer;
-    transition: all 0.2s ease;
     user-select: none;
+    overflow: hidden;
+    transition: background 0.2s ease, border-color 0.2s ease;
   }
-  .voice-page .toggle-card:hover {
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.14), rgba(99, 102, 241, 0.10));
-    border-color: rgba(168, 85, 247, 0.42);
+  .voice-page .toggle-banner::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: rgba(148, 163, 184, 0.4);
+    transition: background 0.2s ease;
   }
-  .voice-page .toggle-card .toggle-icon {
-    width: 36px;
-    height: 36px;
+  .voice-page .toggle-banner:hover {
+    background: rgba(148, 163, 184, 0.16);
+    border-color: rgba(148, 163, 184, 0.32);
+  }
+  .voice-page .toggle-banner .toggle-icon {
+    width: 38px;
+    height: 38px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #a855f7, #6366f1);
-    color: #fff;
+    background: rgba(148, 163, 184, 0.22);
+    color: rgb(100, 116, 139);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.25);
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   }
-  .voice-page .toggle-card .toggle-meta { flex: 1; min-width: 0; }
-  .voice-page .toggle-card .toggle-title {
-    font-size: 0.875rem;
+  .voice-page .toggle-banner .toggle-meta { flex: 1; min-width: 0; }
+  .voice-page .toggle-banner .toggle-title {
+    font-size: 0.9375rem;
     font-weight: 600;
     color: rgb(30, 41, 59);
+    line-height: 1.3;
   }
-  .dark .voice-page .toggle-card .toggle-title { color: #e2e8f0; }
-  .voice-page .toggle-card .toggle-sub {
-    margin-top: 2px;
-    font-size: 0.72rem;
+  .dark .voice-page .toggle-banner .toggle-title { color: #e2e8f0; }
+  .voice-page .toggle-banner .toggle-sub {
+    margin-top: 3px;
+    font-size: 0.75rem;
     color: rgb(100, 116, 139);
   }
-  .voice-page .toggle-card input { display: none; }
-  .voice-page .toggle-switch {
+  .voice-page .toggle-banner .toggle-status {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.2);
+    color: rgb(100, 116, 139);
+    margin-right: 4px;
+  }
+  .voice-page .toggle-banner .toggle-switch {
     position: relative;
-    width: 42px;
-    height: 24px;
+    width: 44px;
+    height: 26px;
     background: rgba(148, 163, 184, 0.55);
-    border-radius: 9999px;
+    border-radius: 999px;
     transition: background 0.22s ease;
     flex-shrink: 0;
   }
-  .voice-page .toggle-switch::after {
+  .voice-page .toggle-banner .toggle-switch::after {
     content: '';
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
+    top: 3px; left: 3px;
+    width: 20px; height: 20px;
     border-radius: 50%;
     background: #fff;
     box-shadow: 0 2px 4px rgba(15, 23, 42, 0.22);
     transition: transform 0.22s ease;
   }
-  .voice-page .toggle-card input:checked ~ .toggle-switch {
-    background: linear-gradient(135deg, #a855f7, #6366f1);
-  }
-  .voice-page .toggle-card input:checked ~ .toggle-switch::after {
-    transform: translateX(18px);
-  }
-  .dark .voice-page .toggle-card {
-    background: linear-gradient(135deg, rgba(168, 85, 247, 0.16), rgba(99, 102, 241, 0.12));
+  .voice-page .toggle-banner input { display: none; }
+  /* 选中态 */
+  .voice-page .toggle-banner:has(input:checked) {
+    background: var(--pri-soft);
     border-color: rgba(168, 85, 247, 0.32);
   }
+  .voice-page .toggle-banner:has(input:checked)::before { background: var(--pri); }
+  .voice-page .toggle-banner:has(input:checked) .toggle-icon {
+    background: var(--pri);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(168, 85, 247, 0.32);
+  }
+  .voice-page .toggle-banner:has(input:checked) .toggle-status {
+    background: var(--pri-soft);
+    color: var(--pri-d);
+  }
+  .dark .voice-page .toggle-banner:has(input:checked) .toggle-status { color: #c4b5fd; }
+  .voice-page .toggle-banner input:checked ~ .toggle-switch { background: var(--pri); }
+  .voice-page .toggle-banner input:checked ~ .toggle-switch::after { transform: translateX(18px); }
+  /* 关闭时显示 OFF / 开启时显示 ON 的可视文案 — 用 CSS 直接控制 */
+  .voice-page .toggle-banner .lbl-on { display: none; }
+  .voice-page .toggle-banner:has(input:checked) .lbl-on { display: inline; }
+  .voice-page .toggle-banner:has(input:checked) .lbl-off { display: none; }
 
-  /* 数字输入加单位徽标 */
-  .voice-page .input-with-suffix {
-    position: relative;
-  }
-  .voice-page .input-with-suffix input {
-    padding-right: 48px;
-  }
-  .voice-page .input-with-suffix .suffix {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.72rem;
-    font-weight: 500;
-    color: rgb(148, 163, 184);
-    pointer-events: none;
-    background: rgba(241, 245, 249, 0.9);
-    padding: 2px 8px;
-    border-radius: 9999px;
-  }
-  .dark .voice-page .input-with-suffix .suffix {
-    background: rgba(30, 41, 59, 0.9);
-    color: rgb(148, 163, 184);
-  }
-
-  /* 配置区段标题分隔 */
+  /* —— 区段标题 —— */
+  .voice-page .config-section { padding-top: 4px; }
   .voice-page .config-section + .config-section {
-    margin-top: 18px;
-    padding-top: 18px;
-    border-top: 1px dashed rgba(148, 163, 184, 0.22);
+    margin-top: 22px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
   }
   .voice-page .config-section-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     color: rgb(100, 116, 139);
     margin-bottom: 14px;
   }
+  .voice-page .config-section-title .sec-num {
+    width: 22px; height: 22px;
+    border-radius: 7px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--pri-soft);
+    color: var(--pri-d);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+  .dark .voice-page .config-section-title .sec-num { color: #c4b5fd; }
 
-  /* 保存按钮 */
+  /* —— ID 行计数徽标(贴在 textarea 右下角) —— */
+  .voice-page .field-textarea-wrap { position: relative; }
+  .voice-page .field-counter {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: rgb(148, 163, 184);
+    background: rgba(241, 245, 249, 0.92);
+    padding: 2px 8px;
+    border-radius: 999px;
+    pointer-events: none;
+    user-select: none;
+  }
+  .dark .voice-page .field-counter {
+    background: rgba(30, 41, 59, 0.85);
+    color: rgb(148, 163, 184);
+  }
+  .voice-page .field-counter[data-count="0"] { opacity: 0.6; }
+
+  /* —— 底部操作条 —— */
+  .voice-page .form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid rgba(148, 163, 184, 0.18);
+  }
+  .voice-page .form-tip {
+    font-size: 0.72rem;
+    color: rgb(148, 163, 184);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
   .voice-page .btn-save {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     height: 42px;
     padding: 0 22px;
-    border-radius: 0.875rem;
+    border-radius: 12px;
     font-size: 0.875rem;
     font-weight: 600;
     color: #fff;
-    background: linear-gradient(135deg, #a855f7, #6366f1);
-    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.32);
-    transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+    background: var(--pri);
+    box-shadow: 0 6px 16px rgba(168, 85, 247, 0.28);
+    transition: background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
   }
   .voice-page .btn-save:hover {
-    filter: brightness(1.06);
+    background: var(--pri-d);
     transform: translateY(-1px);
-    box-shadow: 0 10px 22px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 10px 20px rgba(168, 85, 247, 0.36);
   }
-  .voice-page .btn-save:active {
-    transform: translateY(0);
+  .voice-page .btn-save:active { transform: translateY(0); box-shadow: 0 3px 10px rgba(168, 85, 247, 0.28); }
+  .voice-page .btn-save:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px var(--pri-ring), 0 6px 16px rgba(168, 85, 247, 0.28);
+  }
+
+  /* —— prefers-reduced-motion —— */
+  @media (prefers-reduced-motion: reduce) {
+    .voice-page input,
+    .voice-page textarea,
+    .voice-page .toggle-banner,
+    .voice-page .toggle-switch,
+    .voice-page .toggle-switch::after,
+    .voice-page .btn-save,
+    .voice-page .input-with-suffix .suffix { transition: none !important; }
   }
   .voice-page .live-dot {
     display: inline-block;
@@ -593,93 +693,126 @@
       <i data-lucide="sliders-horizontal" width="18" height="18" class="text-purple-500"></i>
       统计配置
     </h3>
-    <form method="post" action="{{ url_for('voice_admin.save_config', days=days) }}">
+    <form method="post" action="{{ url_for('voice_admin.save_config', days=days) }}" class="cfg-form" id="voice-cfg-form">
 
-      <!-- 段一:基础参数 -->
+      <!-- 段一:启用开关 + 阈值 -->
       <div class="config-section">
         <div class="config-section-title">
-          <i data-lucide="zap" width="14" height="14"></i>
+          <span class="sec-num">1</span>
           基础参数
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          <label class="toggle-card md:col-span-1">
-            <input type="checkbox" name="enabled" {% if config_form.enabled %}checked{% endif %}>
-            <div class="toggle-icon">
-              <i data-lucide="activity" width="18" height="18"></i>
-            </div>
-            <div class="toggle-meta">
-              <div class="toggle-title">启用挂机统计</div>
-              <div class="toggle-sub">关闭后不再写入新会话</div>
-            </div>
-            <span class="toggle-switch"></span>
-          </label>
+        <!-- 全宽 toggle banner -->
+        <label class="toggle-banner" aria-label="启用挂机统计">
+          <input type="checkbox" name="enabled" {% if config_form.enabled %}checked{% endif %}>
+          <div class="toggle-icon">
+            <i data-lucide="activity" width="20" height="20"></i>
+          </div>
+          <div class="toggle-meta">
+            <div class="toggle-title">挂机统计</div>
+            <div class="toggle-sub">关闭后将停止记录新会话(已有数据保留)</div>
+          </div>
+          <span class="toggle-status">
+            <span class="lbl-on">运行中</span>
+            <span class="lbl-off">已停用</span>
+          </span>
+          <span class="toggle-switch"></span>
+        </label>
 
-          <div>
+        <!-- 数字输入 2 列 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div class="field">
             <div class="field-label">
               <i data-lucide="timer" width="14" height="14" class="field-icon"></i>
               最低有效时长
+              <span class="field-tag">阈值</span>
             </div>
             <div class="input-with-suffix">
-              <input type="number" min="0" max="3600" name="min_session_seconds" value="{{ config_form.min_session_seconds }}">
+              <input type="number" min="0" max="3600" name="min_session_seconds"
+                     value="{{ config_form.min_session_seconds }}"
+                     aria-describedby="hint-min-sec" inputmode="numeric">
               <span class="suffix">秒</span>
             </div>
-            <p class="field-hint">低于此时长的会话仍会记录,但不计入聚合与排行</p>
+            <p class="field-hint" id="hint-min-sec">低于此时长的会话仍记录,但不计入排行 — 推荐 30 秒</p>
           </div>
 
-          <div>
+          <div class="field">
             <div class="field-label">
               <i data-lucide="alarm-clock" width="14" height="14" class="field-icon"></i>
               超时强制截断
+              <span class="field-tag">兜底</span>
             </div>
             <div class="input-with-suffix">
-              <input type="number" min="1" max="72" name="truncate_hours" value="{{ config_form.truncate_hours }}">
+              <input type="number" min="1" max="72" name="truncate_hours"
+                     value="{{ config_form.truncate_hours }}"
+                     aria-describedby="hint-truncate" inputmode="numeric">
               <span class="suffix">小时</span>
             </div>
-            <p class="field-hint">单条 active 会话超过此时长会被定时任务自动关闭</p>
+            <p class="field-hint" id="hint-truncate">active 会话超过此时长会被定时任务自动关闭 — 推荐 12 小时</p>
           </div>
-
         </div>
       </div>
 
       <!-- 段二:范围限定 -->
       <div class="config-section">
         <div class="config-section-title">
-          <i data-lucide="filter" width="14" height="14"></i>
+          <span class="sec-num">2</span>
           统计范围
         </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-          <div>
+          <div class="field">
             <div class="field-label">
               <i data-lucide="hash" width="14" height="14" class="field-icon"></i>
-              仅统计的语音频道 ID
-              <span class="ml-auto text-[11px] font-normal text-slate-400">留空=全部</span>
+              语音频道白名单
+              <span class="field-tag pri">仅这些</span>
             </div>
-            <textarea name="whitelist_channel_ids" rows="3" placeholder="一行一个,例如&#10;3825647391928473&#10;6582739184652734">{{ config_form.whitelist_channel_ids }}</textarea>
+            <div class="field-textarea-wrap">
+              <textarea name="whitelist_channel_ids" rows="4"
+                        placeholder="一行一个频道 ID,留空=全部&#10;例如:&#10;3825647391928473&#10;6582739184652734"
+                        data-counter="cnt-wl-ch">{{ config_form.whitelist_channel_ids }}</textarea>
+              <span class="field-counter" id="cnt-wl-ch" data-count="0">0 个</span>
+            </div>
           </div>
 
-          <div>
+          <div class="field">
             <div class="field-label">
               <i data-lucide="ban" width="14" height="14" class="field-icon" style="color:#ef4444;"></i>
-              永远排除的频道 ID
+              频道黑名单
+              <span class="field-tag danger">永远排除</span>
             </div>
-            <textarea name="blacklist_channel_ids" rows="3" placeholder="一行一个">{{ config_form.blacklist_channel_ids }}</textarea>
+            <div class="field-textarea-wrap">
+              <textarea name="blacklist_channel_ids" rows="4"
+                        placeholder="一行一个,这些频道永远不会被统计"
+                        data-counter="cnt-bl-ch">{{ config_form.blacklist_channel_ids }}</textarea>
+              <span class="field-counter" id="cnt-bl-ch" data-count="0">0 个</span>
+            </div>
           </div>
 
-          <div>
+          <div class="field">
             <div class="field-label">
               <i data-lucide="user-check" width="14" height="14" class="field-icon"></i>
-              仅统计的 KOOK 用户 ID
-              <span class="ml-auto text-[11px] font-normal text-slate-400">留空=全部</span>
+              KOOK 用户白名单
+              <span class="field-tag pri">仅这些</span>
             </div>
-            <textarea name="whitelist_kook_ids" rows="3" placeholder="一行一个">{{ config_form.whitelist_kook_ids }}</textarea>
+            <div class="field-textarea-wrap">
+              <textarea name="whitelist_kook_ids" rows="4"
+                        placeholder="一行一个用户 ID,留空=全部"
+                        data-counter="cnt-wl-u">{{ config_form.whitelist_kook_ids }}</textarea>
+              <span class="field-counter" id="cnt-wl-u" data-count="0">0 个</span>
+            </div>
           </div>
 
         </div>
       </div>
 
-      <div class="flex justify-end mt-6">
+      <!-- 操作栏 -->
+      <div class="form-actions">
+        <span class="form-tip">
+          <i data-lucide="info" width="14" height="14"></i>
+          配置保存后立即生效,无需重启
+        </span>
         <button type="submit" class="btn-save">
           <i data-lucide="save" width="16" height="16"></i>
           保存配置
@@ -687,6 +820,26 @@
       </div>
     </form>
   </div>
+
+  <!-- 配置区辅助:实时计数 -->
+  <script>
+    (function () {
+      function refreshCounter(ta) {
+        var id = ta.getAttribute('data-counter');
+        if (!id) return;
+        var badge = document.getElementById(id);
+        if (!badge) return;
+        var lines = (ta.value || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+        var n = lines.length;
+        badge.setAttribute('data-count', String(n));
+        badge.textContent = n + ' 个';
+      }
+      document.querySelectorAll('#voice-cfg-form textarea[data-counter]').forEach(function (ta) {
+        refreshCounter(ta);
+        ta.addEventListener('input', function () { refreshCounter(ta); });
+      });
+    })();
+  </script>
 
 </div>
 {% endblock %}
